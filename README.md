@@ -6,7 +6,7 @@ CDir is a compact Windows file manager built with C#, WPF, and .NET 10. Its ligh
 
 ### Running
 
-Extract `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip` and double-click `CDir.exe`, or run `Publish/CDirWinX64/CDir.exe` directly. Keep every file beside the executable. The package includes the .NET runtime, requires no installer or separate .NET installation, and does not require administrator privileges.
+Extract `/Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip` and double-click `CDir.exe`, or run `/Publish/CDirWinX64/CDir.exe` directly. It's most updated release version. Keep every file beside the executable. The package includes the .NET runtime, requires no installer or separate .NET installation, and does not require administrator privileges.
 
 The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automated regression checks currently run on Windows 11 x64; Windows 10 still needs validation on an actual installation. For Windows 10, 22H2 or an LTSC release still within support is recommended; this does not mean every Windows 10 release has been tested. The official .NET 10 Windows 10 support list is limited to LTSC / Enterprise releases still within support. See [Microsoft's installation and support information](https://learn.microsoft.com/en-us/dotnet/core/install/windows) and the [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 
@@ -210,7 +210,7 @@ After each successful publication and ZIP creation, insert the newest release im
 
 ### 运行
 
-解压 `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`，双击其中的 `CDir.exe`；也可直接运行 `Publish/CDirWinX64/CDir.exe`。请保留程序旁的所有文件。发布包自带 .NET 运行时，无需安装程序或另外安装 .NET，也不需要管理员权限。
+解压 `/Publish/Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`，双击其中的 `CDir.exe`；也可直接运行 `/Publish/CDirWinX64/CDir.exe`。这是最新的发布版本。请保留程序旁的所有文件。发布包自带 .NET 运行时，无需安装程序或另外安装 .NET，也不需要管理员权限。
 
 设计目标为 **Windows 10 / Windows 11 64 位**。当前构建与自动回归验证环境为 Windows 11 x64，Windows 10 尚需实机验收。建议 Windows 10 使用 22H2 或仍在支持期的 LTSC 版本；这不代表所有 Windows 10 版本都已验证。.NET 10 当前的 Windows 10 官方支持清单限于仍在支持期的 LTSC / Enterprise 版本，详见 [Microsoft 支持说明](https://learn.microsoft.com/en-us/dotnet/core/install/windows) 和 [.NET 10 系统清单](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)。
 
