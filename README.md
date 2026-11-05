@@ -1,0 +1,404 @@
+# CDir
+
+## English
+
+CDir is a compact Windows file manager built with C#, WPF, and .NET 10. Its light interface, directory tree that loads on demand, and editable address bar keep everyday file operations straightforward.
+
+### Running
+
+Extract `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip` and double-click `CDir.exe`, or run `Publish/CDirWinX64/CDir.exe` directly. Keep every file beside the executable. The package includes the .NET runtime, requires no installer or separate .NET installation, and does not require administrator privileges.
+
+The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automated regression checks currently run on Windows 11 x64; Windows 10 still needs validation on an actual installation. For Windows 10, 22H2 or an LTSC release still within support is recommended; this does not mean every Windows 10 release has been tested. The official .NET 10 Windows 10 support list is limited to LTSC / Enterprise releases still within support. See [Microsoft's installation and support information](https://learn.microsoft.com/en-us/dotnet/core/install/windows) and the [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
+
+### Features
+
+- Expand or collapse Quick Access and the drive tree by clicking their headings; section state is saved. Directories load on demand and selection follows navigation. A single tree-folder click navigates immediately without expanding or waiting for a double-click interval. A double-click also expands or collapses that folder without duplicate loading or history entries. When the main panel gains focus, the tree and matching bookmark category synchronize to its current path. Navigation preserves selection and sidebar scroll position; arrows change expansion independently. Bookmark roots show branch guides, ending at the connection point of the last sibling at each level. Right-click a drive or folder in the tree to expand or collapse all subfolders in that branch.
+- Drag sidebar category headings to reorder sections, including Quick Access and My Computer. A blue line marks the insertion point and order is saved. Right-click only blank sidebar space to create a category. Category context menus expand or collapse all contained folder branches while keeping the category open. Custom categories can also be renamed or deleted; built-in sections cannot.
+- Bookmark folders in Quick Access and custom categories can expand through multiple directory levels. Click a subfolder to open it or drag it to another custom category.
+- The address bar displays path segments with hover highlighting. Click a segment to navigate. Click blank space or press `Ctrl+L` / `Alt+D` to type or paste a path; `Enter` navigates and `Esc` cancels. Quoted paths, relative paths, environment variables such as `%USERPROFILE%`, `~`, and UNC shares are supported. A file path opens its containing folder and selects the file.
+- Long paths prioritize the current directory. The `…` menu provides access to any ancestor.
+- Copy the current path or selected item paths, and navigate back, forward, up, or refresh.
+- A detailed file list supports column sorting, multiple selection, and recursive name search through the current directory and subdirectories. Use `/file` for files only or `/dir` for folders only, for example `report /file` or `/dir work`. Hidden items are controlled in Preferences. Counts and operation messages appear in the status bar; the selected-item count is separate from total, folder, and file counts.
+- Search supports regular expressions (`/regex` or `/r`, for example `/r ^report.*\.txt$ /f`) and `*` / `?` wildcard patterns such as `report*.txt` or `*report*`. `/wildcard` or `/w` explicitly enables wildcard mode. Matching ignores case by default. Input hints complete mode commands, and invalid or timed-out expressions produce a message.
+- Drag any visible header horizontally to reorder columns. File > Preferences > UI controls visibility of Name, Date Modified, Type, Size, and Absolute Path. Order and visibility are saved. Absolute Path appears only in search results, and at least one normal browsing column must remain visible.
+- Click a header to toggle ascending or descending sorting. The active header shows a bold blue arrow: ↑ for ascending and ↓ for descending. Other columns show no arrow.
+- The list, tree, Quick Access, and address bar display Windows Shell icons, including associated applications, programs, shortcuts, and custom folder icons.
+- Git/SVN badges in the list, tree, and address bar come from actual workspace queries and distinguish unchanged, modified, added, deleted, renamed, conflicted, untracked, and ignored items. Commits and reverts trigger refresh.
+- Context menus and shortcuts support new folders, rename, copy, cut, paste, and recycling, with Windows file-clipboard interoperability.
+- Files, folders, and blank list space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, associations, and third-party extensions; CDir adds no application items. Right-click blank space and choose New to create a folder or a file type registered with the system. Category shortcuts support opening, reordering within a category, and removal. Their entries and order are saved without moving or deleting original folders.
+- Drag one or more main-panel folders onto a custom-category heading or blank content area. Release when the category highlights to add shortcuts. Existing entries are skipped. Dropping onto a concrete folder moves or copies the items according to the drag-copy preference.
+- Ctrl+X in the main panel fades the selected files and folders until the cut is pasted, replaced, or canceled with Esc. Refreshing or switching tabs preserves the pending cut state.
+- Cut from the native context menu shares the Ctrl+X fading and Esc cancellation behavior. Alt+1 toggles the whole sidebar and can be customized in Keyboard Shortcuts. Ctrl+F focuses search; Esc returns focus to the file list while keeping the query. Quick Access opens the Recycle Bin inside the main panel with its Windows icon and native item operations, including Back, Forward, and Refresh support.
+- The embedded terminal uses a native text editor for system IME composition and candidate confirmation. It retains input focus after clicks and supports Chinese, Japanese, Korean, and other text with font fallback.
+- Terminal completion predictions and their tooltips use muted gray to distinguish them from entered commands.
+- Folders from My Computer and Quick Access can also be dragged into custom categories. Dragging between categories adds the destination entry while keeping the source. Dragging within one category reorders it.
+- Drag a category folder outside the sidebar and release, including outside the window, to remove its shortcut. Esc cancels and keeps it. Original folders and entries in other categories remain intact.
+- The main panel is a flat directory listing: a single click selects a folder and a double-click enters it. Double-click files to use their default application. Open a terminal or Windows Explorer at the current location.
+- An embedded PowerShell terminal appears beneath the list. Click Terminal at the lower right or press `Alt+X` to show or hide it. Its first session starts in the displayed directory. Hiding retains the process, working directory, and output. Drag the divider to resize it or restart the session from its title bar.
+- Use `Up` / `Down` in the terminal to browse session command history. Returning to the newest position restores unsubmitted input. Hiding keeps history; restarting clears it.
+- Preferences > Terminal Theme controls terminal font size (8–48) and background color, with swatches, custom `#RRGGBB` input, live preview, saving, and updates to existing sessions. With terminal focus, use `Ctrl+Wheel`, `Ctrl++`, or `Ctrl+-` to resize text; numeric-keypad plus and minus are supported. Keyboard and wheel bindings can be edited, cleared, and reset in Keyboard Shortcuts.
+- Terminal Theme also supports custom text colors or automatic contrast. The terminal footer shows current font size and background color code. `Ctrl+0` restores the default size of 15 and is customizable. Keyboard shortcuts, the native text input, and the context menu share paste behavior.
+- Ordinary directory changes refresh automatically. Completed search results remain stable until `F5` refreshes them. Search results add a sortable Absolute Path column, hidden when search is cleared. The last location, window size, and hidden-item preference are saved.
+- Drag files and folders from Explorer or other CDir windows into the current directory or a target folder. Copy On Drop in General is off by default, so drops move items; enable it to copy. Existing saved choices are retained. Selected main-panel files and folders can also be dragged out.
+- Drop files and folders onto a directory name in the address bar when it highlights to move them there. With Copy On Drop enabled, they are copied instead. The current browsing location stays open.
+- Maximization respects the current monitor's work area so the bottom status bar remains visible. Configured shortcuts, including the terminal toggle, are forwarded by the main window.
+- A Windows notification-area icon remains visible until CDir exits. By default, closing the window hides it; double-click the icon to restore the same window and tabs. Right-click it to open or exit. Enable Exit CDir On Close in Preferences > General to make Close exit instead; the choice saves immediately.
+- Horizontal and vertical scrollbars are 12 DIP. Scrollbars use hover/drag visibility where configured. Fixed `Shift+Wheel` horizontally scrolls the area beneath the pointer and is not customizable; the ordinary wheel scrolls vertically.
+- Preferences has General, UI, Terminal Theme, and Keyboard Shortcuts categories. General includes language, 12/24-hour time, hidden items, and close behavior; UI includes panel font sizes, grid lines, and column visibility; Terminal Theme contains font size, background, and preview controls. English, 简体中文, 日本語, and 한국어 can be switched immediately and are remembered. The path, filter, sorting, and selection are preserved.
+- The light theme uses three gray-white layers: outer `#F3F3F3`, middle `#FBFBFB`, and inner `#FFFFFF`, with `#F3F3F3` focus hints. The main window, menus, dialogs, and Preferences share the palette; the terminal has its own theme.
+
+### Keyboard Shortcuts
+
+In File > Preferences > Keyboard Shortcuts, search customizable shortcuts by action name or key combination. Rows are sorted by English action name. Fixed New Window, Copy, and Paste bindings are omitted. Select an editor and press a new combination to apply and save it immediately. Each item supports Clear and Reset; duplicate combinations produce a conflict message. Menus, tooltips, and help reflect current bindings. Defaults include:
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+L` / `Alt+D` | Edit the address bar; press `Enter` after pasting to navigate |
+| `Ctrl+Shift+C` | Copy current folder path |
+| `Alt+Left` / `Alt+Right` / `Alt+Up` | Back / forward / parent directory |
+| `Alt+X` | Show or hide embedded terminal |
+| `Ctrl+F` | Search current folder and subfolders |
+| `F5` | Refresh directory and icons |
+| `Ctrl+Shift+N` | New folder |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste |
+| `Ctrl+A` | Select all in the file list |
+| `Enter` / `F2` / `Delete` | Open / rename / move to Recycle Bin |
+
+When a text field has focus, copy, cut, paste, and other text-editing shortcuts still operate on text.
+
+### System Icons
+
+Windows Shell supplies icons for actual files and directories. A generic icon is used when extensions cannot supply one, a location is inaccessible, or reading times out. Press `F5` after changing file associations or folder icons. Icons are cached only in memory; CDir does not save extracted icons to disk.
+
+Shortcut arrows are preserved. Version-control badges are drawn separately from workspace queries rather than reusing third-party Shell overlay caches.
+
+List icons are 16 DIP. Default rows are 22 DIP high, plus a 1 DIP border when grid lines are disabled, and grow with larger fonts. Tree and Quick Access spacing remain compact; empty states use larger system folder icons. The application, window, and title bar use the standard Windows yellow folder icon. `Source/Resource/App.ico` contains nine sizes from 16 to 256 pixels and can be regenerated from the current Windows installation using `Source/Scripts/UpdateAppIcon.ps1`. Address-copy, navigation, and refresh buttons use glyphs.
+
+Before creating a window, CDir sets the fixed taskbar application ID `CDir.FileManager` so Windows groups its windows under CDir.
+
+### Git / SVN Workspace Status
+
+CDir detects Git or SVN workspaces by walking up from the current directory. Nested workspaces use the nearest repository; ordinary folders have no badges. Install Git command-line tools 2.31+ or SVN command-line tools 1.8+. CDir searches `PATH`, installation registry entries, and standard directories for `git.exe` / `svn.exe`, including TortoiseSVN installed on other drives. Locally validated versions are Git 2.55.0.windows.5 and SVN 1.14.5. Missing tools, insufficient permissions, timeouts, or incomplete output produce a gray question mark and a reason rather than being treated as unchanged.
+
+Git uses `status --porcelain=v1 -z` and tracked-file lists, covering the index, working tree, renames, submodules, nested repositories, and worktrees. SVN uses local `info --xml` and `status --xml --verbose --no-ignore --depth=immediates` queries for files and immediate children of visible directories, checking content, properties, and conflicts. Entering or expanding a directory queries it as needed rather than repeatedly listing every unchanged item in a large workspace. Operations are local and read-only: no commit, update, revert, or remote query is performed.
+
+| Badge | Meaning |
+| --- | --- |
+| Green `✓` | Tracked and unchanged |
+| Red `!` / `×` | Modified / conflicted |
+| Green `+`, red `−`, blue `↗` | Added, deleted, renamed |
+| Blue `?`, gray `−` | Untracked, ignored |
+| Gray `?` | Verification in progress or status unavailable; hover for the reason |
+
+Files show their own status. Modifying one file does not mark unchanged siblings red. Repository folders summarize children and tooltips explain contained changes, so a folder can have a badge without being edited itself. SVN summaries cover only visible children queried in the current pass; a green check does not certify every unopened deeper subtree. Ignored items do not dirty parent folders. Git does not track empty directories, so empty untracked folders have no badge. Ancestors outside a repository do not aggregate changes across repository boundaries. Visible nested repositories are queried independently. SVN externals are verified through their own workspaces; unverified externals are not marked clean.
+
+The initial repository visit queries status and establishes watchers. Further queries follow file creation, modification, deletion, or renaming and relevant metadata changes such as Git index/HEAD/refs. There is no periodic polling or repeated query merely on window activation. Navigation and tree scrolling within one repository reuse verified snapshots. Unrelated lock-file, object-store, and log changes do not trigger rescans. Bursts are combined over roughly 100 ms, ongoing queries are not repeatedly cancelled, and obsolete results are discarded before a follow-up query. Unchanged tracked-file lists and clean-directory summaries are reused. `F5` forces refresh; refresh manually if watching is unavailable. Status is the latest successfully queried local snapshot and shows verification in progress during continuing changes.
+
+### File Operation Boundaries
+
+- Search matches file and folder names recursively under the current directory and supports `/file` (`/f`) and `/dir` (`/d`) type filters. Focusing an empty search box shows all hints; typing `/` narrows them, and clicking completes a command. Clearing search restores the directory listing. Search respects hidden-item settings, skips inaccessible directories, and does not follow directory links or junctions.
+- Copy and move refuse to overwrite existing names. Folder merging, symbolic links, and junctions are not supported by these application operations.
+- Batch operations may finish partially; completed items remain after failure or cancellation. Cross-volume moves still need validation on actual systems.
+- Delete uses the Windows Recycle Bin with system confirmation. Recycling from network or removable drives is rejected. If Windows says recycling is unavailable, review the dialog before deciding whether to continue.
+- Network shares, Windows 10, and Recycle Bin interaction still require corresponding real-system validation. Restricted, offline, or nonexistent locations display an error and preserve the current directory.
+- CDir does not replace the Windows default file manager or browse archives. Drag and drop, tabs, and recursive search are supported.
+
+CDir has no account system, telemetry, or update checks. Network behavior of shares, Shell extensions, and external programs is controlled by those components.
+
+Settings are stored in `%LOCALAPPDATA%\CDir\Settings.json`, including the interface language. First launch migrates old DocReader settings while preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is retained. First use defaults to English, as do older settings without a language field. Delete the settings file while CDir is closed to restore defaults.
+
+Preferences > UI > Panel Font Sizes independently adjusts File List, Column Headers, Sidebar, Address And Search Bars, Menus, Status Bar, Title Bar, and Preferences (8–24). Changes apply and save immediately; input heights follow font sizes.
+
+### Building From Source
+
+Windows x64 and the .NET 10 SDK are required. Run in the project directory:
+
+```powershell
+.\Source\Scripts\Build.ps1
+```
+
+By default, the script only builds. It does not run tests, launch or restart CDir, publish, or package. Build and test processes use background I/O scheduling. CPU usage is uncapped and affinity is unrestricted by default. For distribution, use:
+
+```powershell
+.\Source\Scripts\Build.ps1 -Publish
+.\Source\Scripts\Build.ps1 -Package
+```
+
+Both `-Publish` and `-Package` publish and create a ZIP. Steps run serially, do not automatically run the full regression suite, and do not close a running application. First publication may download Microsoft .NET runtime packages. Outputs are:
+
+```text
+Publish/CDirWinX64/CDir.exe
+Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip
+```
+
+The title bar shows `vmajor.minor.patch` next to CDir, starting with a `v0.0.0` baseline. `Source/Version.props` supplies the version consistently to the title, assembly, and packaged `Release.json`. Changes under `Source` increase patch on the next successful release. Repackaging unchanged source, building only, testing, or failed publication consumes no version number. Version state is committed only after build, publication, and ZIP creation succeed, with protection against concurrent releases or source changes during publication.
+
+Major is controlled manually and changes only on explicit user instruction, by editing the first component of `<Version>` or using `-MajorVersion`; it can be raised or lowered and never advances automatically. Changing major resets minor and patch to 0, so that release is exactly major.0.0; this takes precedence over automatic increments and other release flags. Use `-FatalBugFix` for actual fatal crashes, hangs, or interference with other applications; it increases minor after success. Temporary browsing-window unavailability during a file operation alone does not qualify. Use `-FeatureRelease` only when the user explicitly requests a minor increase for a major new feature. Ordinary features, fixes, and UI edits leave minor unchanged.
+
+Patch is fully automatic and increases only after changed source/configuration is successfully released. Raising minor neither resets patch nor changes major; combining fatal-fix and feature flags increases minor only once. For example, an ordinary change after `v0.0.5` releases as `v0.0.6`; a fatal fix or explicitly requested feature release becomes `v0.1.6`. Tests and publication must use the same candidate-version flags.
+
+```powershell
+.\Source\Scripts\Test.ps1 -UIGroup language -PublishConfiguration -MajorVersion 1
+.\Source\Scripts\Build.ps1 -Publish -MajorVersion 1
+# Only for a severe fatal bug; use matching test and publication options.
+.\Source\Scripts\Test.ps1 -UIGroup navigation -PublishConfiguration -FatalBugFix
+.\Source\Scripts\Build.ps1 -Publish -FatalBugFix
+# Only when the user explicitly requests a minor increase for a major feature.
+.\Source\Scripts\Test.ps1 -UIGroup fonts -PublishConfiguration -FeatureRelease
+.\Source\Scripts\Build.ps1 -Publish -FeatureRelease
+# Check version increments, failure protection, and title-bar layout without committing a version.
+.\Source\Scripts\Test.ps1 -ScriptGroup release -UIGroup fonts -PublishConfiguration
+```
+
+The title-bar icon is 16 pixels, and the title/version default to the sidebar's 13-point font. Upgrading older settings aligns title size with the prior sidebar size; afterwards it can be adjusted independently in Preferences.
+
+For debugging or selected tests:
+
+```powershell
+dotnet run --project Source/CDir.csproj
+dotnet run --project Source/CDir.csproj -- "C:\Users"
+.\Source\Scripts\Test.ps1 -Group address
+.\Source\Scripts\Test.ps1 -Group filesystem
+.\Source\Scripts\Test.ps1 -UIGroup navigation
+```
+
+An earlier full-validation baseline passed 51 background checks and 92 UI checks. This is historical evidence; routine work runs only groups relevant to the current change. Default background groups are filesystem, language, and address. Git/SVN fixture groups require explicit selection. UI checks run only with `-UIGroup`, on the current Windows desktop with software rendering and owned directories; test windows, menus, and dialogs may be visible. Separate-desktop testing has been removed. Tests do not scan user directories or close applications in use. Reports identify executed, unselected, and skipped groups and elapsed time. See [Source/Tests/README.md](Source/Tests/README.md).
+
+Select UI groups through the runner to retain timeouts and process-tree cleanup:
+
+```powershell
+.\Source\Scripts\Test.ps1 -UIGroup address
+# File operations and dialogs can be checked separately.
+.\Source\Scripts\Test.ps1 -UIGroup operations
+# Combine related groups so each project builds only once.
+.\Source\Scripts\Test.ps1 -Group address -UIGroup navigation,address
+```
+
+Reports and screenshots go to `Artifacts/TestRuns/<run-id>/`. Temporary data stays under `%LOCALAPPDATA%/CDir/TestRuns/<run-id>/` and is cleaned after success using ownership markers. `-SkipBuild` is available when source/configuration is unchanged and the selected binaries have already been built. Use `-Group all` or `-UIGroup all` only when full regression is explicitly needed.
+
+Owned directory names, code files, and custom identifiers use PascalCase. Source is under `Source`; artwork is under `Source/Resource`. External fixed names retain their spelling, including `.editorconfig`, MSBuild/IDE keys, framework APIs, SDK-generated `net10.0-windows` / `win-x64` directories, and .NET culture directories.
+
+After each successful publication and ZIP creation, insert the newest release immediately below the heading, including its version, publication timestamp to the second with timezone, and specific changes to [UpdateLog.md](UpdateLog.md) in the project root. The Chinese guide is [Docs/使用说明.txt](Docs/使用说明.txt); the English guide is [Docs/UserGuide.txt](Docs/UserGuide.txt). Both ship with the release.
+
+### Project Structure
+
+- `Source/App.xaml` / `Source/App.xaml.cs`: entry point and startup logic. The root also retains `CDir.csproj` and `Directory.Build.props`.
+- `Source/UI/MainWindow/`: main window and independent ExplorerTab pages, including browsing, navigation, sidebar, address bar, search, and version-control UI, in the `CDir.UI` namespace.
+- `Source/UI/Dialogs/`: name input, category deletion confirmation, and other dialogs.
+- `Source/UI/Preferences/`: Preferences window.
+- `Source/UI/Themes/`: shared styles and themes; `App.xaml` merges the style dictionaries.
+- `Source/Models/`: directory nodes, bookmarks, categories, settings, file metadata, and related models.
+- `Source/Services/`: filesystem, Git/SVN, and system-icon services.
+- `Source/Controls/`: reusable controls and drawing code, including system icons, list grid lines, and tree guides.
+- `Source/Localization/`: four-language resources and language service. Functional English captions use Title Case; explanations, tooltips, and status messages use sentence case. Brands, shortcuts, and user names retain their spelling.
+- `Source/Tests/CDirTests.csproj`, `Source/Tests/Program.cs`: isolated filesystem regression tests.
+- `Source/Tests/VersionControlTests.cs`, `Source/Tests/VersionControlSmokeTests.cs`: real Git/SVN workspace and UI regressions.
+- `Source/Resource/App.ico`: application icon. `Source/Config/`: application manifest and default configuration.
+- `Source/Scripts/Build.ps1`, `Test.ps1`, `QuietTools.ps1`, `Package.ps1`: build, grouped tests, and background packaging entry points.
+- `Source/Tests/QuietRunner/`: background I/O scheduling, serial queue, and process-tree cleanup. `AGENTS.md` defines efficient current-desktop validation requirements.
+- `Source/Directory.Build.props`: application and regression-test output paths.
+- `Docs/`: user documentation. `Publish/CDirWinX64/`: runnable release.
+- `Build/Bin/<project>/`, `Build/Obj/<project>/`: build outputs and intermediate caches.
+- `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`, `Artifacts/CDirPreview.png`: distribution archive and interface preview.
+
+## 中文
+
+简洁的 Windows 文件管理器，使用 C#、WPF 和 .NET 10 构建。浅色界面、按需展开的目录树和可编辑地址栏，让常用的文件操作保持直观。
+
+### 运行
+
+解压 `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`，双击其中的 `CDir.exe`；也可直接运行 `Publish/CDirWinX64/CDir.exe`。请保留程序旁的所有文件。发布包自带 .NET 运行时，无需安装程序或另外安装 .NET，也不需要管理员权限。
+
+设计目标为 **Windows 10 / Windows 11 64 位**。当前构建与自动回归验证环境为 Windows 11 x64，Windows 10 尚需实机验收。建议 Windows 10 使用 22H2 或仍在支持期的 LTSC 版本；这不代表所有 Windows 10 版本都已验证。.NET 10 当前的 Windows 10 官方支持清单限于仍在支持期的 LTSC / Enterprise 版本，详见 [Microsoft 支持说明](https://learn.microsoft.com/en-us/dotnet/core/install/windows) 和 [.NET 10 系统清单](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)。
+
+### 已有功能
+
+- 左侧常用位置与驱动器目录树可分别点击标题展开、收起，并记住状态；目录按需加载，导航时同步所选位置。单击目录树中的文件夹立即导航，不展开，也不等待双击判定；双击同时展开或收起，同一目录不重复加载或增加历史记录。主面板获得焦点时，目录树及匹配的收藏分类同步回主面板当前路径。跳转时保留选中状态与侧栏滚动位置；箭头独立展开或收起。收藏根目录也显示分支提示线，每层最后一个同级目录的提示线在该目录连接点结束。右键点击目录树中的盘符或文件夹，仅显示展开所有子文件夹和收起所有子文件夹，递归操作当前分支。
+- 拖动左侧类别标题可调整顺序，包括常用位置与目录树；蓝色提示线表示插入位置，顺序自动保存。仅在侧栏空白处右键可新增类别；类别标题右键可展开或收起其下所有文件夹分支，类别本身保持展开。自定义类别还支持重命名和删除。常用位置与目录树为内置分组，不允许删除或重命名。
+- 常用位置和自定义类别中的收藏文件夹可逐级展开子目录，点击子目录即可打开，也支持将子目录拖到其他自定义类别。
+- 地址栏按级显示路径，悬停高亮文件夹，点击直接跳转到对应目录；点击空白处或按 `Ctrl + L` / `Alt + D` 可输入、粘贴路径，`Enter` 跳转、`Esc` 取消编辑。支持带引号的路径、相对路径、`%USERPROFILE%` 等环境变量、`~` 和 UNC 共享路径；输入文件路径会打开其所在目录并选中文件。
+- 路径过长时优先显示当前目录，左侧 `…` 菜单可选择任意级目录。
+- 一键复制当前路径、复制选中项目路径，支持后退、前进、上一级与刷新。
+- 文件详细列表、列排序、多选、按名称递归搜索当前目录及子目录；使用 `/file` 仅显示文件、`/dir` 仅显示文件夹，例如 `report /file`、`/dir work`。隐藏项目在偏好设置中控制，项目数量和操作提示显示在底部状态栏；已选择数量独立显示，保留总数、文件夹数和文件数。
+- 搜索支持正则匹配（`/regex` 或 `/r`，例如 `/r ^report.*\.txt$ /f`）和 `*`、`?` 通配符模糊匹配（例如 `report*.txt`、`*report*`）；也可用 `/wildcard` 或 `/w` 显式启用。匹配默认不区分大小写，输入提示可补全模式命令，表达式错误或耗时过长会显示提示。
+- 左右拖动任意可见表头可调整列的显示顺序；“文件 → 偏好设置 → UI”提供名称、修改日期、类型、大小、绝对路径的显示开关，列顺序和显示选择自动保存。绝对路径仍只在搜索结果中显示，普通浏览至少保留一列。
+- 点击表头可切换该列的升序、降序；当前排序列表头右侧显示加粗蓝色箭头，↑ 表示升序、↓ 表示降序，其他列不显示箭头。
+- 文件列表、目录树、常用位置和地址栏显示 Windows Shell 系统图标，包含默认关联程序、应用程序、快捷方式及自定义文件夹图标。
+- 文件列表、目录树和地址栏显示由 Git/SVN 实际工作区查询生成的状态徽标，区分未修改、修改、新增、删除、重命名、冲突、未跟踪与忽略；提交和还原后自动刷新。
+- 通过右键菜单或快捷键新建文件夹、重命名、复制、剪切、粘贴、移到回收站；与 Windows 文件剪贴板互通。
+- 主面板按 Ctrl+X 剪切后，选中文件和文件夹淡化显示；按 Esc 取消剪切并恢复显示。刷新或切换标签页保留待剪切状态，复制新内容或完成剪切粘贴后自动恢复显示。
+- 右键菜单的“剪切”与 Ctrl+X 使用相同的淡化及 Esc 取消行为。Alt+1 显示或隐藏整个左侧目录栏，可在 Keyboard Shortcuts 中自定义；Ctrl+F 聚焦搜索框后，Esc 退出焦点并保留搜索内容。Quick Access 的回收站在主面板内浏览，使用 Windows 默认图标和原生项目操作，支持前进、后退和刷新。
+- 内嵌终端使用系统输入法的文本输入控件处理组词和候选确认；点击后保持输入焦点，支持中文、日文、韩文等文本，并使用相应字体回退显示。
+- 终端自动补全建议及其帮助提示使用柔和灰色，便于和已输入命令区分。
+- 文件列表的文件、文件夹及空白处使用 Windows Shell 原生完整右键菜单（Windows 11 中对应“显示更多选项”），由系统提供命令、文件关联和第三方扩展，不附加 CDir 菜单项；空白处右键的“新建”可创建文件夹或系统已注册的文件类型。类别中的快捷入口支持点击打开、同类别内拖动排序及移除，内容和顺序自动保存，不移动或删除原文件夹。
+- 主面板中的文件夹可拖到左侧自定义类别的标题或类别内空白处，目标类别高亮后松开即可添加快捷入口；支持多选拖入，已有条目不会重复添加。拖到具体文件夹时，按拖放复制设置执行移动或复制。
+- “My Computer”和“Quick Access”中的文件夹也支持拖到自定义类别；类别之间拖动文件夹会添加到目标类别并保留原入口，同类别内拖动仍用于排序。
+- 将类别内的文件夹拖到左侧栏以外并松开，即可从原类别移除快捷入口，支持在窗口外松开；按 Esc 取消会保留入口，不影响原文件夹或其他类别中的入口。
+- 主面板以平铺列表显示当前目录，单击文件夹仅选中，双击进入文件夹；双击文件使用系统默认程序打开。支持在当前目录打开终端或系统资源管理器。
+- 文件列表下方提供内嵌 PowerShell 终端；点击右下角状态栏的 Terminal 按钮或按 `Alt + X` 显示/隐藏，首次打开使用当前显示的目录。隐藏后保留进程、工作目录和输出，可拖动分隔条调整高度，终端标题栏支持重启会话。
+- 内嵌终端支持用 `↑` / `↓` 浏览当前会话的命令历史，回到最新位置时恢复未提交的输入；隐藏后保留历史，重启后清空。
+- “偏好设置 → Terminal Theme”可调整终端字号（8–48）和背景颜色，支持色块、自定义 `#RRGGBB` 和实时预览，自动保存并应用到现有会话。终端聚焦时用 `Ctrl` + 滚轮、`Ctrl++` / `Ctrl+-` 调整字号，支持数字键盘加减键；键盘与滚轮绑定均可在快捷键面板修改、清除和恢复。
+- Terminal Theme 还支持自定义字体颜色或自动配色；终端底栏实时显示字号和背景颜色代码。终端聚焦时用 `Ctrl+0` 恢复默认字号 15，可在快捷键面板修改此绑定；支持键盘、原生文本输入框和右键菜单的统一粘贴。
+- 普通浏览时当前目录变动自动刷新；搜索结果完成后保持稳定，按 `F5` 手动刷新。搜索结果额外显示绝对路径列，支持排序，清空搜索后隐藏。记住最后位置、窗口大小与隐藏项目设置。
+- 支持从资源管理器或其他 CDir 窗口拖入文件、文件夹，放入当前目录或目标文件夹；General 中的拖放复制默认关闭，默认执行移动，勾选后执行复制。已保存的个人选择会保留。支持拖出主面板选中的文件和文件夹。
+- 可将文件和文件夹拖到地址栏中的某一级目录名称上，目标目录高亮后松开即可移入；勾选拖放复制时则复制到该目录，当前浏览位置保持不变。
+- 窗口最大化使用当前显示器工作区，保证底部状态栏可见；统一转发已配置快捷键，包括 Alt + X 显示/隐藏终端。
+- CDir 启动后持续显示 Windows 通知区域图标，直到退出进程；默认点击窗口关闭按钮时隐藏，双击 CDir 图标恢复原窗口和标签页；右键图标可打开或退出。在 Preferences → General 勾选 Exit CDir On Close 后，关闭按钮改为直接退出，设置立即保存。
+- 横向和纵向滚动条统一为 12 DIP，平时隐藏，悬停在滚动条区域或拖动时显示。固定的 Shift + 滚轮用于鼠标所在区域的横向滚动，不支持自定义；普通滚轮保持纵向滚动。
+- “文件 → 偏好设置”左侧按 General（常规）、UI、Terminal Theme（终端主题）和 Keyboard Shortcuts（快捷键）分类。常规分类包含语言、12/24 小时制、隐藏项目和关闭窗口时退出选项；UI 分类包含面板字体大小、网格线和列显示开关；终端主题包含终端字号、背景色和预览。语言支持简体中文、日本語、한국어和 English，即时切换并记住选择；当前路径、筛选、排序和选中项目保持不变。
+- 浅色界面使用三层灰白底色：外层 `#F3F3F3`、中层 `#FBFBFB`、内层 `#FFFFFF`；聚焦提示统一为 `#F3F3F3`。主窗口、菜单、弹窗和偏好设置统一配色，终端保持独立主题。
+
+### 快捷键
+
+在“文件 → 偏好设置 → 快捷键”中，可按功能名称或按键组合搜索可自定义的快捷键。列表按功能英文名称升序排列；固定的新窗口、复制和粘贴快捷键不列入自定义列表。点击输入框并按下新的组合键即可修改，立即生效并保存；每项支持清除、重置，重复绑定会提示冲突。菜单、按钮提示和帮助同步显示当前绑定。以下为默认按键。
+
+| 快捷键 | 操作 |
+| --- | --- |
+| `Ctrl + L` / `Alt + D` | 编辑地址栏，粘贴后按 `Enter` 跳转 |
+| `Ctrl + Shift + C` | 复制当前文件夹路径 |
+| `Alt + ←` / `Alt + →` / `Alt + ↑` | 后退 / 前进 / 上一级 |
+| `Alt + X` | 显示或隐藏内嵌终端 |
+| `Ctrl + F` | 搜索当前文件夹及子文件夹 |
+| `F5` | 刷新目录与图标 |
+| `Ctrl + Shift + N` | 新建文件夹 |
+| `Ctrl + C` / `Ctrl + X` / `Ctrl + V` | 复制 / 剪切 / 粘贴 |
+| `Ctrl + A` | 在文件列表中全选 |
+| `Enter` / `F2` / `Delete` | 打开 / 重命名 / 移到回收站 |
+
+文本框具有焦点时，复制、剪切、粘贴等文本编辑快捷键仍作用于文本。
+
+### 系统图标
+
+图标由 Windows Shell 按实际文件或目录提供；Shell 扩展无法返回图标、位置不可访问或读取超时时，使用系统通用图标。更改文件关联或文件夹图标后，按 `F5` 可刷新。图标只缓存在内存中，CDir 不将提取的图标保存到磁盘。
+
+保留快捷方式箭头；版本控制徽标由下面的工作区查询单独绘制，不复用第三方 Shell 扩展的状态缓存。
+
+列表保留 16 DIP 图标，默认内容行高缩小为 22 DIP（关闭网格线时另有 1 DIP 行边框），字号增大时行高自动增加，树与常用位置沿用原有紧凑间距；空状态使用较大的系统文件夹图标。应用程序、窗口和标题栏使用 Windows 通用黄色文件夹图标，构建资源为 `Source/Resource/App.ico`，含 16 至 256 像素的九种尺寸；可通过 `Source/Scripts/UpdateAppIcon.ps1` 从当前 Windows 重新提取。地址栏复制、导航和刷新按钮保持字形图标。
+程序在创建窗口前设置固定任务栏应用标识 `CDir.FileManager`，让 Windows 使用 CDir 自身的任务栏分组。
+
+### Git / SVN 工作区状态
+
+自动沿当前目录的父级识别 Git / SVN 工作区，嵌套工作区使用最近一层仓库；普通目录不显示版本控制徽标。需要本机安装 Git 命令行（Git 2.31 或更新版本）或 SVN 命令行（SVN 1.8 或更新版本）。程序从 `PATH`、安装注册表和标准安装目录查找 `git.exe` / `svn.exe`，支持安装在其他磁盘的 TortoiseSVN；本机验证版本为 Git 2.55.0.windows.5、SVN 1.14.5。没有工具、权限不足、查询超时或输出不完整时显示灰色问号和原因，不把失败当作“未修改”。
+
+Git 使用 `status --porcelain=v1 -z` 和已跟踪文件清单，覆盖暂存区、工作区、重命名、子模块、嵌套仓库及 worktree；SVN 使用本地 `info --xml` / `status --xml --verbose --no-ignore --depth=immediates`，按可见目录读取文件及直接子项，同时判断内容、属性和冲突。进入或展开新目录时补查该目录，避免大型工程每次递归输出整个工作区的未修改文件。只读取本地状态，不执行提交、更新、还原或网络查询。
+
+| 徽标 | 状态 |
+| --- | --- |
+| 绿色 `✓` | 已跟踪且未修改 |
+| 红色 `!` / `×` | 已修改 / 存在冲突 |
+| 绿色 `+`、红色 `−`、蓝色 `↗` | 已新增、已删除、已重命名 |
+| 蓝色 `?`、灰色 `−` | 未跟踪、已忽略 |
+| 灰色 `?` | 正在核实或状态不可用，悬停查看原因 |
+
+文件只显示自身状态，修改一个文件不会给未修改的兄弟文件标红；仓库内目录汇总其子项，悬停会注明“目录内包含……”，因此目录本身未编辑也可能有变化徽标。SVN 目录仅汇总本轮可见范围内已查询的子项，未展开的更深目录不会递归扫描，绿色勾不代表整个深层子树均无变化。忽略项不使父目录变脏。Git 不跟踪空目录，未跟踪的空目录没有徽标。仓库之外的祖先目录不跨仓库汇总状态；可见的嵌套仓库独立查询。SVN external 由其工作区独立核实，尚未核实的 external 不标为干净。
+
+首次打开仓库时读取一次状态并建立监视，此后由文件新增、修改、删除、重命名，以及 Git index/HEAD/refs 等有效元数据变化触发刷新；不再定时轮询或因窗口激活重复查询。同仓库内导航和树滚动复用已核实快照，Git 锁文件、对象库和日志等无关变化不触发重扫。连续事件在约 100 毫秒内合并，正在运行的查询不会被每条事件反复取消；过期结果不应用，随后补查最新状态。内容变化时复用未改变的索引文件清单和干净目录汇总，避免重复构建整仓库基础状态。按 `F5` 可强制重查；若文件监视不可用，则需手动刷新。状态仍表示最近成功查询的本地快照，持续修改期间显示“正在核实”。
+
+### 文件操作边界
+
+- 搜索按名称匹配当前文件夹及所有子文件夹中的文件和文件夹，支持 `/file`（简写 `/f`）、`/dir`（简写 `/d`）类型过滤。空搜索框获得焦点时显示全部过滤提示，输入 `/` 后按当前命令实时匹配，点击提示可补全。清空后恢复当前文件夹列表。搜索遵循隐藏项目设置，跳过不可访问的子目录，不进入目录链接或 junction。
+- 复制或移动遇到同名项目会拒绝覆盖；暂不合并文件夹，也不复制或移动符号链接、目录联接点。
+- 批量操作可能部分完成；失败或取消后，已完成的项目保留。跨卷移动未完成实机验证。
+- 删除使用 Windows 回收站并保留系统确认；网络盘和可移动磁盘的回收操作会被拒绝。如果 Windows 提示无法回收，应检查系统对话框后决定是否继续。
+- 网络共享、Windows 10 与回收站交互尚未完成实机验证。访问受限、离线或不存在的位置会显示错误并保留当前目录。
+- 不替代 Windows 默认文件管理器，不提供压缩包浏览；支持拖放、多标签页和递归搜索。
+
+程序没有账号、遥测或更新检查。网络共享、Windows Shell 扩展及外部程序的网络行为由对应系统组件决定。
+
+设置位于 `%LOCALAPPDATA%\CDir\Settings.json`，包含界面语言。首次启动 CDir 时会自动迁移旧 DocReader 设置，保留语言、自定义类别和侧栏顺序；已有 CDir 设置优先，旧文件保留。首次使用默认使用英语；旧版设置文件缺少语言字段时默认使用英语。关闭程序后删除该文件可恢复默认设置。
+
+“偏好设置 → UI → 面板字体大小”可分别设置文件列表、列表表头、侧边栏、地址与搜索栏、菜单、状态栏、标题栏和偏好设置的字号（8–24）。修改即时生效并自动保存；输入框高度随字号调整。
+
+### 从源码构建
+
+需要 Windows x64 与 .NET 10 SDK。在项目目录运行：
+
+```powershell
+.\Source\Scripts\Build.ps1
+```
+
+脚本默认只构建，不跑测试、不启动或重启程序、不发布和压缩。构建与测试采用后台 I/O 调度；按用户偏好，默认不限制 CPU 使用率、不绑定单核。只有明确需要分发时才运行：
+
+```powershell
+.\Source\Scripts\Build.ps1 -Publish
+.\Source\Scripts\Build.ps1 -Package
+```
+
+`-Publish` 和 `-Package` 都包含发布并生成 ZIP；所有步骤串行执行，不自动跑全量回归，也不会关闭正在使用的程序。首次发布可能需要联网下载 Microsoft .NET 运行时包。输出为：
+
+```text
+Publish/CDirWinX64/CDir.exe
+Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip
+```
+
+标题栏在 CDir 右侧显示 `v大版本.中版本.小版本`，首次发布建立 `v0.0.0` 基线。版本由 `Source/Version.props` 统一提供，程序标题、程序集和发布包中的 `Release.json` 保持一致。后续 `Source` 中的源码或配置发生变化时，下一次成功发布的小版本自动加 1；同一份代码重复打包、仅构建、运行测试或发布失败都不消耗版本号。版本状态仅在构建、发布及 ZIP 全部成功后写入，并防止同时发布或发布过程中源码变化造成误计数。
+
+大版本完全由人工控制，只按用户明确指示修改 `Source/Version.props` 中 `<Version>` 的第一段，或在发布时使用 `-MajorVersion`（支持增大和减小），不会自动递增。主版本变更时，次版本和补丁号同时重置为 0，该次发布严格为 major.0.0；此规则优先于自动递增及其他发布选项。修复实际崩溃、卡死、影响其他程序正常运行等严重致命 Bug 时，使用 `-FatalBugFix`，成功后中版本自动加 1；文件操作期间暂时无法操作浏览窗口本身不作为致命 Bug 的判断依据。新增大功能时，只有用户明确要求提升中版本，才使用 `-FeatureRelease` 手动加 1；普通功能、修复和界面修改保持中版本不变。
+
+小版本完全自动管理：只有源码或配置发生变化，下一次成功发布才加 1；同一份源码重复发布或打包、仅构建、运行测试和发布失败都不递增。中版本增加时不重置小版本，不自动改变大版本；同一发布同时包含大功能和致命修复，中版本也只加一次。例如 `v0.0.5` 的普通源码更新发布为 `v0.0.6`，致命修复或用户要求升级中版本的大功能发布为 `v0.1.6`。测试和发布须使用相同的候选版本选项。
+
+```powershell
+.\Source\Scripts\Test.ps1 -UIGroup language -PublishConfiguration -MajorVersion 1
+.\Source\Scripts\Build.ps1 -Publish -MajorVersion 1
+# 仅用于严重致命 Bug 修复；测试与发布必须使用相同的候选版本选项
+.\Source\Scripts\Test.ps1 -UIGroup navigation -PublishConfiguration -FatalBugFix
+.\Source\Scripts\Build.ps1 -Publish -FatalBugFix
+# 仅在用户明确要求新增大功能提升中版本时使用
+.\Source\Scripts\Test.ps1 -UIGroup fonts -PublishConfiguration -FeatureRelease
+.\Source\Scripts\Build.ps1 -Publish -FeatureRelease
+# 检查版本递增、失败保护与标题栏布局；不会提交版本号
+.\Source\Scripts\Test.ps1 -ScriptGroup release -UIGroup fonts -PublishConfiguration
+```
+
+标题栏图标为 16 像素，标题和版本默认使用与侧栏一致的 13 号字体。升级旧设置时会将标题字号调整为原有侧栏字号；此后仍可在偏好设置中独立调整标题栏字号。
+
+调试运行或按需测试：
+
+```powershell
+dotnet run --project Source/CDir.csproj
+dotnet run --project Source/CDir.csproj -- "C:\Users"
+.\Source\Scripts\Test.ps1 -Group address
+.\Source\Scripts\Test.ps1 -Group filesystem
+.\Source\Scripts\Test.ps1 -UIGroup navigation
+```
+
+此前的完整验证基线为 51 项后台回归与 92 项界面检查通过；这是历史记录，日常只运行改动相关的组，不重复跑全套。后台默认组为文件系统、语言、地址分段；创建 Git/SVN 仓库的组需显式选择。界面测试只有指定 `-UIGroup` 才运行，直接使用当前 Windows 桌面、软件渲染和自有目录，测试窗口、菜单和对话框可能可见；独立桌面机制已删除。测试不扫描用户目录或关闭正在使用的软件。结果明确记录实际运行、未选择和跳过的组以及耗时。自动化测试细节见 [Source/Tests/README.md](Source/Tests/README.md)。
+
+通过测试入口选择需要的界面组，以保留超时与进程树清理，例如：
+
+```powershell
+.\Source\Scripts\Test.ps1 -UIGroup address
+# 文件操作与对话框检查可单独运行
+.\Source\Scripts\Test.ps1 -UIGroup operations
+# 相关组在一次调用中执行，每个项目只构建一次
+.\Source\Scripts\Test.ps1 -Group address -UIGroup navigation,address
+```
+
+报告和截图位于 `Artifacts/TestRuns/<本次ID>/`；临时数据仅写入 `%LOCALAPPDATA%/CDir/TestRuns/<本次ID>/`，成功后按所有权标记清理。源码与配置未变且二进制已构建时，可用 `-SkipBuild` 重跑。全量后台或界面回归仅在明确需要时分别选择 `-Group all` 或 `-UIGroup all`。
+
+自有目录、代码文件与自定义标识符统一使用 PascalCase；源码集中在 `Source`，美术资源集中在 `Source/Resource`。仅外部固定契约保留原名，例如 `.editorconfig`、MSBuild/IDE 配置键、框架 API、SDK 生成的 `net10.0-windows`/`win-x64` 目录和 .NET 文化目录。
+
+每次成功发布并生成 ZIP 后，在项目根目录的 [UpdateLog.md](UpdateLog.md) 追加版本、精确到秒且带时区的发布时间及具体改动。中文使用说明见 [Docs/使用说明.txt](Docs/使用说明.txt)，英文版见 [Docs/UserGuide.txt](Docs/UserGuide.txt)，两份说明均随发布包分发。
+
+### 项目结构
+
+- `Source/App.xaml` / `Source/App.xaml.cs`：程序入口与启动逻辑；根目录另保留 `CDir.csproj` 和 `Directory.Build.props` 两个工程文件。
+- `Source/UI/MainWindow/`：主窗口与独立 ExplorerTab 标签页，包含完整浏览区、导航、侧栏、地址栏、搜索及版本控制的界面逻辑，命名空间为 `CDir.UI`。
+- `Source/UI/Dialogs/`：名称输入、类别删除确认等对话框。
+- `Source/UI/Preferences/`：偏好设置窗口。
+- `Source/UI/Themes/`：应用共享样式和主题资源；`App.xaml` 仅合并样式字典。
+- `Source/Models/`：目录节点、收藏入口、类别、设置、文件元数据等模型。
+- `Source/Services/`：文件系统、Git/SVN 和系统图标查询服务。
+- `Source/Controls/`：可复用控件和绘制逻辑，包括系统图标、文件列表网格线、目录树指示线。
+- `Source/Localization/`：四语资源与语言服务。英文功能项使用 Title Case，说明、提示和状态消息使用句式大小写；品牌、快捷键和用户名称保持原样。
+- `Source/Tests/CDirTests.csproj`、`Source/Tests/Program.cs`：隔离文件系统回归测试。
+- `Source/Tests/VersionControlTests.cs`、`Source/Tests/VersionControlSmokeTests.cs`：真实 Git/SVN 工作区与界面回归。
+- `Source/Resource/App.ico`：应用图标；`Source/Config/`：Windows 应用清单与默认配置。
+- `Source/Scripts/Build.ps1`、`Source/Scripts/Test.ps1`、`Source/Scripts/QuietTools.ps1`、`Source/Scripts/Package.ps1`：按需构建、分组测试和后台打包入口。
+- `Source/Tests/QuietRunner/`：测试进程树的后台 I/O 调度、串行队列及退出清理；`AGENTS.md` 记录按需、高效、当前桌面验证的要求。
+- `Source/Directory.Build.props`：主程序与回归测试输出路径。
+- `Docs/`：使用文档；`Publish/CDirWinX64/`：可直接运行的发布包。
+- `Build/Bin/<项目名>/`、`Build/Obj/<项目名>/`：构建产物与中间缓存。
+- `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`、`Artifacts/CDirPreview.png`：分发包和界面预览。
+
+---

@@ -1,0 +1,14 @@
+root = true
+
+[*.{cs,xaml,csproj,props}]
+charset = utf-8
+insert_final_newline = true
+
+[*.cs]
+# Framework overrides and interface implementations retain their required names.
+dotnet_naming_rule.CustomSymbolsUsePascalCase.severity = warning
+dotnet_naming_rule.CustomSymbolsUsePascalCase.symbols = CustomSymbols
+dotnet_naming_rule.CustomSymbolsUsePascalCase.style = PascalCase
+dotnet_naming_symbols.CustomSymbols.applicable_kinds = namespace, class, struct, interface, enum, delegate, property, method, field, event, parameter, type_parameter, local
+dotnet_naming_symbols.CustomSymbols.applicable_accessibilities = *
+dotnet_naming_style.PascalCase.capitalization = pascal_case
