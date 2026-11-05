@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="VersionControlTests.cs" />
+    <Compile Include="SearchTests.cs" />
+    <Compile Include="EnglishTextCaseTests.cs" />
+    <Compile Include="FolderSizeTests.cs" />
+    <Compile Include="../Services/FolderSizeService.cs" Link="Services/FolderSizeService.cs" />
+    <Compile Include="../Models/FileEntry.cs" Link="Models/FileEntry.cs" />
+    <Compile Include="../Models/SearchQuery.cs" Link="Models/SearchQuery.cs" />
+    <Compile Include="../Models/AddressSegment.cs" Link="Models/AddressSegment.cs" />
+    <Compile Include="../Models/VersionStatus.cs" Link="Models/VersionStatus.cs" />
+    <Compile Include="../Services/VersionControlService.cs" Link="Services/VersionControlService.cs" />
+    <Compile Include="../Services/FileSystemService.cs" Link="Services/FileSystemService.cs" />
+    <Compile Include="../Services/FileOperationHistory.cs" Link="Services/FileOperationHistory.cs" />
+    <Compile Include="../Localization/LanguageService.cs" Link="Localization/LanguageService.cs" />
+    <EmbeddedResource Include="../Localization/*.json" LogicalName="CDir.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

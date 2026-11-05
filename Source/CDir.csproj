@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="Version.props" />
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>CDir</AssemblyName>
+    <RootNamespace>CDir</RootNamespace>
+    <ApplicationManifest>Config/App.manifest</ApplicationManifest>
+    <ApplicationIcon>Resource/App.ico</ApplicationIcon>
+    <Product>CDir</Product>
+    <Description>简洁、实用的 Windows 文件管理器</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Draw selection behind the glyphs so opaque highlights keep selected text readable. -->
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.Controls.Text.UseAdornerForTextboxSelectionRendering" Value="false" />
+    <PackageReference Include="VirtualTerminal.WPF" Version="1.10.0" />
+    <ApplicationDefinition Include="App.xaml" />
+    <Resource Include="Resource/App.ico" />
+    <EmbeddedResource Include="Localization/*.json" />
+    <EmbeddedResource Include="Config/DefaultSettings.json" LogicalName="CDir.Config.DefaultSettings.json" />
+    <Compile Remove="Tests/**/*.cs" />
+    <Compile Include="Tests/*SmokeTests.cs" />
+    <None Remove="Tests/**" />
+    <None Update="ThirdParty/VirtualTerminal.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Config/TerminalStartup.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

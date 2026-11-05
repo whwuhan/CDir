@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\..\..\Build\Bin\QuietRunner\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\..\..\Build\Obj\QuietRunner\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

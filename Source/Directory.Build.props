@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\Build\Bin\CDir\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\Build\Obj\CDir\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'CDirTests'">
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\Build\Bin\CDirTests\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\Build\Obj\CDirTests\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
