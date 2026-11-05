@@ -1,0 +1,191 @@
+CDir File Manager
+
+The title bar shows the current version next to CDir as vmajor.minor.patch, starting at v0.0.0.
+The major version is controlled manually. The minor version increases after a release that fixes a fatal crash or hang, or when the user explicitly requests an increase for a major new feature. The release workflow manages the patch version: source or configuration changes increase it on the next successful release. Releasing or packaging unchanged source, building, testing, or a failed release does not increase it. Increasing minor does not reset patch or automatically change major.
+The title and version use the sidebar's default font size. Adjust the title bar independently under Preferences > UI > Panel Font Sizes.
+
+Getting started
+Extract the entire ZIP, then double-click CDir.exe.
+Keep all files in the same directory. No installer or separate .NET installation is required.
+The target systems are Windows 10 and Windows 11, 64-bit. Validation has been performed on Windows 11 x64; Windows 10 still requires testing on a physical installation.
+
+Tabs
+The tab bar appears below the File menu. Click + or press Ctrl+T to open a new tab in the current folder. Click a tab to switch to it. Click its × or press Ctrl+W to close it. Closing the last tab closes the window.
+Each tab has its own address bar, search box, sidebar, file list, status bar, and terminal. Tabs retain their own path, navigation history, search, sorting, selection, and sidebar state. Switching tabs does not reload them. Closing a tab releases its terminal and file watchers.
+Ctrl+Tab switches to the next tab; Ctrl+Shift+Tab switches to the previous tab, wrapping at either end. These shortcuts are customizable. Preferences are managed by the window.
+
+Browsing and navigation
+Click the arrow in the middle of the divider between the sidebar and file list to hide the sidebar. The button remains at the left edge; click it again to restore the previous width. Visibility is saved for the next launch. Drag other parts of the divider to resize the sidebar.
+The sidebar contains Quick Access and the directory tree. A single click on a tree folder immediately navigates the main panel without expanding the folder or waiting for a double-click interval. A double-click also expands or collapses the folder without loading it twice. Navigation preserves sidebar selection and scroll position. The arrow beside a folder expands or collapses it independently. Bookmark roots also show branch guides. Guides extend through each expanded level to its last visible child, shorten when collapsed, and remain continuous while scrolling.
+Click the Quick Access or My Computer heading to collapse or expand that section. The state is restored on the next launch.
+Right-click blank sidebar space and choose New Category, enter a name, and confirm. The category is appended below the existing sections. Right-click a category heading to expand or collapse all its folder branches while keeping the heading and root entries visible. Custom categories also offer Rename Category and Delete Category. Names, order, and expansion state are saved. The built-in Quick Access and My Computer sections cannot be deleted or renamed.
+Folders in Quick Access and custom categories have arrows for expanding their subfolders. Click a subfolder to open it, or drag it to another custom category. Expand All respects hidden-item settings and skips directory links. Collapse All stops an expansion in progress.
+Deleting a custom category first shows a confirmation naming the category. Confirm to remove the category and its shortcuts; cancel or close the dialog to keep them. Original folders and entries in other categories are unaffected.
+Right-click a drive or folder in the directory tree to expand or collapse all subfolders in that branch. This does not change the main panel's current location. Expansion respects hidden-item settings and skips directory links. Collapsing stops expansion in progress.
+Select folders in the main panel and drag them onto the heading or blank content area of an existing custom category. If there is no custom category, create one by right-clicking blank sidebar space. Multiple folders can be added together; duplicates within a category are skipped. Category entries are shortcuts to the original folders and do not move them. Dropping onto a concrete folder instead moves or copies the items according to the drag-copy preference.
+Drag folder entries up or down within a category and release at the blue insertion line to reorder them. Drag near the top or bottom of the sidebar to scroll. Entries and order are saved. Remove From Category removes only the shortcut.
+Dragging a category folder outside the sidebar and releasing removes its shortcut from that category. This works over the main panel, toolbar, or outside the window. Other category entries and the original folder are unaffected. Merely passing outside the sidebar does not remove anything. Press Esc to cancel, or release inside the sidebar to keep the entry.
+Dragging folders from the main panel onto a custom-category heading or blank content area highlights the category. Release to append the selected folders. Existing entries are skipped and a collapsed destination category expands automatically. This adds shortcuts without moving files.
+Folders in My Computer and Quick Access can also be dragged into custom categories. Dragging between custom categories adds an entry to the destination and keeps the source entry. Dragging within one category reorders entries. Dragging a tree folder does not first open it. The same tree click behavior applies to nested folders inside categories.
+Drag a category heading and release at the blue insertion line to change section order. Quick Access, My Computer, and custom categories can all be reordered. Order is saved; new categories are appended at the bottom. Press Esc to cancel.
+The main panel shows a flat list of the current directory's immediate files and folders. A single click selects a folder. Double-click, press Enter, or choose Open from its context menu to enter it. Double-click a file to open it with its default application.
+The address bar displays path segments. Hover over a folder name to highlight it; click to navigate to that level.
+Navigation from the main panel, address bar, or history expands the corresponding sidebar path and current folder, selects it, and scrolls it into view. A collapsed My Computer section opens automatically. Folder arrows only expand or collapse. Single-clicking a sidebar folder starts navigation immediately; double-clicking also changes expansion without adding duplicate history entries. This applies to My Computer, Quick Access, custom-category roots, and nested folders. Manual collapse takes precedence over background refresh. The matching tree resynchronizes when the main panel regains focus.
+Double-click the address bar or a segment to edit the full path without navigating to that segment. Single-clicking a segment still navigates. Click blank address-bar space or press Ctrl+L / Alt+D to type or paste a path. Press Enter to navigate; press Esc to cancel and restore the segmented display.
+Submitting a path with Enter or Go reveals and selects the destination under My Computer, even when browsing began from Quick Access or a custom category.
+While editing a path, clicking other blank areas of the window, including the list, sidebar, toolbar, status bar, or title bar, or pressing Esc, cancels unsubmitted text and moves focus out of the address field. Clicking inside still positions the caret or selects text. Go submits the current draft.
+Long paths prioritize the current directory. The … menu on the left lets you choose any ancestor.
+Paths may contain spaces, Chinese characters, or surrounding quotes. Environment variables such as %USERPROFILE%, relative paths, and network shares are supported.
+Entering a file path opens its containing directory and selects the file.
+The copy button to the right of the address bar copies the current folder path.
+The search box recursively searches names of files and folders in the current directory and all subdirectories.
+Enter a keyword such as report. Add /file to show only files or /dir to show only folders, for example report /file or /dir work. A type filter alone lists all items of that type; using both includes both types.
+/file can be shortened to /f and /dir to /d, without regard to case. Focusing an empty search box shows all filter hints. Typing / narrows the hints to matching commands; click a hint to complete it. Plain filename input, focus loss, or Esc hides the hints.
+Clicking blank space outside the search box and hint panel moves focus away and hides hints while preserving the query.
+For regular expressions, use /regex or /r, for example /regex ^report.*\.txt$ /file. Matching ignores case by default. Without ^ or $ anchors, any part of the name can match. Invalid expressions and matching timeouts produce a message.
+For wildcard matching, enter patterns such as report*.txt, *report*, or data?.txt. * matches any number of characters; ? matches one character, against the full name. /wildcard or /w explicitly enables this mode and can be combined with /file or /dir. Plain keywords use substring matching.
+Results appear in batches. Clearing search restores the current directory listing. Search respects hidden-item settings, skips inaccessible subdirectories, and does not follow directory links or junctions.
+Completed results remain stable. Background file changes do not restart a full search. Press F5 to refresh results or change the query to search again.
+Search results include an Absolute Path column to distinguish identical names in different folders. The column supports sorting and full-path tooltips, and disappears when search is cleared.
+Hidden items are controlled in File > Preferences. Item counts and operation messages appear in the status bar. A separate selected-item count preserves the total, folder, and file counts, and hides when selection is cleared.
+
+Interface language
+English is the default for first use. An existing saved language choice is preserved.
+Open File > Preferences and choose English, 简体中文, 日本語, or 한국어 without restarting.
+Language changes preserve the current path, filter, sorting, and selection. Your choice is saved for the next launch.
+
+Column headers and preference categories
+Drag any visible file-list header left or right to reorder columns. Click a header to sort by that column.
+Click again to switch ascending or descending order. The active header shows a bold blue arrow: ↑ for ascending and ↓ for descending. Other columns hide their arrows.
+Preferences includes General, UI, Terminal Theme, and Keyboard Shortcuts. General controls language, 12/24-hour time, hidden items, and close behavior. UI controls panel font sizes, grid lines, and visible columns.
+In UI, toggle Name, Date Modified, Type, Size, and Absolute Path to change visibility immediately. At least one ordinary browsing column must remain visible. Absolute Path is shown only during search.
+Column order and visibility are saved across restarts. Changing columns does not rerun search.
+
+System icons
+The file list, tree, Quick Access, and address bar use Windows Shell system icons.
+Icons follow Windows file associations, application icons, shortcut icons, and custom folder icons.
+Shortcut arrows are preserved. Git/SVN badges come from direct workspace queries rather than cached third-party Shell overlays.
+A generic system icon is used when a location is inaccessible, an extension does not return an icon, or reading times out.
+After changing associations or folder icons, press F5 to refresh the directory and icons.
+Icons are cached only in memory and are not extracted to disk.
+List icons are 16 DIP. Default rows are 22 DIP high, with an additional 1 DIP row border when grid lines are disabled. Larger fonts increase row height automatically. The title bar keeps the CDir icon; action buttons use compact glyphs.
+
+Git / SVN status
+CDir detects the Git or SVN workspace containing the current directory. Ordinary folders have no extra status badges. Nested repositories use their nearest workspace.
+Install Git 2.31+ or SVN 1.8+ command-line tools. CDir finds git.exe / svn.exe through PATH, installation registry entries, or standard locations, including TortoiseSVN installed on other drives.
+A green check means tracked and unchanged. A red exclamation mark means modified; a red cross means conflicted. Plus, minus, and diagonal-arrow badges indicate added, deleted, and renamed items.
+A blue question mark means untracked; a gray minus means ignored. A gray question mark means verification is in progress or status is unavailable. Hover for the reason.
+Files show their own status. Repository folders summarize changes in their children, with details in tooltips. Unchanged sibling files are not marked as modified.
+Ignored items do not dirty parent folders. Empty untracked Git directories have no badge. Ancestors outside a repository do not aggregate changes across repository boundaries.
+SVN checks both content and properties, reading files and immediate children of visible directories. Entering or expanding a directory adds a query without recursively scanning an entire large project.
+SVN directory summaries cover only visible children queried in the current pass. A green check does not certify unopened deeper subtrees. Unverified externals are not marked clean.
+Status is queried when first entering a repository, then refreshed after file changes or relevant version-control metadata changes. There is no periodic polling or query merely because the window regains focus.
+Navigation and tree scrolling within a repository reuse status. Bursts of changes are combined without repeatedly cancelling work. F5 forces refresh; refresh manually if watching is unavailable.
+Commits, reverts, and deep file changes trigger new queries. Obsolete results are not reused after navigation.
+Failed or timed-out queries show status as unavailable rather than guessing whether files are modified. Results describe the latest successfully queried local state.
+CDir only reads status. It does not commit, update, revert, or query remote servers.
+
+Keyboard shortcuts
+Use File > Preferences > Keyboard Shortcuts to edit configurable application shortcuts, including both Edit Path bindings. Only customizable items appear, sorted by their English action names. New Window (Ctrl+N), main-panel Copy (Ctrl+C), and Paste (Ctrl+V) are fixed and omitted from this list. Copy and paste in text fields remain normal text editing.
+Search by action name or key combination. Select an editor and press a new combination to apply and save it immediately.
+Customizable bindings can be cleared or reset. Duplicate combinations are rejected rather than overwriting another action. Ctrl+N always opens an independent CDir window in the current directory. Enter, Esc, and Tab retain their normal behavior in text fields and dialogs.
+Button tooltips and shortcut help update with changed application bindings. Windows Shell context menus remain system-managed. Default bindings are:
+Ctrl+T                  New tab
+Ctrl+N                  New CDir window (fixed)
+Ctrl+W                  Close current tab
+Ctrl+Tab / Ctrl+Shift+Tab  Next / previous tab
+Ctrl+L / Alt+D          Edit address bar
+Ctrl+Shift+C            Copy current folder path
+Alt+Left / Right / Up   Back / forward / parent directory
+Alt+X                   Show or hide embedded terminal
+Ctrl+F                  Search current folder and subfolders
+F5                      Refresh directory and icons
+Ctrl+Shift+N            New folder
+Ctrl+C / X / V          Copy / cut / paste
+Ctrl+C in the sidebar tree copies the selected folder's absolute path. This tree binding is fixed.
+While preparing to drag a main-panel folder to a category, the sidebar tree remains unchanged until release or the end of the drag.
+Ctrl+A                  Select all in the file list
+Enter                   Open selected item
+F2                      Rename
+Delete                  Move to Recycle Bin
+
+Embedded terminal
+Click Terminal at the lower right or press Alt+X to show or hide the PowerShell terminal beneath the file list.
+The first session starts in the current directory. Hiding preserves its session, working directory, environment, and output. Navigating the file list does not change an existing terminal's directory.
+Drag the divider above the terminal to resize it. The title-bar arrow hides it. Restart ends the old session and starts a new one in the file list's current directory.
+Copy, paste, and other terminal keys are handled by the terminal rather than the file list. The terminal toggle binding is customizable.
+Press Up for the previous command and Down for the next. Returning to the newest position restores unsubmitted input. History belongs to the current session: hiding preserves it, restarting clears it.
+Preferences > Terminal Theme appears below UI and controls terminal font size (8–48) and background color. Choose a swatch or enter #RRGGBB. The preview and running terminal update immediately and save automatically without restarting the session. Light backgrounds automatically use dark text.
+With terminal focus, Ctrl+Wheel Up or Ctrl++ increases font size; Ctrl+Wheel Down or Ctrl+- decreases it. Numeric-keypad plus and minus also work. Focusing another area prevents terminal zoom.
+Font changes update the caret and input-method position. After a terminal click, input focus is redirected to its native text editor. Chinese and other text uses the system IME; text is sent only after composition is confirmed. Enter, Backspace, and arrows go to the IME during composition. Cancelling composition does not execute a command. System font fallbacks display Chinese, Japanese, Korean, and other characters.
+Completion predictions and their tooltips use muted gray (#6F6F6F). Entered commands retain their normal syntax colors.
+Keyboard Shortcuts includes keyboard and wheel bindings for terminal font size. They can be edited, cleared, and reset. Select an editor and press a combination, or hold Ctrl or Alt while scrolling to record a wheel binding. Conflicting combinations are rejected.
+Ctrl+0, including numeric-keypad 0, resets the focused terminal to the default font size of 15. This binding is customizable. The terminal footer shows current font size, background color, and its #RRGGBB code, updating after preference or shortcut changes.
+Below Background Color, Terminal Theme also offers text-color swatches and custom #RRGGBB input. Automatic text color is enabled by default. Disable it to customize; selecting a text-color swatch switches to custom mode. Changes apply and save immediately. Restore Default Settings reenables automatic coloring.
+Ctrl+V, Ctrl+Shift+V, Shift+Insert, and context-menu Paste send text directly to the terminal rather than an invisible text field. Chinese and multiline text are supported.
+
+File operations
+Double-click files to open their Windows default application. Context menus or shortcuts provide new-folder creation, cut, copy, paste, rename, and delete.
+Files, folders, and blank main-panel space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, icons, associations, and third-party extensions; CDir does not add its own items. Shift+right-click shows extended commands. Multi-selection offers shared operations according to Windows rules. Shell rename supports numbered batch names.
+Right-click blank main-panel space and choose New to create a folder or a file type registered with Windows in the current directory.
+Pasting copies into the same directory generates a copy suffix and numbered names for collisions while preserving original files and extensions. Application copy/move actions do not overwrite existing names, merge folders, or copy/move symbolic links and junctions. Native Shell copy, move, delete, and conflict prompts follow Windows rules.
+Batch operations may complete partially. Already completed items remain after a failure or cancellation.
+Application delete actions use the Windows Recycle Bin and retain system confirmation; recycling from network or removable drives is rejected. Native context-menu deletion follows system policy: ordinary delete prefers recycling; Shift+Delete remains permanent. Deletion runs on a separate worker so system confirmation and progress windows do not lock the browser. You can browse, search, create items, and switch tabs. An operating tab remains open until its file operation finishes.
+If Windows reports that recycling is unavailable, review the system dialog before deciding whether to continue.
+Windows 10, cross-volume moves, network shares, and Recycle Bin interaction still require validation on the corresponding systems.
+
+Settings
+The last location, window size, hidden-item setting, interface language, and sidebar section states are saved in:
+%LOCALAPPDATA%\CDir\Settings.json
+On first launch, CDir migrates old DocReader settings, preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is kept.
+Restore Default Settings at the bottom of Preferences resets language, time format, hidden items, grid lines, column order/visibility, eight panel font sizes, terminal theme, and all shortcuts. Changes apply and save immediately while preserving location, window size, and custom categories. The default terminal font size is 15 and background is #1E1E1E; its title bar follows that background. Other baseline preferences date from November 3, 2026.
+Source\Config\DefaultSettings.json is the shared default configuration, embedded during builds and used for first launch and restoring preferences.
+
+CDir has no account system, telemetry, or automatic update checks.
+
+Panel Font Sizes in Preferences > UI independently controls File List, Column Headers, Sidebar, Address And Search Bars, Menus, Status Bar, Title Bar, and Preferences (8–24), applying and saving immediately.
+The light interface uses three neutral layers: #F3F3F3 for the outer window and title area, #FBFBFB for the sidebar and tools, and #FFFFFF for inner lists and input fields. Focus hints use #F3F3F3. Menus and Preferences share this palette; the terminal keeps its own theme.
+
+Closing and the notification area
+CDir shows a notification-area icon from startup until process exit, whether the window is visible, minimized, or hidden. By default, the window's Close button hides it and preserves the process and tabs. Double-click the CDir icon to restore the window. The icon may be in Windows' overflow area.
+Right-click the notification icon to open or exit CDir. Existing protections still apply while file operations are running.
+Enable Exit CDir On Close in Preferences > General to make the Close button exit the process. Disable it to restore hiding. The setting saves immediately and survives restarts.
+
+Scrollbars and horizontal scrolling
+Horizontal and vertical scrollbars are 12 logical pixels wide. Sidebar tree scrollbars normally hide, appearing after roughly 150 ms of continuous hover in their area. Quick movement between the main panel and sidebar does not make them flash. Pressing or dragging shows them immediately. Main-panel scrollbars remain visible when content is scrollable. Thumbs are light-gray rectangles, darken slightly on hover, and turn blue while dragged.
+Shift+Wheel provides fixed horizontal scrolling in the area under the pointer: wheel down scrolls right and wheel up scrolls left. It is not customizable. The ordinary wheel scrolls vertically.
+
+Top menu
+The File menu separates Preferences and Exit with a divider. Exit closes CDir while retaining active-operation protections. Help, to the right of File, is currently a reserved menu label without an action.
+
+Marquee selection
+Hold the left mouse button and drag in blank list space or the blank area to the right of name text to select multiple files and folders. Near the list's upper or lower edge, the list scrolls automatically. Ctrl+drag toggles items; Shift+drag adds to the selection. Esc cancels the marquee and restores the prior selection. Releasing preserves the result.
+Dragging on a folder icon or its name still starts the existing folder/category drag action.
+
+Drag-and-drop copying and moving
+Drag files and folders from Windows Explorer, the desktop, another CDir window, or selected items in the main panel. Dropping on blank main-panel space targets the current directory. Dropping on a folder row or an actual sidebar folder targets that folder. Drag feedback shows the destination and copy/move action.
+Copy Files And Folders On Drop in Preferences > General is unchecked by default, so drops move items. Enable it to copy while preserving sources. Existing saved choices are retained; Restore Default Settings turns it off. Changes save immediately and synchronize to other tabs. Existing names are not overwritten. A source's own directory, itself, or its descendants cannot be the destination.
+Dragging folders to a custom category within the window continues to add shortcuts.
+Main-panel folders dropped onto a category heading or blank category area add shortcuts. Dropping onto a concrete folder instead moves or copies the items according to the drag-copy preference, without adding category entries.
+Ctrl+X in the main panel fades the selected files and folders while they are pending a cut. Press Esc to cancel the cut and restore their appearance; pasting afterward cannot execute the canceled move. Refreshing or switching tabs preserves the cut state. Copying new contents or successfully completing a cut paste restores the normal appearance.
+Cut from the native context menu uses the same fading, Esc cancellation, and completed-paste behavior as Ctrl+X.
+Alt+1 shows or hides the entire sidebar. Customize, clear, or reset it under Preferences > Keyboard Shortcuts > Toggle Directory Tree. Ctrl+F focuses the search field; Esc closes search tips and returns focus to the file list without clearing the query. Quick Access opens the Recycle Bin in the same CDir file grid, with the Windows default icon and native item operations. Back, Forward, Refresh, and independent tabs are supported. Windows provides item operations such as Restore and Delete.
+Files and folders can also be dropped onto a directory name in the address bar. Release when the destination highlights to move items there, or copy them when Copy Files And Folders On Drop is enabled. The current browsing location stays open. Blank address-bar space does not accept file drops.
+Maximized windows use the current monitor's work area, keeping the status bar above the taskbar. The main window forwards application shortcuts, so Alt+X can toggle the terminal from the file list, text fields, or terminal.
+
+Navigation buttons highlight only while hovered or pressed. Moving the pointer away restores the normal style; keyboard navigation retains a focus border.
+
+File Operation History, Undo And Redo
+File operation records are retained locally across restarts; they are not shown in the interface. The File menu lists Undo (Ctrl+Z), Redo (Ctrl+Y), a separator, Preferences, and Exit. Ctrl+Z undoes and Ctrl+Y redoes file changes; these shortcuts cannot be customized or cleared. New folders, renames, copies, moves and deletions are supported within the current application session. Multi-selection changes are grouped; a new file change clears the redo branch. Deletion retains a local recovery copy. Undo stops if an item changed later or its original path is occupied. Text fields retain their normal text-editing undo and redo.
+Esc returns focus to the main file panel after dismissing editing, tips, menus or dialogs, including when pressed in the terminal. Existing cut cancellation, marquee cancellation and file-selection clearing remain available.
+Records and recovery copies are stored under %LOCALAPPDATA%\CDir\OperationHistory. Records survive restarting; undo and redo apply only to the current session. Changes made by external applications or terminal commands cannot be undone here. Third-party shell-extension invocations are recorded, but their internal actions cannot be undone. Windows Shell commands manage Restore, permanent deletion, and Empty Recycle Bin.
+Single-click address breadcrumb navigation waits at most 180 milliseconds. A quick double-click still opens full-path editing.
+
+Ctrl+A is fixed and selects all visible files and folders from any control in the main window, keeping the current search filter. It cannot be customized or cleared. Release ZIPs are saved to Publish/CDir_WinX64_vmajor.minor.patch.zip with an identical copy in Artifacts. Extracting a ZIP creates the matching versioned folder.
+In the Recycle Bin, Ctrl+F focuses search and filters original display names; Ctrl+A selects all currently displayed items. Clearing search restores the full view.
+
+Recycle Bin uses the ordinary file panel with two additional columns: Original Location and Date Deleted. Both columns are always displayed and cannot be hidden. The dropdown to the right of search lists column headers, marks visible columns with a check at the right, and toggles their visibility when clicked. Required Recycle Bin columns are checked fixed entries.
+
+Version 1.0.0 interaction updates
+Folder totals appear progressively in Size and include hidden descendants. Scans run serially in throttled background batches and stop when switching folders or tabs, or hiding Size. An unknown total is shown as —; ≥ indicates a partial total. Links and junction targets are not traversed. Press F5 to recalculate after changes inside subfolders. Repeated terminal deletion avoids copying scrollback for every screen update, keeps the IME host layout stable, and batches queued input without delaying individual keys.
+Ctrl+A anywhere in the main CDir window, including search, address, sidebar, tabs and terminal, focuses the file panel and selects all currently visible results without clearing the filter. Preferences and other dialogs stay open and retain native text selection. Mouse side buttons and browser-driver commands navigate Back/Forward in the active tab. File and Help menus and the tray popup have a font-aware minimum width. File includes About above the final separator and Exit; the tray retains only Open, its original separator, and Exit. Preferences reserves category space for all supported languages so switching languages preserves its sidebar and content alignment. New installations use the preferences in Source/Config/DefaultSettings.json. Custom categories, folder paths, and navigation state belong only to the user Settings.json and are excluded from the bundled defaults.
