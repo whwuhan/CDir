@@ -12,6 +12,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 
 ### Features
 
+- Folder totals appear progressively in the Size column, including hidden descendants. One throttled background scan runs at a time; changing folders or tabs and hiding Size cancel pending work. `—` means unknown, `≥` marks a partial total, and links are not traversed. Press `F5` to recalculate after changes inside subfolders.
 - Expand or collapse Quick Access and the drive tree by clicking their headings; section state is saved. Directories load on demand and selection follows navigation. A single tree-folder click navigates immediately without expanding or waiting for a double-click interval. A double-click also expands or collapses that folder without duplicate loading or history entries. When the main panel gains focus, the tree and matching bookmark category synchronize to its current path. Navigation preserves selection and sidebar scroll position; arrows change expansion independently. Bookmark roots show branch guides, ending at the connection point of the last sibling at each level. Right-click a drive or folder in the tree to expand or collapse all subfolders in that branch.
 - Drag sidebar category headings to reorder sections, including Quick Access and My Computer. A blue line marks the insertion point and order is saved. Right-click only blank sidebar space to create a category. Category context menus expand or collapse all contained folder branches while keeping the category open. Custom categories can also be renamed or deleted; built-in sections cannot.
 - Bookmark folders in Quick Access and custom categories can expand through multiple directory levels. Click a subfolder to open it or drag it to another custom category.
@@ -61,10 +62,10 @@ In File > Preferences > Keyboard Shortcuts, search customizable shortcuts by act
 | `F5` | Refresh directory and icons |
 | `Ctrl+Shift+N` | New folder |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste |
-| `Ctrl+A` | Select all in the file list |
+| `Ctrl+A` | Focus the main file panel and select every visible item |
 | `Enter` / `F2` / `Delete` | Open / rename / move to Recycle Bin |
 
-When a text field has focus, copy, cut, paste, and other text-editing shortcuts still operate on text.
+In the main window, Ctrl+A moves focus from search, address, sidebar, tabs, or terminal to the file panel and selects every visible result without clearing the search filter. Preferences and other dialogs remain open and keep normal text selection. Other text-editing shortcuts, including copy, cut, and paste, retain their text-field behavior. Mouse side buttons navigate Back/Forward in the active tab; mouse-driver browser commands and dedicated browser keys are also supported.
 
 ### System Icons
 
@@ -203,6 +204,8 @@ After each successful publication and ZIP creation, insert the newest release im
 
 ## 中文
 
+文件夹的 Size 列会在后台逐步显示包含隐藏文件在内的递归合计大小。统计任务串行、分批执行；切换目录或标签、隐藏 Size 列时取消未完成的统计。`—` 表示未知，`≥` 表示仅统计了部分内容；不会递归进入链接或联接目录。子目录内容变化后可按 `F5` 重新计算。
+
 简洁的 Windows 文件管理器，使用 C#、WPF 和 .NET 10 构建。浅色界面、按需展开的目录树和可编辑地址栏，让常用的文件操作保持直观。
 
 ### 运行
@@ -262,10 +265,10 @@ After each successful publication and ZIP creation, insert the newest release im
 | `F5` | 刷新目录与图标 |
 | `Ctrl + Shift + N` | 新建文件夹 |
 | `Ctrl + C` / `Ctrl + X` / `Ctrl + V` | 复制 / 剪切 / 粘贴 |
-| `Ctrl + A` | 在文件列表中全选 |
+| `Ctrl + A` | 聚焦主面板并全选当前显示的项目 |
 | `Enter` / `F2` / `Delete` | 打开 / 重命名 / 移到回收站 |
 
-文本框具有焦点时，复制、剪切、粘贴等文本编辑快捷键仍作用于文本。
+主窗口中的 Ctrl+A 会从搜索框、地址栏、侧栏、标签栏或终端切回主面板，全选当前显示的结果，并保留搜索筛选。Preferences、重命名等弹窗保持打开，保留普通文本全选；复制、剪切、粘贴等其他文本编辑快捷键仍作用于文本。鼠标侧键 1/2 分别在当前标签页内后退、前进，同时支持鼠标驱动发送的浏览器命令及专用浏览器按键。
 
 ### 系统图标
 

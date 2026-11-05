@@ -1,5 +1,27 @@
 # 更新日志
 
+## v1.0.1
+
+- 发布时间：2026-11-05 23:41:41 UTC+08:00 (Asia/Shanghai)
+- 修复默认配置混入用户 Category 信息：从 Source/Config/DefaultSettings.json 及默认配置模型中移除 CustomCategories、LastPath、NavigationTreeKey、SidebarTreeLayouts 和 SidebarScrollOffset，SidebarOrder 仅保留 Quick Access、My Computer 两个内置区域。新用户的自定义分类和导航状态独立初始化为空；已有用户 Settings.json 中的分类、目录、排序、展开及选中状态仍正常保存、迁移和恢复。
+- 原因是上一版辅助脚本将用户 Settings.json 全量合并进默认配置；已归档该一次性脚本和个人配置快照，并更新中英文说明。新增回归检查保证内置 JSON 不包含个人分类、路径与导航状态，缺少分类字段的旧配置不会继承个人分类，不同用户配置实例互不污染。
+- 修正 About 菜单 Escape 测试的事件来源：使用主窗口的 PresentationSource 和独立测试键盘，避免菜单关闭后其视觉源为空导致测试中断；首轮失败输出与自有临时目录已完整归档后重跑。
+- 验证：发布配置 v1.0.1 下 language 界面组 548 项、sidebar 界面组 407 项通过，共 955 项，涵盖默认配置、四种语言、分类创建与保存、迁移、关闭重开和侧栏恢复。其他界面组、全部后台组及 release 脚本组本次未运行。
+- 发布交付：Publish/CDirWinX64、Publish/CDir_WinX64_v1.0.1.zip 和 Artifacts/CDir_WinX64_v1.0.1.zip；测试与发布程序哈希一致，程序元数据、标题版本程序集、Release.json 和版本状态一致，两份 ZIP 完全相同，唯一顶层目录与版本文件名一致，包内 407 个文件逐一校验通过。更新并检查 Artifacts/CDirPreview.png 及精确版本、捕获时间元数据；旧预览和过期诊断归档。发布前仅关闭已核实路径属于本工作区的运行实例，发布成功后已重新打开一次。
+
+## v1.0.0
+
+- 发布时间：2026-11-05 23:20:49 UTC+08:00 (Asia/Shanghai)
+- 首个正式可用版本；按用户指定升级主版本为 v1.0.0，次版本与补丁版本同时归零，标题栏、程序元数据、Release.json 和版本状态保持一致。英文 LICENSE 放在中文前并随发布包分发；README 的 English、中文均为二级标题，英文内容在前。
+- Size 列后台逐步统计文件夹内全部普通文件的递归逻辑大小，包含隐藏文件。全部窗口共享一个串行扫描入口，每 64 项短暂让出资源，长扫描最多每 250 毫秒报告进度；切换目录或标签、隐藏 Size 列以及关闭窗口时取消，迟到结果不能写入新页面。空目录显示 0 B，未知显示 —，部分统计显示 ≥；跳过符号链接和联接目标，避免循环或重复，F5 可重新统计子目录内容变化。
+- 优化终端连续删除：屏幕刷新不再复制完整历史文本用于辅助功能比较，辅助功能通知合并，文本查询仍获取最新内容；输入法宿主移动使用渲染变换，减少逐字符布局；合并积压的输入写入。真实 ConPTY 中填充 1,000 行历史后，以约 8 毫秒间隔删除 120 个字符，约 1.02 秒完成回显；同时验证前向 Delete、输入法、历史、剪贴板和重启。
+- 修复鼠标侧键快速返回，兼容 XButton、浏览器专用键及驱动 WM_APPCOMMAND；主窗口内 Ctrl+A 从搜索、地址栏、侧栏、标签、菜单或终端聚焦文件面板并全选当前显示结果，保留筛选；Preferences、重命名等独立弹窗保持打开及原有文本全选行为。
+- Preferences 为四种语言预留稳定的分类宽度与行高，切换语言不再改变左栏及内容位置；将当前完整配置及快捷键写入 Source/Config/DefaultSettings.json，默认字典与树布局独立复制。File、Help 与托盘菜单增加随字号调整的合理最小宽度，保留紧凑布局；File 在 Exit 上方增加 About 和下方分割线，托盘仅保留 Open、原有分割线与 Exit。
+- 修复原生右键菜单首次打开的初始化时机，同步构建动态级联菜单并在初始化与显示期间转发 Shell 消息；防止菜单重入。Escape 检查使用真实的预览键路由；当前桌面菜单测试等待导航焦点恢复后再打开，并观察原生菜单进入消息，避免短暂显示被轮询漏检。
+- 验证：UI 共 3370 项通过，columns 306、terminal 259、shortcuts 308、operations 566、tabs 108、language 546、fonts 265、sidebar 407、lifecycle 122、search 218、navigation 265；filesystem 后台组 36、language 后台组 7、release 脚本组 46 项通过。未运行后台 search/address/version-control 及 UI transfer/selection/address/shell-icons/version-control。报告均为本次发布相关检查；每轮重试前已归档前轮完整输出和自有临时目录，未将旧程序误选的检查作为本次发布证据。
+- 发布交付：Publish/CDirWinX64、Publish/CDir_WinX64_v1.0.0.zip 和 Artifacts/CDir_WinX64_v1.0.0.zip。测试与发布二进制 SHA-256 一致，两份 ZIP 完全一致，唯一顶层目录为 CDir_WinX64_v1.0.0，包内全部 407 个文件逐一校验一致；Publish 及可运行目录时间戳已更新。
+- 更新并核对 Artifacts/CDirPreview.png，附版本、时间与图片哈希元数据；AGENTS.md 增加每次发布必须更新并检查 Preview 的规则。Artifacts 下旧版本 ZIP、过期预览、旧诊断目录与遗留标记已归档至 F:\Repository\CDir\Trash\ArtifactCleanup-20261105-232112-85899957eea64a61acd5849fddf93c74，保留当前发布包与本次验证证据。
+
 ## v0.0.58
 
 - 发布时间：2026-11-05 21:06:04 UTC+08:00 (Asia/Shanghai)
