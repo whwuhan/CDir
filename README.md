@@ -2,11 +2,22 @@
 
 ## English
 
-CDir is a compact Windows file manager built with C#, WPF, and .NET 10. Its light interface, directory tree that loads on demand, and editable address bar keep everyday file operations straightforward.
+### About CDir
 
-### Running
+CDir is a compact Windows file manager for everyday file browsing, organization, and project navigation. It combines tabs, a directory tree that loads on demand, an editable address bar, and custom bookmark categories in a light interface. Recursive search, Git/SVN status badges, and an embedded PowerShell terminal help you work with local folders and code repositories.
 
-Extract `/Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip` and double-click `CDir.exe`, or run `/Publish/CDirWinX64/CDir.exe` directly. It's most updated release version. Keep every file beside the executable. The package includes the .NET runtime, requires no installer or separate .NET installation, and does not require administrator privileges.
+Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
+
+![CDir v1.0.1 interface preview](Docs/Images/CDirPreview.png)
+
+### Opening CDir
+
+Choose either way to open the latest published version:
+
+1. Extract `Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip`, open the extracted versioned folder, and double-click `CDir.exe`.
+2. If you already have the repository's runnable release, open `Publish/CDirWinX64/` and double-click `CDir.exe`.
+
+Keep all files and subfolders in the release together. The package includes the .NET runtime, requires no installer or separate .NET installation, and does not require administrator privileges.
 
 The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automated regression checks currently run on Windows 11 x64; Windows 10 still needs validation on an actual installation. For Windows 10, 22H2 or an LTSC release still within support is recommended; this does not mean every Windows 10 release has been tested. The official .NET 10 Windows 10 support list is limited to LTSC / Enterprise releases still within support. See [Microsoft's installation and support information](https://learn.microsoft.com/en-us/dotnet/core/install/windows) and the [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 
@@ -106,7 +117,7 @@ The initial repository visit queries status and establishes watchers. Further qu
 
 CDir has no account system, telemetry, or update checks. Network behavior of shares, Shell extensions, and external programs is controlled by those components.
 
-Settings are stored in `%LOCALAPPDATA%\CDir\Settings.json`, including the interface language. First launch migrates old DocReader settings while preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is retained. First use defaults to English, as do older settings without a language field. Delete the settings file while CDir is closed to restore defaults.
+Settings are stored in `%LOCALAPPDATA%\CDir\Settings.json`, including the interface language. First launch migrates old DocReader settings while preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is retained. First use defaults to English, as do older settings without a language field. The bundled preferences in `Source/Config/DefaultSettings.json` exclude personal categories, folder paths, and navigation state; new users start with no custom categories. Delete the settings file while CDir is closed to restore defaults.
 
 Preferences > UI > Panel Font Sizes independently adjusts File List, Column Headers, Sidebar, Address And Search Bars, Menus, Status Bar, Title Bar, and Preferences (8–24). Changes apply and save immediately; input heights follow font sizes.
 
@@ -129,6 +140,7 @@ Both `-Publish` and `-Package` publish and create a ZIP. Steps run serially, do 
 
 ```text
 Publish/CDirWinX64/CDir.exe
+Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip
 Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip
 ```
 
@@ -181,6 +193,8 @@ Owned directory names, code files, and custom identifiers use PascalCase. Source
 
 After each successful publication and ZIP creation, insert the newest release immediately below the heading, including its version, publication timestamp to the second with timezone, and specific changes to [UpdateLog.md](UpdateLog.md) in the project root. The Chinese guide is [Docs/使用说明.txt](Docs/使用说明.txt); the English guide is [Docs/UserGuide.txt](Docs/UserGuide.txt). Both ship with the release.
 
+After updating the release preview, copy `Artifacts/CDirPreview.png` to `Docs/Images/CDirPreview.png` and update both preview version labels in this README. The documentation copy is included in Git so GitHub can display the image while `Artifacts/` remains ignored.
+
 ### Project Structure
 
 - `Source/App.xaml` / `Source/App.xaml.cs`: entry point and startup logic. The root also retains `CDir.csproj` and `Directory.Build.props`.
@@ -198,24 +212,34 @@ After each successful publication and ZIP creation, insert the newest release im
 - `Source/Scripts/Build.ps1`, `Test.ps1`, `QuietTools.ps1`, `Package.ps1`: build, grouped tests, and background packaging entry points.
 - `Source/Tests/QuietRunner/`: background I/O scheduling, serial queue, and process-tree cleanup. `AGENTS.md` defines efficient current-desktop validation requirements.
 - `Source/Directory.Build.props`: application and regression-test output paths.
-- `Docs/`: user documentation. `Publish/CDirWinX64/`: runnable release.
+- `Docs/`: user documentation. `Docs/Images/CDirPreview.png`: README preview included in Git. `Publish/CDirWinX64/`: runnable release.
 - `Build/Bin/<project>/`, `Build/Obj/<project>/`: build outputs and intermediate caches.
 - `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`, `Artifacts/CDirPreview.png`: distribution archive and interface preview.
 
 ## 中文
 
-文件夹的 Size 列会在后台逐步显示包含隐藏文件在内的递归合计大小。统计任务串行、分批执行；切换目录或标签、隐藏 Size 列时取消未完成的统计。`—` 表示未知，`≥` 表示仅统计了部分内容；不会递归进入链接或联接目录。子目录内容变化后可按 `F5` 重新计算。
+### 软件介绍
 
-简洁的 Windows 文件管理器，使用 C#、WPF 和 .NET 10 构建。浅色界面、按需展开的目录树和可编辑地址栏，让常用的文件操作保持直观。
+CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整理和项目目录导航。它在浅色界面中提供多标签页、按需加载的目录树、可编辑地址栏和自定义收藏分类，并结合递归搜索、Git/SVN 状态徽标和内嵌 PowerShell 终端，方便管理本地文件夹和代码仓库。
 
-### 运行
+CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-解压 `/Publish/Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`，双击其中的 `CDir.exe`；也可直接运行 `/Publish/CDirWinX64/CDir.exe`。这是最新的发布版本。请保留程序旁的所有文件。发布包自带 .NET 运行时，无需安装程序或另外安装 .NET，也不需要管理员权限。
+![CDir v1.0.1 界面预览](Docs/Images/CDirPreview.png)
+
+### 打开 CDir
+
+可通过以下任一方式打开最新发布版本：
+
+1. 解压 `Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip`，打开解压后的版本目录，双击 `CDir.exe`。
+2. 如果已有仓库中的可运行发布目录，打开 `Publish/CDirWinX64/`，双击 `CDir.exe`。
+
+请保留发布目录中的全部文件和子文件夹。发布包自带 .NET 运行时，无需安装程序或另外安装 .NET，也不需要管理员权限。
 
 设计目标为 **Windows 10 / Windows 11 64 位**。当前构建与自动回归验证环境为 Windows 11 x64，Windows 10 尚需实机验收。建议 Windows 10 使用 22H2 或仍在支持期的 LTSC 版本；这不代表所有 Windows 10 版本都已验证。.NET 10 当前的 Windows 10 官方支持清单限于仍在支持期的 LTSC / Enterprise 版本，详见 [Microsoft 支持说明](https://learn.microsoft.com/en-us/dotnet/core/install/windows) 和 [.NET 10 系统清单](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)。
 
 ### 已有功能
 
+- 文件夹的 Size 列会在后台逐步显示包含隐藏文件在内的递归合计大小。统计任务串行、分批执行；切换目录或标签、隐藏 Size 列时取消未完成的统计。`—` 表示未知，`≥` 表示仅统计了部分内容；不会递归进入链接或联接目录。子目录内容变化后可按 `F5` 重新计算。
 - 左侧常用位置与驱动器目录树可分别点击标题展开、收起，并记住状态；目录按需加载，导航时同步所选位置。单击目录树中的文件夹立即导航，不展开，也不等待双击判定；双击同时展开或收起，同一目录不重复加载或增加历史记录。主面板获得焦点时，目录树及匹配的收藏分类同步回主面板当前路径。跳转时保留选中状态与侧栏滚动位置；箭头独立展开或收起。收藏根目录也显示分支提示线，每层最后一个同级目录的提示线在该目录连接点结束。右键点击目录树中的盘符或文件夹，仅显示展开所有子文件夹和收起所有子文件夹，递归操作当前分支。
 - 拖动左侧类别标题可调整顺序，包括常用位置与目录树；蓝色提示线表示插入位置，顺序自动保存。仅在侧栏空白处右键可新增类别；类别标题右键可展开或收起其下所有文件夹分支，类别本身保持展开。自定义类别还支持重命名和删除。常用位置与目录树为内置分组，不允许删除或重命名。
 - 常用位置和自定义类别中的收藏文件夹可逐级展开子目录，点击子目录即可打开，也支持将子目录拖到其他自定义类别。
@@ -229,12 +253,12 @@ After each successful publication and ZIP creation, insert the newest release im
 - 文件列表、目录树、常用位置和地址栏显示 Windows Shell 系统图标，包含默认关联程序、应用程序、快捷方式及自定义文件夹图标。
 - 文件列表、目录树和地址栏显示由 Git/SVN 实际工作区查询生成的状态徽标，区分未修改、修改、新增、删除、重命名、冲突、未跟踪与忽略；提交和还原后自动刷新。
 - 通过右键菜单或快捷键新建文件夹、重命名、复制、剪切、粘贴、移到回收站；与 Windows 文件剪贴板互通。
+- 文件列表的文件、文件夹及空白处使用 Windows Shell 原生完整右键菜单（Windows 11 中对应“显示更多选项”），由系统提供命令、文件关联和第三方扩展，不附加 CDir 菜单项；空白处右键的“新建”可创建文件夹或系统已注册的文件类型。类别中的快捷入口支持点击打开、同类别内拖动排序及移除，内容和顺序自动保存，不移动或删除原文件夹。
+- 主面板中的文件夹可拖到左侧自定义类别的标题或类别内空白处，目标类别高亮后松开即可添加快捷入口；支持多选拖入，已有条目不会重复添加。拖到具体文件夹时，按拖放复制设置执行移动或复制。
 - 主面板按 Ctrl+X 剪切后，选中文件和文件夹淡化显示；按 Esc 取消剪切并恢复显示。刷新或切换标签页保留待剪切状态，复制新内容或完成剪切粘贴后自动恢复显示。
 - 右键菜单的“剪切”与 Ctrl+X 使用相同的淡化及 Esc 取消行为。Alt+1 显示或隐藏整个左侧目录栏，可在 Keyboard Shortcuts 中自定义；Ctrl+F 聚焦搜索框后，Esc 退出焦点并保留搜索内容。Quick Access 的回收站在主面板内浏览，使用 Windows 默认图标和原生项目操作，支持前进、后退和刷新。
 - 内嵌终端使用系统输入法的文本输入控件处理组词和候选确认；点击后保持输入焦点，支持中文、日文、韩文等文本，并使用相应字体回退显示。
 - 终端自动补全建议及其帮助提示使用柔和灰色，便于和已输入命令区分。
-- 文件列表的文件、文件夹及空白处使用 Windows Shell 原生完整右键菜单（Windows 11 中对应“显示更多选项”），由系统提供命令、文件关联和第三方扩展，不附加 CDir 菜单项；空白处右键的“新建”可创建文件夹或系统已注册的文件类型。类别中的快捷入口支持点击打开、同类别内拖动排序及移除，内容和顺序自动保存，不移动或删除原文件夹。
-- 主面板中的文件夹可拖到左侧自定义类别的标题或类别内空白处，目标类别高亮后松开即可添加快捷入口；支持多选拖入，已有条目不会重复添加。拖到具体文件夹时，按拖放复制设置执行移动或复制。
 - “My Computer”和“Quick Access”中的文件夹也支持拖到自定义类别；类别之间拖动文件夹会添加到目标类别并保留原入口，同类别内拖动仍用于排序。
 - 将类别内的文件夹拖到左侧栏以外并松开，即可从原类别移除快捷入口，支持在窗口外松开；按 Esc 取消会保留入口，不影响原文件夹或其他类别中的入口。
 - 主面板以平铺列表显示当前目录，单击文件夹仅选中，双击进入文件夹；双击文件使用系统默认程序打开。支持在当前目录打开终端或系统资源管理器。
@@ -308,7 +332,7 @@ Git 使用 `status --porcelain=v1 -z` 和已跟踪文件清单，覆盖暂存区
 
 程序没有账号、遥测或更新检查。网络共享、Windows Shell 扩展及外部程序的网络行为由对应系统组件决定。
 
-设置位于 `%LOCALAPPDATA%\CDir\Settings.json`，包含界面语言。首次启动 CDir 时会自动迁移旧 DocReader 设置，保留语言、自定义类别和侧栏顺序；已有 CDir 设置优先，旧文件保留。首次使用默认使用英语；旧版设置文件缺少语言字段时默认使用英语。关闭程序后删除该文件可恢复默认设置。
+设置位于 `%LOCALAPPDATA%\CDir\Settings.json`，包含界面语言。首次启动 CDir 时会自动迁移旧 DocReader 设置，保留语言、自定义类别和侧栏顺序；已有 CDir 设置优先，旧文件保留。首次使用默认使用英语；旧版设置文件缺少语言字段时默认使用英语。内置偏好设置 `Source/Config/DefaultSettings.json` 不包含个人分类、目录路径或导航状态，新用户的自定义分类为空。关闭程序后删除该文件可恢复默认设置。
 
 “偏好设置 → UI → 面板字体大小”可分别设置文件列表、列表表头、侧边栏、地址与搜索栏、菜单、状态栏、标题栏和偏好设置的字号（8–24）。修改即时生效并自动保存；输入框高度随字号调整。
 
@@ -331,6 +355,7 @@ Git 使用 `status --porcelain=v1 -z` 和已跟踪文件清单，覆盖暂存区
 
 ```text
 Publish/CDirWinX64/CDir.exe
+Publish/CDir_WinX64_v<major>.<minor>.<patch>.zip
 Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip
 ```
 
@@ -381,7 +406,9 @@ dotnet run --project Source/CDir.csproj -- "C:\Users"
 
 自有目录、代码文件与自定义标识符统一使用 PascalCase；源码集中在 `Source`，美术资源集中在 `Source/Resource`。仅外部固定契约保留原名，例如 `.editorconfig`、MSBuild/IDE 配置键、框架 API、SDK 生成的 `net10.0-windows`/`win-x64` 目录和 .NET 文化目录。
 
-每次成功发布并生成 ZIP 后，在项目根目录的 [UpdateLog.md](UpdateLog.md) 追加版本、精确到秒且带时区的发布时间及具体改动。中文使用说明见 [Docs/使用说明.txt](Docs/使用说明.txt)，英文版见 [Docs/UserGuide.txt](Docs/UserGuide.txt)，两份说明均随发布包分发。
+每次成功发布并生成 ZIP 后，在项目根目录的 [UpdateLog.md](UpdateLog.md) 文档标题下方插入最新记录，包含版本、精确到秒且带时区的发布时间及具体改动。中文使用说明见 [Docs/使用说明.txt](Docs/使用说明.txt)，英文版见 [Docs/UserGuide.txt](Docs/UserGuide.txt)，两份说明均随发布包分发。
+
+更新发布预览后，将 `Artifacts/CDirPreview.png` 复制到 `Docs/Images/CDirPreview.png`，并同步修改本 README 中英文两处预览版本标注。文档副本纳入 Git，保证 GitHub 可以显示图片，同时继续忽略 `Artifacts/`。
 
 ### 项目结构
 
@@ -400,7 +427,7 @@ dotnet run --project Source/CDir.csproj -- "C:\Users"
 - `Source/Scripts/Build.ps1`、`Source/Scripts/Test.ps1`、`Source/Scripts/QuietTools.ps1`、`Source/Scripts/Package.ps1`：按需构建、分组测试和后台打包入口。
 - `Source/Tests/QuietRunner/`：测试进程树的后台 I/O 调度、串行队列及退出清理；`AGENTS.md` 记录按需、高效、当前桌面验证的要求。
 - `Source/Directory.Build.props`：主程序与回归测试输出路径。
-- `Docs/`：使用文档；`Publish/CDirWinX64/`：可直接运行的发布包。
+- `Docs/`：使用文档；`Docs/Images/CDirPreview.png`：纳入 Git 的 README 预览图；`Publish/CDirWinX64/`：可直接运行的发布包。
 - `Build/Bin/<项目名>/`、`Build/Obj/<项目名>/`：构建产物与中间缓存。
 - `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`、`Artifacts/CDirPreview.png`：分发包和界面预览。
 
