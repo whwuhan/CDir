@@ -39,6 +39,9 @@ public partial class MainWindow : Window
 
     public ObservableCollection<ExplorerTab> Tabs { get; } = [];
     public ObservableCollection<TabHeader> Headers { get; } = [];
+    public ObservableCollection<TabHeader> VisibleHeaders { get; } = [];
+    public ObservableCollection<TabHeader> PinnedHeaders { get; } = [];
+    private bool SeparatePinnedTabs;
     internal ExplorerTab? ActiveTab { get; private set; }
     internal ExplorerTab? PresentedTab { get; private set; }
     internal TrayIconService? TrayIcon { get; private set; }
@@ -91,6 +94,7 @@ public partial class MainWindow : Window
         };
         Activated += (_, _) => this.LastActivatedUtc = DateTimeOffset.UtcNow;
         Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); };
+        this.SeparatePinnedTabs = Settings.SeparatePinnedTabs;
         this.AttachTab(Initial);
         Initial.RefreshShellResources();
         this.UpdateCaption();
@@ -147,6 +151,7 @@ public partial class MainWindow : Window
         Page.PropertyChanged += (_, _) => this.PersistWorkspaceNow();
         this.TabPages.Children.Add(Page);
         this.Headers.Add(new TabHeader(Page));
+        this.RefreshTabHeaders();
         this.SelectTab(Page);
     }
 
@@ -170,9 +175,10 @@ public partial class MainWindow : Window
             Page.Visibility = Visibility.Visible;
             if (this.PresentedTab is { } Previous) Previous.IsHitTestVisible = false;
         }
-        this.TabHeaders.UpdateLayout();
-        (this.TabHeaders.ItemContainerGenerator.ContainerFromItem(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page))) as FrameworkElement)?.BringIntoView();
-        if (ReferenceEquals(Page, this.Tabs.Last()))
+        var HeaderControl = this.SeparatePinnedTabs && Page.IsTabPinned ? this.PinnedTabHeaders : this.TabHeaders;
+        HeaderControl.UpdateLayout();
+        (HeaderControl.ItemContainerGenerator.ContainerFromItem(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page))) as FrameworkElement)?.BringIntoView();
+        if (ReferenceEquals(Page, this.Tabs.Last()) && !(this.SeparatePinnedTabs && Page.IsTabPinned))
         {
             this.TabScroll.UpdateLayout();
             this.NewTabButton.BringIntoView();
@@ -215,6 +221,7 @@ public partial class MainWindow : Window
         this.TabPages.Children.Remove(Page);
         this.Tabs.Remove(Page);
         this.Headers.Remove(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page)));
+        this.RefreshTabHeaders();
         if (ReferenceEquals(Page, this.PresentedTab)) this.PresentedTab = null;
         if (WasActive) this.SelectTab(this.Tabs[Math.Min(Index, this.Tabs.Count - 1)]);
         this.PersistWorkspaceNow();
@@ -237,7 +244,7 @@ public partial class MainWindow : Window
             Element = Element is Visual ? VisualTreeHelper.GetParent(Element) : LogicalTreeHelper.GetParent(Element))
         {
             // The dedicated buttons and overflow scrollbar keep their own gestures.
-            if (Element is ScrollBar || Element is Button Button && (ReferenceEquals(Button, this.NewTabButton) || Button.Name == "CloseTabButton")) return;
+            if (Element is ScrollBar || Element is Button Button && (ReferenceEquals(Button, this.NewTabButton) || Button.Name is "CloseTabButton" or "PinTabButton")) return;
             if (Element is FrameworkElement { DataContext: TabHeader Item }) Header = Item;
         }
         E.Handled = true;
@@ -340,6 +347,7 @@ public partial class MainWindow : Window
     {
         if (Command == "NewTab") this.AddTab();
         else if (Command == "CloseTab" && this.ActiveTab is { } Page) this.CloseTab(Page);
+        else if (Command == "ToggleTabPin" && this.ActiveTab is { } PinnedPage) this.SetTabPinned(PinnedPage, !PinnedPage.IsTabPinned);
         else if (this.ActiveTab is not null && this.Tabs.Count > 1)
         {
             var Delta = Command == "PreviousTab" ? -1 : 1;

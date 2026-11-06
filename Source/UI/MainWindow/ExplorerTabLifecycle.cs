@@ -25,6 +25,13 @@ public partial class ExplorerTab
     public string TabTitle => this.TabAlias.Length > 0 ? this.TabAlias : this.IsRecycleBin ? LanguageService.Text("RecycleBin") : this.TabPath.Length == 0 ? LanguageService.Text("NewTab")
         : Path.GetFileName(Path.TrimEndingDirectorySeparator(this.TabPath)) is { Length: > 0 } Name ? Name : this.TabPath;
     public bool IsTabSelected { get; private set; }
+    public bool IsTabPinned { get; private set; }
+
+    internal void SetTabPinned(bool Pinned)
+    {
+        this.IsTabPinned = Pinned;
+        this.PropertyChanged?.Invoke(this, new(nameof(IsTabPinned)));
+    }
     internal bool IsOperationBusy => this.OperationBusy;
     internal AppSettings PageSettings => this.Settings;
     internal bool IsInitialLayoutReady => this.InitialLayoutReady.Task.IsCompletedSuccessfully;
@@ -85,7 +92,7 @@ public partial class ExplorerTab
     internal bool TryGetTabCommand(Key Key, ModifierKeys Modifiers, out string Command)
     {
         Command = KeyboardShortcut.Match(this.ShortcutBindings, Key, Modifiers)?.Id ?? "";
-        return Command is "NewTab" or "CloseTab" or "NextTab" or "PreviousTab";
+        return Command is "NewTab" or "CloseTab" or "NextTab" or "PreviousTab" or "ToggleTabPin";
     }
 
     internal async Task ApplySharedPreferencesAsync(AppSettings Source)
@@ -101,6 +108,8 @@ public partial class ExplorerTab
         this.Settings.CalculateFolderSizes = Shared.CalculateFolderSizes;
         this.Settings.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
         this.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
+        this.Settings.SeparatePinnedTabs = Shared.SeparatePinnedTabs;
+        this.HostWindow.UpdatePinnedTabLayout(Shared.SeparatePinnedTabs);
         this.Settings.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
         this.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
         this.UpdateHiddenItemsMenu();

@@ -322,7 +322,7 @@ public partial class ExplorerTab
                     while (!Dialog.ShowHiddenCheck.IsEnabled && Failure is null) await Task.Delay(20);
                     Check(Dialog.ShowHiddenCheck.IsEnabled && this.Settings.ShowHidden, "Reset fixture enables hidden items through Preferences");
                     Dialog.Categories.SelectedItem = Dialog.UICategory;
-                    Dialog.GridLinesCheck.IsChecked = false;
+                    Dialog.GridLinesCheck.IsChecked = true;
                     foreach (var Picker in Dialog.FontSizePickers.Values) Picker.SelectedItem = 18.0;
                     Dialog.TerminalFontSizePicker.SelectedItem = 21.0;
                     Dialog.TerminalBackgroundEditor.Text = "#FFFFFF";
@@ -330,7 +330,7 @@ public partial class ExplorerTab
                     this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(Models.FileEntry.Size)).DisplayIndex = 0;
                     for (var Attempt = 0; Attempt < 2; Attempt++)
                     {
-                        Dialog.RestoreDefaultsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await this.RestorePreferencesSmokeAsync(Dialog);
                         while (!Dialog.RestoreDefaultsButton.IsEnabled && Failure is null) await Task.Delay(20);
                         Dialog.UpdateLayout();
                         Check(Failure is null && Dialog.IsVisible && Dialog.RestoreDefaultsButton.IsEnabled
@@ -343,12 +343,12 @@ public partial class ExplorerTab
                             && Dialog.ShowBookmarkPathsCheck.IsChecked == false && !this.Settings.ShowBookmarkPaths && !this.ShowBookmarkPaths
                             && Dialog.ShowSidebarDriveUsageCheck.IsChecked == false && !this.Settings.ShowSidebarDriveUsage && !this.ShowSidebarDriveUsage
                             && Dialog.StartOnLoginCheck.IsChecked == false && !this.ReadStartOnLogin()
-                            && Dialog.GridLinesCheck.IsChecked == true && this.Settings.ShowGridLines
+                            && Dialog.GridLinesCheck.IsChecked == false && !this.Settings.ShowGridLines
                             && this.Settings.TerminalFontSize == Models.DefaultSettings.Current.TerminalFontSize
                             && this.Settings.TerminalBackgroundColor == Models.DefaultSettings.Current.TerminalBackgroundColor
                             && Equals(Dialog.TerminalFontSizePicker.SelectedItem, Models.DefaultSettings.Current.TerminalFontSize)
                             && Dialog.TerminalBackgroundEditor.Text == Models.DefaultSettings.Current.TerminalBackgroundColor
-                            && this.FileGridLines.Visibility == Visibility.Visible
+                            && this.FileGridLines.Visibility == Visibility.Collapsed
                             && this.HostWindow.PreferencesMenuItem.FontSize == 13 && this.HostWindow.FileMenu.FontSize == 13
                             && this.GetFontOptions().All(Option => Option.Size == Option.DefaultSize
                                 && Dialog.FontSizePickers[Option.Key].SelectedItem is double Size && Size == Option.DefaultSize)

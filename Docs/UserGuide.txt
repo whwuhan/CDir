@@ -70,7 +70,7 @@ Shortcut arrows are preserved. Git/SVN badges come from direct workspace queries
 A generic system icon is used when a location is inaccessible, an extension does not return an icon, or reading times out.
 After changing associations or folder icons, press F5 to refresh the directory and icons.
 Icons are cached only in memory and are not extracted to disk.
-List icons are 16 DIP. Default rows are 22 DIP high, with an additional 1 DIP row border when grid lines are disabled. Larger fonts increase row height automatically. The title bar keeps the CDir icon; action buttons use compact glyphs.
+List icons are 16 DIP. Default rows are 22 DIP high. Grid lines are off by default; enabling them adds lines without changing row layout. Larger fonts increase row height automatically. The title bar keeps the CDir icon; action buttons use compact glyphs.
 
 Git / SVN status
 CDir detects the Git or SVN workspace containing the current directory. Ordinary folders have no extra status badges. Nested repositories use their nearest workspace.
@@ -143,7 +143,7 @@ Settings
 The last location, window size, hidden-item setting, interface language, and sidebar section states are saved in:
 %LOCALAPPDATA%\CDir\Settings.json
 On first launch, CDir migrates old DocReader settings, preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is kept.
-Restore Default Settings at the bottom of Preferences resets language, time format, hidden items, grid lines, column order/visibility, eight panel font sizes, terminal theme, and all shortcuts. Changes apply and save immediately while preserving location, window size, and custom categories. The default terminal font size is 15 and background is #1E1E1E; its title bar follows that background. Other baseline preferences date from November 3, 2026.
+Restore Default Settings at the bottom of Preferences opens a scope chooser. The current category is selected by default; choose it to reset only that category, or choose All Preferences to reset everything in Preferences. Cancel or Escape leaves settings unchanged. General resets language, time format, hidden items, close behavior, Copy On Drop, folder-size calculation and startup. UI resets nine panel font sizes, grid lines, display options and column order/visibility. Terminal Theme resets terminal fonts and colors; Keyboard Shortcuts resets custom bindings. Changes apply and save immediately while preserving location, window size and custom categories. File-list grid lines default to off. The default terminal font size is 15 and background is #1E1E1E; its title bar follows that background.
 Source\Config\DefaultSettings.json is the shared default configuration, embedded during builds and used for first launch and restoring preferences.
 
 CDir has no account system, telemetry, or automatic update checks.
@@ -210,3 +210,5 @@ Show Folder Paths in Preferences > UI is unchecked by default. Enable it to show
 
 Display options
 The dropdown to the right of search ends with a separator and Show Hidden Files And Folders, synchronized with Preferences > General. Turning off Show Grid Lines In The File List also removes separators beneath file rows. Preferences > UI includes Show Folder Paths and Show Drive Usage In My Computer. Drive usage is unchecked by default and controls the capacity text, bars and percentages beside drive names.
+
+Tabs can be dragged to reorder within the pinned or ordinary group. When the separate pinned row is visible, dragging across rows pins or unpins the tab at the drop position. An insertion marker shows the destination and row edges scroll while dragging. Tab order and pin state are saved.

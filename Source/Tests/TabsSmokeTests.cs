@@ -30,7 +30,7 @@ public partial class ExplorerTab
             var Surface = FindVisualChild<Border>(Container)
                 ?? throw new InvalidOperationException("The tab header surface is missing.");
             var Buttons = ((Grid)Surface.Child).Children.OfType<Button>().ToArray();
-            return Buttons[Close ? 1 : 0];
+            return Close ? Buttons.Single(Button => Button.Name == "CloseTabButton") : Buttons[0];
         }
         MouseButtonEventArgs Press(UIElement Target, int ClickCount)
         {
@@ -281,6 +281,8 @@ public partial class ExplorerTab
                 "Standard tab shortcuts resolve through the configurable shortcut model");
             await this.RunBackgroundDeleteSmokeChecksAsync(Passed);
             await this.RunTabContextMenuSmokeChecksAsync(Passed);
+            await this.RunPinnedTabSmokeChecksAsync(Passed);
+            await this.RunTabDragSmokeChecksAsync(Passed);
         }
         finally
         {

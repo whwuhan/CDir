@@ -121,16 +121,14 @@ public partial class ExplorerTab
                     .GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke);
                 FileMenuInvoker.Invoke();
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
-                Check(this.HostWindow.FileMenu.IsOpen && this.HostWindow.FileMenu.IsVisible && this.HostWindow.FileMenu.Items.Count == 7
+                Check(this.HostWindow.FileMenu.IsOpen && this.HostWindow.FileMenu.IsVisible && this.HostWindow.FileMenu.Items.Count == 6
                     && ReferenceEquals(this.HostWindow.FileMenu.Items[0], this.HostWindow.UndoMenuItem)
                     && ReferenceEquals(this.HostWindow.FileMenu.Items[1], this.HostWindow.RedoMenuItem)
                     && ReferenceEquals(this.HostWindow.FileMenu.Items[2], this.HostWindow.FileMenuSeparator)
                     && ReferenceEquals(this.HostWindow.FileMenu.Items[3], this.HostWindow.PreferencesMenuItem)
                     && this.HostWindow.FileMenuSeparator.IsVisible && this.HostWindow.FileMenuSeparator.ActualHeight >= 1
-                    && ReferenceEquals(this.HostWindow.FileMenu.Items[4], this.HostWindow.FileAboutMenuItem)
-                    && this.HostWindow.FileAboutMenuItem.Header?.ToString() == LanguageService.Text("About")
-                    && ReferenceEquals(this.HostWindow.FileMenu.Items[5], this.HostWindow.FileMenuExitSeparator)
-                    && ReferenceEquals(this.HostWindow.FileMenu.Items[6], this.HostWindow.ExitMenuItem)
+                    && ReferenceEquals(this.HostWindow.FileMenu.Items[4], this.HostWindow.FileMenuExitSeparator)
+                    && ReferenceEquals(this.HostWindow.FileMenu.Items[5], this.HostWindow.ExitMenuItem)
                     && this.HostWindow.ExitMenuItem.IsVisible && this.HostWindow.ExitMenuItem.IsEnabled
                     && this.HostWindow.ExitMenuItem.Header?.ToString() == LanguageService.Text("TrayExit")
                     && this.HostWindow.PreferencesMenuItem.Header?.ToString() == LanguageService.Text("Preferences") && this.HostWindow.PreferencesMenuItem.IsVisible
@@ -284,11 +282,12 @@ public partial class ExplorerTab
                 && System.IO.File.Exists(OlderSettings), "settings migration skips missing earlier locations");
             Check(ReadSettingsWithMigration(System.IO.Path.Combine(Fixture, "Migration", "Fresh", "Settings.json"), PreviousSettings + ".missing").Language == "en-US",
                 "a fresh CDir installation still defaults to English");
+            await this.RunScopedPreferencesResetSmokeChecksAsync(Passed);
             await this.RunPreferencesSmokeChecksAsync(Passed, RestoreDefaults: true);
             var DefaultsFile = System.IO.Path.Combine(Fixture, "Settings", "RestoredDefaults.json");
             Check(this.SaveSettings(DefaultsFile), "Restored defaults save to an owned settings file");
             var Defaults = ReadSettings(DefaultsFile);
-            Check(Defaults.Language == "en-US" && Defaults.ShowGridLines && !Defaults.ShowHidden && !Defaults.Use12HourClock
+            Check(Defaults.Language == "en-US" && !Defaults.ShowGridLines && !Defaults.ShowHidden && !Defaults.Use12HourClock
                 && Defaults.HiddenColumns is { Count: 0 } && Defaults.ColumnOrder!.SequenceEqual(ColumnKeys)
                 && FontPanels.All(Panel => Defaults.FontSizes![Panel.Key] == Panel.DefaultSize)
                 && Defaults.FontSizes!["Headers"] == 13 && Defaults.FontSizes["StatusBar"] == 13

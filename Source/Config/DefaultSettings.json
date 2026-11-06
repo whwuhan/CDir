@@ -1,11 +1,12 @@
 {
   "ShowHidden": false,
-  "ShowGridLines": true,
+  "ShowGridLines": false,
   "Use12HourClock": false,
   "ExitOnClose": false,
   "CalculateFolderSizes": false,
   "ShowSidebarDriveUsage": false,
   "ShowBookmarkPaths": false,
+  "SeparatePinnedTabs": false,
   "CopyOnDrop": true,
   "TerminalFontSize": 15,
   "TerminalBackgroundColor": "#1E1E1E",
@@ -42,6 +43,7 @@
   "Shortcuts": {
     "NewWindow": "Ctrl+N",
     "NewTab": "Ctrl+T",
+    "ToggleTabPin": "Alt+W",
     "CloseTab": "Ctrl+W",
     "NextTab": "Ctrl+Tab",
     "PreviousTab": "Ctrl+Shift+Tab",

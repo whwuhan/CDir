@@ -16,6 +16,7 @@ internal sealed class DefaultSettings
     public required bool CopyOnDrop { get; init; }
     public required bool CalculateFolderSizes { get; init; }
     public required bool ShowSidebarDriveUsage { get; init; }
+    public required bool SeparatePinnedTabs { get; init; }
     public required bool ShowBookmarkPaths { get; init; }
     public required IReadOnlyList<string> ColumnOrder { get; init; }
     public required IReadOnlyList<string> HiddenColumns { get; init; }

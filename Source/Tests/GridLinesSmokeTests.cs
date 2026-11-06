@@ -61,10 +61,12 @@ public partial class ExplorerTab
         }
         try
         {
-            Check(new AppSettings().ShowGridLines && JsonSerializer.Deserialize<AppSettings>("{\"ShowHidden\":true}")!.ShowGridLines,
-                "Fresh and older settings use the saved baseline with grid lines on");
+            Check(!new AppSettings().ShowGridLines && !JsonSerializer.Deserialize<AppSettings>("{\"ShowHidden\":true}")!.ShowGridLines,
+                "Fresh and older settings default to grid lines off");
             Check(!JsonSerializer.Deserialize<AppSettings>("{\"ShowGridLines\":false}")!.ShowGridLines,
                 "An explicitly disabled grid preference remains disabled");
+            Check(JsonSerializer.Deserialize<AppSettings>("{\"ShowGridLines\":true}")!.ShowGridLines,
+                "An explicitly enabled grid preference remains enabled");
             this.ChangeGridLines(true);
             await Settle();
             var Guides = RenderGuides();
@@ -140,6 +142,8 @@ public partial class ExplorerTab
                         "Repeated layouts keep file rows stationary: " + Repeat + "/" + Frame);
                 }
             }
+            Check(JsonSerializer.Deserialize<AppSettings>("{\"ShowGridLines\":true}")!.ShowGridLines,
+                "An explicitly enabled grid preference remains enabled");
             this.ChangeGridLines(true);
             this.SearchBox.Text = "no-matching-gridline-file";
             await Settle();

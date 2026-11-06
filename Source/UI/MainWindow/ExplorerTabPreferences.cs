@@ -24,6 +24,13 @@ public partial class ExplorerTab
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
+    private void ChangeSeparatePinnedTabs(bool Separate)
+    {
+        this.Settings.SeparatePinnedTabs = Separate;
+        this.HostWindow.UpdatePinnedTabLayout(Separate);
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
     private void ChangeShowBookmarkPaths(bool Show)
     {
         if (this.WindowClosed) return;
@@ -32,36 +39,53 @@ public partial class ExplorerTab
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
-    private async Task RestoreDefaultPreferencesAsync()
+    private async Task RestoreDefaultPreferencesAsync(PreferenceResetScope Scope)
     {
         if (this.WindowClosed) return;
         var Defaults = DefaultSettings.Current;
-        var RefreshHidden = this.Settings.ShowHidden != Defaults.ShowHidden;
-        this.Settings.ShowHidden = Defaults.ShowHidden;
-        this.Settings.ShowGridLines = Defaults.ShowGridLines;
-        this.Settings.Use12HourClock = Defaults.Use12HourClock;
-        this.Settings.ExitOnClose = Defaults.ExitOnClose;
-        this.Settings.CopyOnDrop = Defaults.CopyOnDrop;
-        this.Settings.CalculateFolderSizes = Defaults.CalculateFolderSizes;
-        this.Settings.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
-        this.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
-        this.Settings.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
-        this.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
-        this.UpdateHiddenItemsMenu();
-        this.Settings.FontSizes = null;
-        this.Settings.Shortcuts = null;
-        this.Settings.TerminalFontSize = Defaults.TerminalFontSize;
-        this.Settings.TerminalBackgroundColor = Defaults.TerminalBackgroundColor;
-        this.Settings.TerminalForegroundColor = Defaults.TerminalForegroundColor;
-        this.ApplyTerminalTheme();
-        this.ShortcutBindings = KeyboardShortcut.Resolve(null);
-        this.ApplyUIFonts();
-        this.ApplyGridLines();
-        this.RestoreColumnLayout(Defaults.ColumnOrder, Defaults.HiddenColumns);
-        foreach (var Entry in this.Entries) Entry.Use12HourClock = Defaults.Use12HourClock;
-        this.ChangeLanguage(Defaults.Language, Persist: false);
+        var ResetGeneral = Scope is PreferenceResetScope.All or PreferenceResetScope.General;
+        var RefreshHidden = ResetGeneral && this.Settings.ShowHidden != Defaults.ShowHidden;
+        if (ResetGeneral)
+        {
+            this.Settings.ShowHidden = Defaults.ShowHidden;
+            this.Settings.Use12HourClock = Defaults.Use12HourClock;
+            this.Settings.ExitOnClose = Defaults.ExitOnClose;
+            this.Settings.CopyOnDrop = Defaults.CopyOnDrop;
+            this.Settings.CalculateFolderSizes = Defaults.CalculateFolderSizes;
+            this.QueueFolderSizes();
+            this.UpdateHiddenItemsMenu();
+            foreach (var Entry in this.Entries) Entry.Use12HourClock = Defaults.Use12HourClock;
+            this.ChangeLanguage(Defaults.Language, Persist: false);
+        }
+        if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI)
+        {
+            this.Settings.ShowGridLines = Defaults.ShowGridLines;
+            this.Settings.SeparatePinnedTabs = Defaults.SeparatePinnedTabs;
+            this.HostWindow.UpdatePinnedTabLayout(Defaults.SeparatePinnedTabs);
+            this.Settings.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
+            this.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
+            this.Settings.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
+            this.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
+            this.Settings.FontSizes = null;
+            this.ApplyUIFonts();
+            this.ApplyGridLines();
+            this.RestoreColumnLayout(Defaults.ColumnOrder, Defaults.HiddenColumns);
+        }
+        if (Scope is PreferenceResetScope.All or PreferenceResetScope.TerminalTheme)
+        {
+            this.Settings.TerminalFontSize = Defaults.TerminalFontSize;
+            this.Settings.TerminalBackgroundColor = Defaults.TerminalBackgroundColor;
+            this.Settings.TerminalForegroundColor = Defaults.TerminalForegroundColor;
+            this.ApplyTerminalTheme();
+        }
+        if (Scope is PreferenceResetScope.All or PreferenceResetScope.Shortcuts)
+        {
+            this.Settings.Shortcuts = null;
+            this.ShortcutBindings = KeyboardShortcut.Resolve(null);
+        }
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
         if (RefreshHidden) await this.RefreshAsync(true);
+        await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 
     private void ApplyGridLines() => this.FileGridLines.Visibility = this.Settings.ShowGridLines ? Visibility.Visible : Visibility.Collapsed;

@@ -24,9 +24,9 @@ public partial class ExplorerTab
             if (!Condition) throw new InvalidOperationException("Shortcuts UI smoke test failed: " + Name);
             Passed.Add(Name);
         }
-        Check(KeyboardShortcut.All.Count == 30 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
-            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 30,
-            "All thirty bindings have valid unique defaults including fixed new-window copy and paste gestures");
+        Check(KeyboardShortcut.All.Count == 31 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
+            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 31,
+            "All thirty-one bindings have valid unique defaults including fixed new-window copy and paste gestures");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+1" }) is var Migrated
             && Migrated["Search"] == "Alt+1" && Migrated["ToggleSidebar"] == "",
             "An existing personal Alt+1 binding is preserved when adding the new sidebar command");
@@ -62,8 +62,8 @@ public partial class ExplorerTab
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
                 Dialog.UpdateLayout();
                 Check(Dialog.ShortcutsPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
-                    && Dialog.ShortcutEditors.Count == 21 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
-                    "The keyboard shortcuts page lists the twenty-one customizable bindings");
+                    && Dialog.ShortcutEditors.Count == 22 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
+                    "The keyboard shortcuts page lists the twenty-two customizable bindings");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
@@ -213,11 +213,11 @@ public partial class ExplorerTab
                     && !Dialog.ShortcutEditors.ContainsKey("Copy") && !Dialog.ShortcutEditors.ContainsKey("Paste"),
                     "Reopening Preferences retains changed bindings");
                 Dialog.CopyOnDropCheck.IsChecked = false;
-                Dialog.RestoreDefaultsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await this.RestorePreferencesSmokeAsync(Dialog);
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(this.Settings.Shortcuts is null && KeyboardShortcut.All.All(Item => this.ShortcutBindings[Item.Id] == Item.DefaultGesture)
                     && KeyboardShortcut.All.Where(Item => !Item.IsFixed).All(Item => Dialog.ShortcutEditors[Item.Id].Text == Item.DefaultGesture)
-                    && Dialog.ShortcutEditors.Count == 21, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
+                    && Dialog.ShortcutEditors.Count == 22, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
                 Check(Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop,
                     "Restore Default Settings turns drag-copy mode on");
             });

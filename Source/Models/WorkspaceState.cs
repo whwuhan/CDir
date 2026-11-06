@@ -17,6 +17,7 @@ internal sealed class WorkspaceTabState
 {
     public AppSettings Settings { get; set; } = new();
     public string Alias { get; set; } = "";
+    public bool IsPinned { get; set; }
     public string Search { get; set; } = "";
     public string Sort { get; set; } = nameof(FileEntry.Name);
     public bool Descending { get; set; }

@@ -844,6 +844,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.Settings.CalculateFolderSizes, this.ChangeCalculateFolderSizes,
             this.Settings.ShowBookmarkPaths, this.ChangeShowBookmarkPaths,
             this.Settings.ShowSidebarDriveUsage, this.ChangeShowSidebarDriveUsage,
+            this.Settings.SeparatePinnedTabs, this.ChangeSeparatePinnedTabs,
             this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }

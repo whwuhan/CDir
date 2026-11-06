@@ -49,6 +49,55 @@
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="TabPinButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Page.IsTabPinned}" Value="True"><Setter Property="Foreground" Value="{StaticResource Accent}" /></DataTrigger>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+        <Trigger Property="IsPressed" Value="True"><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+      </Style.Triggers>
+    </Style>
+    <DataTemplate x:Key="TabHeaderTemplate">
+                <Border x:Name="TabSurface" PreviewMouseLeftButtonDown="TabHeaderDragMouseDown" PreviewMouseMove="TabHeaderDragMouseMove" PreviewMouseLeftButtonUp="TabHeaderDragMouseUp" Height="{DynamicResource UITabHeight}" BorderBrush="{StaticResource Line}" BorderThickness="1,1,1,0" Margin="0,0,3,0" Background="{StaticResource SurfaceOuter}">
+                  <Border.ContextMenu>
+                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" FontSize="{DynamicResource UIFontMenus}" Padding="2" Opened="TabContextMenuOpened">
+                      <ContextMenu.Resources>
+                        <Style TargetType="MenuItem" BasedOn="{StaticResource TabContextMenuItem}" />
+                        <Style TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}"><Setter Property="Margin" Value="4,2" /></Style>
+                      </ContextMenu.Resources>
+                      <MenuItem Tag="RenameTab" Header="{DynamicResource TextRenameTab}" Click="RenameTabClick" />
+                      <Separator />
+                      <MenuItem Tag="CloseRightTabs" Header="{DynamicResource TextCloseRightTabs}" Click="CloseTabsMenuClick" />
+                      <MenuItem Tag="CloseLeftTabs" Header="{DynamicResource TextCloseLeftTabs}" Click="CloseTabsMenuClick" />
+                      <MenuItem Tag="CloseOtherTabs" Header="{DynamicResource TextCloseOtherTabs}" Click="CloseTabsMenuClick" />
+                      <Separator />
+                      <MenuItem Tag="CloseTab" Header="{DynamicResource TextCloseTab}" Click="CloseTabsMenuClick" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="22" /><ColumnDefinition Width="22" /></Grid.ColumnDefinitions>
+                    <Button Click="SelectTabClick" Padding="6,2" MinWidth="78" MaxWidth="190" HorizontalContentAlignment="Left" ToolTip="{Binding Page.TabPath}" AutomationProperties.Name="{Binding Page.TabTitle}">
+                      <StackPanel Orientation="Horizontal">
+                        <controls:ShellIcon Path="{Binding Page.TabPath}" IsDirectory="True" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="{Binding Page.TabTitle}" TextTrimming="CharacterEllipsis" MaxWidth="135" FontSize="{DynamicResource UIFontTabs}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button x:Name="PinTabButton" Style="{StaticResource TabPinButtonStyle}" Grid.Column="1" Content="&#xE718;" Click="PinTabClick" Width="20" Height="20" FontFamily="Segoe MDL2 Assets" FontSize="12" Padding="0" VerticalAlignment="Center" Focusable="False"
+                            ToolTip="{DynamicResource TextPinTab}" AutomationProperties.Name="{DynamicResource TextPinTab}" />
+                    <Button x:Name="CloseTabButton" Style="{StaticResource WindowCloseButton}" Grid.Column="2" Content="&#xE8BB;" Click="CloseTabClick" Width="20" Height="20" FontSize="10" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"
+                            ToolTip="{DynamicResource TextCloseTab}" AutomationProperties.Name="{DynamicResource TextCloseTab}" />
+                  </Grid>
+                </Border>
+                <DataTemplate.Triggers><DataTrigger Binding="{Binding Page.IsTabSelected}" Value="True">
+                  <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource SurfaceInner}" />
+                  <Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource Accent}" />
+                </DataTrigger>
+                  <DataTrigger Binding="{Binding Page.IsTabPinned}" Value="True">
+                    <Setter TargetName="PinTabButton" Property="Content" Value="&#xE77A;" />
+                    <Setter TargetName="PinTabButton" Property="ToolTip" Value="{DynamicResource TextUnpinTab}" />
+                    <Setter TargetName="PinTabButton" Property="AutomationProperties.Name" Value="{DynamicResource TextUnpinTab}" />
+                  </DataTrigger></DataTemplate.Triggers>
+              </DataTemplate>
   </Window.Resources>
   <Border x:Name="WindowFrame" Background="{StaticResource SurfaceOuter}" BorderBrush="{StaticResource Line}" BorderThickness="1">
     <Grid>
@@ -88,7 +137,6 @@
                 <MenuItem x:Name="RedoMenuItem" Tag="Redo" Header="{DynamicResource TextRedo}" InputGestureText="Ctrl+Y" Style="{StaticResource FileMenuShortcutItem}" Click="RedoClick" />
                 <Separator x:Name="FileMenuSeparator" Style="{StaticResource {x:Type Separator}}" />
                 <MenuItem x:Name="PreferencesMenuItem" Tag="Preferences" Header="{DynamicResource TextPreferences}" Style="{StaticResource TabContextMenuItem}" Click="PreferencesClick" />
-                <MenuItem x:Name="FileAboutMenuItem" Tag="About" Header="{DynamicResource TextAbout}" Style="{StaticResource TabContextMenuItem}" Click="AboutClick" />
                 <Separator x:Name="FileMenuExitSeparator" Style="{StaticResource {x:Type Separator}}" />
                 <MenuItem x:Name="ExitMenuItem" Tag="TrayExit" Header="{DynamicResource TextTrayExit}" Style="{StaticResource TabContextMenuItem}" Click="ExitClick" />
               </ContextMenu>
@@ -116,49 +164,32 @@
         </StackPanel>
       </Border>
       <Border x:Name="TabBar" Grid.Row="2" Background="{StaticResource SurfaceOuter}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,2,6,0" PreviewMouseDown="TabBarPreviewMouseDown">
+        <StackPanel>
+          <Border x:Name="PinnedTabRow" Visibility="Collapsed" Background="Transparent" AllowDrop="True" PreviewDragEnter="TabRowDragOver" PreviewDragOver="TabRowDragOver" PreviewDragLeave="TabRowDragLeave" PreviewDrop="TabRowDrop">
+            <Grid>
+          <ScrollViewer x:Name="PinnedTabScroll" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False" Margin="0,0,0,2">
+            <ItemsControl x:Name="PinnedTabHeaders" ItemTemplate="{StaticResource TabHeaderTemplate}" ItemsSource="{Binding PinnedHeaders, RelativeSource={RelativeSource AncestorType=Window}}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            </ItemsControl>
+          </ScrollViewer>
+              <Border x:Name="PinnedTabDropMarker" Width="2" HorizontalAlignment="Left" Background="{StaticResource Accent}" IsHitTestVisible="False" Visibility="Collapsed" />
+            </Grid>
+          </Border>
+          <Border x:Name="NormalTabRow" Background="Transparent" AllowDrop="True" PreviewDragEnter="TabRowDragOver" PreviewDragOver="TabRowDragOver" PreviewDragLeave="TabRowDragLeave" PreviewDrop="TabRowDrop">
+            <Grid>
           <ScrollViewer x:Name="TabScroll" Background="Transparent" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-            <ItemsControl x:Name="TabHeaders" ItemsSource="{Binding Headers, RelativeSource={RelativeSource AncestorType=Window}}">
+            <ItemsControl x:Name="TabHeaders" ItemTemplate="{StaticResource TabHeaderTemplate}" ItemsSource="{Binding VisibleHeaders, RelativeSource={RelativeSource AncestorType=Window}}">
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate><DataTemplate>
-                <Border x:Name="TabSurface" Height="{DynamicResource UITabHeight}" BorderBrush="{StaticResource Line}" BorderThickness="1,1,1,0" Margin="0,0,3,0" Background="{StaticResource SurfaceOuter}">
-                  <Border.ContextMenu>
-                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" FontSize="{DynamicResource UIFontMenus}" Padding="2" Opened="TabContextMenuOpened">
-                      <ContextMenu.Resources>
-                        <Style TargetType="MenuItem" BasedOn="{StaticResource TabContextMenuItem}" />
-                        <Style TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}"><Setter Property="Margin" Value="4,2" /></Style>
-                      </ContextMenu.Resources>
-                      <MenuItem Tag="RenameTab" Header="{DynamicResource TextRenameTab}" Click="RenameTabClick" />
-                      <Separator />
-                      <MenuItem Tag="CloseRightTabs" Header="{DynamicResource TextCloseRightTabs}" Click="CloseTabsMenuClick" />
-                      <MenuItem Tag="CloseLeftTabs" Header="{DynamicResource TextCloseLeftTabs}" Click="CloseTabsMenuClick" />
-                      <MenuItem Tag="CloseOtherTabs" Header="{DynamicResource TextCloseOtherTabs}" Click="CloseTabsMenuClick" />
-                      <Separator />
-                      <MenuItem Tag="CloseTab" Header="{DynamicResource TextCloseTab}" Click="CloseTabsMenuClick" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
-                  <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="22" /></Grid.ColumnDefinitions>
-                    <Button Click="SelectTabClick" Padding="6,2" MinWidth="78" MaxWidth="190" HorizontalContentAlignment="Left" ToolTip="{Binding Page.TabPath}" AutomationProperties.Name="{Binding Page.TabTitle}">
-                      <StackPanel Orientation="Horizontal">
-                        <controls:ShellIcon Path="{Binding Page.TabPath}" IsDirectory="True" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" />
-                        <TextBlock Text="{Binding Page.TabTitle}" TextTrimming="CharacterEllipsis" MaxWidth="135" FontSize="{DynamicResource UIFontTabs}" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
-                    <Button x:Name="CloseTabButton" Grid.Column="1" Content="×" Click="CloseTabClick" Width="20" Height="20" FontSize="14" Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"
-                            ToolTip="{DynamicResource TextCloseTab}" AutomationProperties.Name="{DynamicResource TextCloseTab}" />
-                  </Grid>
-                </Border>
-                <DataTemplate.Triggers><DataTrigger Binding="{Binding Page.IsTabSelected}" Value="True">
-                  <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource SurfaceInner}" />
-                  <Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource Accent}" />
-                </DataTrigger></DataTemplate.Triggers>
-              </DataTemplate></ItemsControl.ItemTemplate>
             </ItemsControl>
               <Button x:Name="NewTabButton" Content="+" Width="24" Height="24" Margin="4,0,0,1" FontSize="18" Padding="0" VerticalAlignment="Top"
                       Click="NewTabClick" ToolTip="{DynamicResource TextNewTab}" AutomationProperties.Name="{DynamicResource TextNewTab}" />
             </StackPanel>
           </ScrollViewer>
+              <Border x:Name="NormalTabDropMarker" Width="2" HorizontalAlignment="Left" Background="{StaticResource Accent}" IsHitTestVisible="False" Visibility="Collapsed" />
+            </Grid>
+          </Border>
+        </StackPanel>
       </Border>
       <Grid x:Name="TabPages" Grid.Row="3" />
     </Grid>

@@ -21,6 +21,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal CheckBox CalculateFolderSizesCheck { get; }
     internal CheckBox ShowBookmarkPathsCheck { get; }
     internal CheckBox ShowSidebarDriveUsageCheck { get; }
+    internal CheckBox SeparatePinnedTabsCheck { get; }
     internal CheckBox StartOnLoginCheck { get; }
     internal ComboBox TimeFormatPicker { get; }
     internal Label TimeFormatLabel { get; }
@@ -37,7 +38,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     public PreferencesWindow(Window Owner, Action<string> OnLanguageChanged, bool ShowGridLines, Action<bool> OnGridLinesChanged,
         bool ShowHidden, Func<bool, Task> OnShowHiddenChanged, bool Use12HourClock, Action<bool> OnTimeFormatChanged,
         IReadOnlyList<ColumnPreference> Columns, Func<string, bool, bool> OnColumnVisibilityChanged,
-        IReadOnlyList<UIFontOption> Fonts, Func<string, double, bool> OnFontSizeChanged, Func<Task> OnRestoreDefaults,
+        IReadOnlyList<UIFontOption> Fonts, Func<string, double, bool> OnFontSizeChanged, Func<PreferenceResetScope, Task> OnRestoreDefaults,
         IReadOnlyDictionary<string, string> Shortcuts, Func<string, string, bool> OnShortcutChanged,
         double TerminalFontSize, string TerminalBackgroundColor, Func<double, bool> OnTerminalFontSizeChanged,
         Func<string, bool> OnTerminalBackgroundChanged, string? TerminalForegroundColor, Func<string?, bool> OnTerminalForegroundChanged,
@@ -45,6 +46,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
         bool CalculateFolderSizes, Action<bool> OnCalculateFolderSizesChanged,
         bool ShowBookmarkPaths, Action<bool> OnShowBookmarkPathsChanged,
         bool ShowSidebarDriveUsage, Action<bool> OnShowSidebarDriveUsageChanged,
+        bool SeparatePinnedTabs, Action<bool> OnSeparatePinnedTabsChanged,
         bool StartOnLogin, Func<bool, bool> OnStartOnLoginChanged)
     {
         var UpdatingPreferences = false;
@@ -310,11 +312,21 @@ internal sealed partial class PreferencesWindow : DialogWindow
             };
         }
         UI.Children.Add(FontGrid);
-        this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 24);
+        this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 12);
         UI.Children.Add(this.GridLinesCheck);
         this.ShowBookmarkPathsCheck.Margin = new Thickness(0, 0, 0, 12);
         UI.Children.Add(this.ShowBookmarkPathsCheck);
         UI.Children.Add(this.ShowSidebarDriveUsageCheck);
+        this.SeparatePinnedTabsCheck = new CheckBox
+        {
+            Name = "SeparatePinnedTabsCheck", IsChecked = SeparatePinnedTabs,
+            Margin = new Thickness(0, 0, 0, 12), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.SeparatePinnedTabsCheck.SetResourceReference(ContentControl.ContentProperty, "TextSeparatePinnedTabs");
+        this.SeparatePinnedTabsCheck.SetResourceReference(AutomationProperties.NameProperty, "TextSeparatePinnedTabs");
+        this.SeparatePinnedTabsCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnSeparatePinnedTabsChanged(true); };
+        this.SeparatePinnedTabsCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnSeparatePinnedTabsChanged(false); };
+        UI.Children.Add(this.SeparatePinnedTabsCheck);
         var ColumnsHeading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
         ColumnsHeading.SetResourceReference(TextBlock.TextProperty, "TextVisibleColumns");
         UI.Children.Add(ColumnsHeading);
@@ -419,33 +431,54 @@ internal sealed partial class PreferencesWindow : DialogWindow
         this.RestoreDefaultsButton.Click += async (_, _) =>
         {
             if (UpdatingPreferences) return;
+            var CurrentScope = ReferenceEquals(this.Categories.SelectedItem, this.UICategory) ? PreferenceResetScope.UI
+                : ReferenceEquals(this.Categories.SelectedItem, this.TerminalThemeCategory) ? PreferenceResetScope.TerminalTheme
+                : ReferenceEquals(this.Categories.SelectedItem, this.ShortcutsCategory) ? PreferenceResetScope.Shortcuts
+                : PreferenceResetScope.General;
+            var CategoryName = ((ListBoxItem)this.Categories.SelectedItem).Content.ToString()!;
+            var Choice = new ResetPreferencesDialog(this, CurrentScope, CategoryName);
+            if (Choice.ShowDialog() != true) return;
+            var Scope = Choice.SelectedScope;
             UpdatingPreferences = true;
             Layout.IsEnabled = false;
             try
             {
-                if (!OnStartOnLoginChanged(false)) return;
-                await OnRestoreDefaults();
+                if ((Scope is PreferenceResetScope.All or PreferenceResetScope.General) && !OnStartOnLoginChanged(false)) return;
+                await OnRestoreDefaults(Scope);
                 var Defaults = DefaultSettings.Current;
-                this.LanguagePicker.SelectedValue = Defaults.Language;
-                this.Language = XmlLanguage.GetLanguage(LanguageService.CurrentLanguage);
-                this.TimeFormatPicker.SelectedIndex = Defaults.Use12HourClock ? 1 : 0;
-                this.ShowHiddenCheck.IsChecked = Defaults.ShowHidden;
-                this.ExitOnCloseCheck.IsChecked = Defaults.ExitOnClose;
-                this.CopyOnDropCheck.IsChecked = Defaults.CopyOnDrop;
-                this.CalculateFolderSizesCheck.IsChecked = Defaults.CalculateFolderSizes;
-                this.ShowBookmarkPathsCheck.IsChecked = Defaults.ShowBookmarkPaths;
-                this.ShowSidebarDriveUsageCheck.IsChecked = Defaults.ShowSidebarDriveUsage;
-                this.StartOnLoginCheck.IsChecked = false;
-                this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
-                foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;
-                this.TerminalFontSizePicker.SelectedItem = Defaults.TerminalFontSize;
-                this.TerminalBackgroundEditor.Text = Defaults.TerminalBackgroundColor;
-                this.TerminalAutomaticForeground.IsChecked = Defaults.TerminalForegroundColor is null;
-                if (Defaults.TerminalForegroundColor is not null) this.TerminalForegroundEditor.Text = Defaults.TerminalForegroundColor;
-                foreach (var Check in Checks) Check.Value.IsChecked = !Defaults.HiddenColumns.Contains(Check.Key);
-                UpdateColumnChecks();
-                this.PreferenceShortcuts = KeyboardShortcut.Resolve(null);
-                this.ShowShortcutError(null);
+                if (Scope is PreferenceResetScope.All or PreferenceResetScope.General)
+                {
+                    this.LanguagePicker.SelectedValue = Defaults.Language;
+                    this.Language = XmlLanguage.GetLanguage(LanguageService.CurrentLanguage);
+                    this.TimeFormatPicker.SelectedIndex = Defaults.Use12HourClock ? 1 : 0;
+                    this.ShowHiddenCheck.IsChecked = Defaults.ShowHidden;
+                    this.ExitOnCloseCheck.IsChecked = Defaults.ExitOnClose;
+                    this.CopyOnDropCheck.IsChecked = Defaults.CopyOnDrop;
+                    this.CalculateFolderSizesCheck.IsChecked = Defaults.CalculateFolderSizes;
+                    this.StartOnLoginCheck.IsChecked = false;
+                }
+                if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI)
+                {
+                    this.ShowBookmarkPathsCheck.IsChecked = Defaults.ShowBookmarkPaths;
+                    this.ShowSidebarDriveUsageCheck.IsChecked = Defaults.ShowSidebarDriveUsage;
+                    this.SeparatePinnedTabsCheck.IsChecked = Defaults.SeparatePinnedTabs;
+                    this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
+                    foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;
+                    foreach (var Check in Checks) Check.Value.IsChecked = !Defaults.HiddenColumns.Contains(Check.Key);
+                    UpdateColumnChecks();
+                }
+                if (Scope is PreferenceResetScope.All or PreferenceResetScope.TerminalTheme)
+                {
+                    this.TerminalFontSizePicker.SelectedItem = Defaults.TerminalFontSize;
+                    this.TerminalBackgroundEditor.Text = Defaults.TerminalBackgroundColor;
+                    this.TerminalAutomaticForeground.IsChecked = Defaults.TerminalForegroundColor is null;
+                    this.TerminalForegroundEditor.Text = Defaults.TerminalForegroundColor ?? "#E5E7EB";
+                }
+                if (Scope is PreferenceResetScope.All or PreferenceResetScope.Shortcuts)
+                {
+                    this.PreferenceShortcuts = KeyboardShortcut.Resolve(null);
+                    this.ShowShortcutError(null);
+                }
                 this.RefreshShortcuts();
             }
             finally { UpdatingPreferences = false; Layout.IsEnabled = true; }

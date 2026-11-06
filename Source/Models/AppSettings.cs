@@ -15,6 +15,7 @@ internal sealed class AppSettings
     public bool CopyOnDrop { get; set; } = DefaultSettings.Current.CopyOnDrop;
     public bool CalculateFolderSizes { get; set; } = DefaultSettings.Current.CalculateFolderSizes;
     public bool ShowSidebarDriveUsage { get; set; } = DefaultSettings.Current.ShowSidebarDriveUsage;
+    public bool SeparatePinnedTabs { get; set; } = DefaultSettings.Current.SeparatePinnedTabs;
     public bool ShowBookmarkPaths { get; set; } = DefaultSettings.Current.ShowBookmarkPaths;
     public List<string>? ColumnOrder { get; set; } = DefaultSettings.Current.ColumnOrder.ToList();
     public List<string>? HiddenColumns { get; set; } = DefaultSettings.Current.HiddenColumns.ToList();

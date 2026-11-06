@@ -107,13 +107,7 @@ public partial class ExplorerTab
                 Timeout.Start();
                 try
                 {
-                    if (Attempt == 0)
-                    {
-                        Menu.IsOpen = false;
-                        this.HostWindow.FileMenuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                        this.HostWindow.FileAboutMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-                    }
-                    else this.HostWindow.AboutMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    this.HostWindow.AboutMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 }
                 finally { Timeout.Stop(); if (Pending.Status == DispatcherOperationStatus.Pending) Pending.Abort(); }
                 if (Failure is not null) throw new InvalidOperationException("Could not verify About.", Failure);

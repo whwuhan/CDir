@@ -14,6 +14,7 @@ public partial class ExplorerTab
     {
         this.ChangeLanguage(this.Settings.Language ?? DefaultSettings.Current.Language, Persist: false);
         this.ApplyUIFonts();
+        this.HostWindow.UpdatePinnedTabLayout(this.Settings.SeparatePinnedTabs);
     }
     internal WorkspaceTabState CaptureWorkspaceTab()
     {
@@ -31,7 +32,7 @@ public partial class ExplorerTab
         Settings.DirectoryTreeExpanded = this.DirectoryTreeSection.IsExpanded;
         return new WorkspaceTabState
         {
-            Settings = Settings, Alias = this.TabAlias, Search = this.SearchBox.Text,
+            Settings = Settings, Alias = this.TabAlias, IsPinned = this.IsTabPinned, Search = this.SearchBox.Text,
             Sort = this.SortProperty, Descending = this.SortDirection == ListSortDirection.Descending,
             History = this.History.ToList(), HistoryTreeKeys = this.HistoryTreeKeys.ToList(), HistoryIndex = this.HistoryIndex,
             ColumnWidths = this.FileGrid.Columns.ToDictionary(Column => Column.SortMemberPath, Column => Column.ActualWidth),
@@ -46,6 +47,7 @@ public partial class ExplorerTab
     {
         await this.WaitUntilReadyAsync();
         this.SetTabAlias(State.Alias ?? "");
+        this.HostWindow.SetTabPinned(this, State.IsPinned);
         if (State.History is { Count: > 0 } History && State.HistoryTreeKeys?.Count == History.Count
             && State.HistoryIndex >= 0 && State.HistoryIndex < History.Count
             && string.Equals(History[State.HistoryIndex], this.CurrentPath, StringComparison.OrdinalIgnoreCase))

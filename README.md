@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v1.1.29 interface preview](Docs/Images/CDirPreview.png)
+![CDir v1.1.35 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -64,6 +64,10 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - The column dropdown ends with Show Hidden Files And Folders, synchronized with Preferences > General. Turning off file-list grid lines also removes separators beneath file rows.
 - Preferences > UI > Show Drive Usage In My Computer is unchecked by default; enable it for capacity text, usage bars, and percentages beside drives. Drive root paths are not repeated beside drive names.
 - Preferences > UI > Show Folder Paths is off by default. Enable it for absolute paths beside every directory-tree folder, including expanded descendants and pinned parents; hover shows the full path immediately. Folder paths and drive capacity panels share an aligned right-hand column. Pinned parents are limited to expanded branches and category headers yield at the next section.
+- Drag pinned or ordinary tabs to reorder their own group. With the separate pinned row visible, drag across rows to pin or unpin at the drop position. The insertion marker shows the destination, row edges scroll during a drag, and both group orders are saved.
+- Pin or unpin the current tab with `Alt+W` (customizable in Preferences > Keyboard Shortcuts), or click the pin between its label and Close. Pinned tabs stay on the left in pin order; unpinning moves a tab to the front of the ordinary group. Preferences > UI > Show Pinned Tabs In A Separate Row is off by default and optionally places pinned tabs above the ordinary row. Pin state, order, and the row preference survive restart. Tab Close uses the same red hover and pressed colors as window Close.
+- File-list grid lines are off by default, including after restoring UI or all Preferences. Saved explicit choices are retained.
+- Restore Default Settings opens a scope chooser: reset only the current Preferences category (selected by default), or all Preferences. Cancel and Escape leave settings unchanged. Category resets preserve settings in the other categories.
 - Preferences has General, UI, Terminal Theme, and Keyboard Shortcuts categories. General includes language, 12/24-hour time, hidden items, close behavior, Copy On Drop, background folder-size calculation, and optional Windows sign-in startup (off by default); UI includes panel font sizes, grid lines, folder paths, drive usage, and column visibility; Terminal Theme contains font size, background, and preview controls. English, 简体中文, 日本語, and 한국어 can be switched immediately and are remembered. The path, filter, sorting, and selection are preserved.
 - The light theme uses three gray-white layers: outer `#F3F3F3`, middle `#FBFBFB`, and inner `#FFFFFF`, with `#F3F3F3` focus hints. The main window, menus, dialogs, and Preferences share the palette; the terminal has its own theme.
 
@@ -230,7 +234,7 @@ After updating the release preview, copy `Artifacts/CDirPreview.png` to `Docs/Im
 - `Docs/`: user documentation. `Docs/Images/CDirPreview.png`: README preview included in Git. `Publish/CDirWinX64/`: runnable release.
 - `Build/Bin/<project>/`, `Build/Obj/<project>/`: build outputs and regenerable intermediate caches.
 - `Build/PublicationWorkspaces/`: preserved live workspaces and settings backups used during publication.
-- `Trash/`: archived superseded packages, previews, and diagnostics, retaining their original relative paths. `Publish/` keeps the current runnable release and latest versioned ZIP.
+- `Trash/`: archived superseded packages, previews, and diagnostics, retaining their original relative paths. `Publish/` keeps the current runnable release, latest versioned ZIP, and historical versioned ZIPs until explicitly requested cleanup.
 - `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`, `Artifacts/CDirPreview.png`: distribution archive and interface preview.
 
 ## 中文
@@ -241,7 +245,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v1.1.29 界面预览](Docs/Images/CDirPreview.png)
+![CDir v1.1.35 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -256,6 +260,10 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 ### 已有功能
 
+- 置顶标签和普通标签均可在各自分组中拖拽排序。置顶标签单独一行且已显示时，跨行拖拽可切换置顶状态，并按释放位置插入；拖拽时显示插入标记，行边缘支持自动横向滚动，排序会保存。
+- 文件列表网格线默认关闭，重置 UI 或全部偏好设置后也保持关闭；已保存的明确选择继续保留。
+- “恢复默认设置”先弹出范围选择：默认只重置当前 Preferences 分类，也可选择全部偏好设置；取消或按 Escape 不作更改。单独重置分类时保留其他分类的设置。
+- 用 `Alt+W` 置顶或取消置顶当前标签页（可在 Preferences > Keyboard Shortcuts 自定义），或点击名称与关闭按钮之间的图钉。置顶标签按置顶顺序排列在左侧，取消置顶后进入普通标签最左侧。Preferences > UI 的“在单独一行显示置顶标签页”默认不勾选，开启后将置顶标签放在普通标签上方；置顶状态、顺序和布局选项重启后保留。标签关闭按钮的悬停和按下颜色与窗口关闭按钮一致。
 - 列显示下拉菜单末尾的“显示隐藏文件/文件夹”与 Preferences → General 同步；关闭文件列表网格线时，文件条目下方的分割线也会隐藏。
 - Preferences → UI → 显示“我的电脑”中的磁盘用量默认不勾选，开启后显示磁盘容量、用量条和百分比。磁盘名称旁不再重复根路径。
 - Preferences → UI → 显示文件夹路径默认关闭；启用后在所有目录树文件夹（包括展开的子目录和置顶父目录）名称右侧显示绝对路径，悬停立即显示完整路径。路径与磁盘容量面板使用对齐的右侧列。父级置顶仅保留展开分支，分类标题在下一分类进入时退让。
@@ -462,7 +470,7 @@ Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip
 - `Docs/`：使用文档；`Docs/Images/CDirPreview.png`：纳入 Git 的 README 预览图；`Publish/CDirWinX64/`：可直接运行的发布包。
 - `Build/Bin/<项目名>/`、`Build/Obj/<项目名>/`：构建产物与可重新生成的中间缓存。
 - `Build/PublicationWorkspaces/`：发布时保存的实时工作区及设置备份。
-- `Trash/`：按原相对路径归档的旧发布包、旧预览及诊断文件；`Publish/` 只保留当前可运行程序和最新版本 ZIP。
+- `Trash/`：按原相对路径归档的旧发布包、旧预览及诊断文件；`Publish/` 保留当前可运行程序、最新版本 ZIP 以及历史版本 ZIP，只有用户明确要求时才清理历史 ZIP。
 - `Artifacts/CDir_WinX64_v<major>.<minor>.<patch>.zip`、`Artifacts/CDirPreview.png`：分发包和界面预览。
 
 ---

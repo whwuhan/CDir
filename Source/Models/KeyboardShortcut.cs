@@ -11,6 +11,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
     [
         new("NewWindow", "NewWindow", true, FixedGesture: "Ctrl+N"),
         new("NewTab", "NewTab", true),
+        new("ToggleTabPin", "ToggleTabPin", true),
         new("CloseTab", "CloseTab", true),
         new("NextTab", "NextTab", true),
         new("PreviousTab", "PreviousTab", true),
@@ -127,9 +128,10 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         }
         // Damaged or manually edited settings must not leave commands competing for a key.
         // A newly introduced default must not take over an existing personal binding.
-        if (Overrides is not null && !Overrides.ContainsKey("ToggleSidebar")
-            && Result.Any(Pair => Pair.Key != "ToggleSidebar" && Pair.Value == Result["ToggleSidebar"]))
-            Result["ToggleSidebar"] = "";
+        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin" })
+            if (Overrides is not null && !Overrides.ContainsKey(NewCommand)
+                && Result.Any(Pair => Pair.Key != NewCommand && Pair.Value == Result[NewCommand]))
+                Result[NewCommand] = "";
         if (Result.Values.Where(Value => Value.Length > 0).GroupBy(Value => Value).Any(Group => Group.Count() > 1))
             return All.ToDictionary(Item => Item.Id, Item => Item.DefaultGesture, StringComparer.Ordinal);
         return Result;

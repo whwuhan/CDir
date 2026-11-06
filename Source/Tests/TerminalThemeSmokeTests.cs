@@ -193,7 +193,7 @@ public partial class ExplorerTab
                 Check(Equals(Dialog.TerminalFontSizePicker.SelectedItem, 18.0) && Dialog.TerminalBackgroundEditor.Text == "#002B36"
                     && Dialog.TerminalForegroundEditor.Text == "#66D9EF" && Dialog.TerminalAutomaticForeground.IsChecked == false,
                     "Reopening Terminal Theme retains the saved font size and background");
-                Dialog.RestoreDefaultsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await this.RestorePreferencesSmokeAsync(Dialog);
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(Surface.FontSize == DefaultSettings.Current.TerminalFontSize
                     && this.GetTerminalBackgroundColor() == DefaultSettings.Current.TerminalBackgroundColor

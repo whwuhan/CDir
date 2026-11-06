@@ -195,6 +195,7 @@ public partial class ExplorerTab
             CopyOnDrop = this.Settings.CopyOnDrop,
             CalculateFolderSizes = this.Settings.CalculateFolderSizes,
             ShowBookmarkPaths = this.Settings.ShowBookmarkPaths,
+            SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
             ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
             ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
             HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
