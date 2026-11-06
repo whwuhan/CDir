@@ -88,7 +88,7 @@ public partial class ExplorerTab
 
     private CategoryFolderDragPayload? DraggedCategoryFolder(IDataObject Data)
     {
-        if (!Data.GetDataPresent(CategoryFolderDragFormat, false)
+        if (this.ActiveCategoryFolderDrag is null || !Data.GetDataPresent(CategoryFolderDragFormat, false)
             || Data.GetData(CategoryFolderDragFormat, false) is not CategoryFolderDragPayload Payload) return null;
         return ReferenceEquals(Payload, this.ActiveCategoryFolderDrag) && ReferenceEquals(Payload.Owner, this)
             && this.CustomCategories.Contains(Payload.Category) && Payload.Category.Folders.Contains(Payload.Folder) ? Payload : null;

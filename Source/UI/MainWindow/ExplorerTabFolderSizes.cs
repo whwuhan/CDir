@@ -19,6 +19,12 @@ public partial class ExplorerTab
     private void QueueFolderSizes()
     {
         this.CancelFolderSizes();
+        if (!this.Settings.CalculateFolderSizes)
+        {
+            foreach (var Entry in this.Entries) Entry.ResetFolderSize();
+            if (this.SortProperty == nameof(FileEntry.Size)) this.View?.Refresh();
+            return;
+        }
         if (this.WindowClosed || !this.IsTabSelected || this.IsRecycleBin || this.Entries.Count == 0
             || this.Settings.HiddenColumns?.Contains(nameof(FileEntry.Size)) == true) return;
         var Cancellation = new CancellationTokenSource();
@@ -32,6 +38,7 @@ public partial class ExplorerTab
         var Reader = this.ReadFolderSize;
         var Seen = new HashSet<FileEntry>();
         bool Current() => !Token.IsCancellationRequested && !this.WindowClosed && this.IsTabSelected
+            && this.Settings.CalculateFolderSizes
             && Version == this.NavigationVersion && ReferenceEquals(Listed, this.Entries);
         try
         {

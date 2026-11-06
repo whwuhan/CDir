@@ -272,8 +272,9 @@ public partial class ExplorerTab
                 await Settle();
                 Check(ActiveMenu.IsOpen && ActiveMenu.IsVisible && ReferenceEquals(ActiveMenu.DataContext, Node)
                     && ActiveMenu.Items.OfType<MenuItem>().Select(Action => Action.Tag?.ToString())
-                        .SequenceEqual(new[] { "ExpandAllSubfolders", "CollapseAllSubfolders" }),
-                    $"Drive or folder menu targets the clicked node and offers only expand and collapse (open={ActiveMenu.IsOpen}, visible={ActiveMenu.IsVisible}, target={ActiveMenu.DataContext is FolderNode TargetNode && ReferenceEquals(TargetNode, Node)})");
+                        .SequenceEqual(new[] { "ExpandAllSubfolders", "CollapseAllSubfolders", "NewFolder" })
+                    && ActiveMenu.Items[2] is Separator,
+                    $"Drive or folder menu targets the clicked node and separates New Folder below collapse (open={ActiveMenu.IsOpen}, visible={ActiveMenu.IsVisible}, target={ActiveMenu.DataContext is FolderNode TargetNode && ReferenceEquals(TargetNode, Node)})");
                 return ActiveMenu;
             }
             static void Invoke(ContextMenu Menu, string Key) => Menu.Items.OfType<MenuItem>()

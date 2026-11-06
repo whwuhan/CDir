@@ -40,7 +40,9 @@ public partial class ExplorerTab
         {
             Press(Key.V);
             var Deadline = Environment.TickCount64 + 15000;
-            while ((this.OperationBusy || this.Loading) && Environment.TickCount64 < Deadline) await Task.Delay(20);
+            var Expected = LanguageService.Text(Move ? "MoveComplete" : "CopyComplete");
+            while ((this.OperationBusy || this.Loading || this.StatusText.Text != Expected)
+                && Environment.TickCount64 < Deadline) await Task.Delay(20);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Check(!this.OperationBusy && !this.Loading && this.StatusText.Text == LanguageService.Text(Move ? "MoveComplete" : "CopyComplete"),
                 "Ctrl+V finishes the filesystem transfer and reports success: " + this.StatusText.Text);
@@ -65,16 +67,17 @@ public partial class ExplorerTab
                 "Ctrl+C publishes Windows file-drop paths and Copy effect for a mixed selection");
             for (var Index = 1; Index <= 2; Index++)
             {
+                var Before = Directory.EnumerateFileSystemEntries(Source).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 await Paste();
-                var CopiedFile = Index == 1 ? LanguageService.Text("CopyName", "报告", ".txt")
-                    : LanguageService.Text("NumberedCopyName", "报告", Index, ".txt");
-                var CopiedFolder = Index == 1 ? LanguageService.Text("CopyName", "Folder", "")
-                    : LanguageService.Text("NumberedCopyName", "Folder", Index, "");
-                Check(File.ReadAllText(Path.Combine(Source, CopiedFile)) == "Original file contents"
-                    && File.ReadAllText(Path.Combine(Source, CopiedFolder, "Nested", "Data.txt")) == "Nested folder contents"
+                var Added = Directory.EnumerateFileSystemEntries(Source).Where(Path => !Before.Contains(Path)).ToArray();
+                var CopiedFile = Added.SingleOrDefault(File.Exists);
+                var CopiedFolder = Added.SingleOrDefault(Directory.Exists);
+                Check(Added.Length == 2 && CopiedFile is not null && CopiedFolder is not null
+                    && File.ReadAllText(CopiedFile) == "Original file contents"
+                    && File.ReadAllText(Path.Combine(CopiedFolder, "Nested", "Data.txt")) == "Nested folder contents"
                     && File.ReadAllText(FilePath) == "Original file contents"
-                    && this.Entries.Any(Entry => Entry.Name == CopiedFile) && ClipboardData is not null,
-                    "Repeated same-folder Ctrl+V creates visible numbered file and folder copies and preserves the originals: " + Index);
+                    && this.Entries.Any(Entry => SamePath(Entry.FullPath, CopiedFile)) && ClipboardData is not null,
+                    "Windows chooses same-folder copy names, keeps originals and refreshes each paste: " + Index);
             }
             await this.NavigateAsync(Target, RecordHistory: false);
             await Paste();
@@ -91,6 +94,36 @@ public partial class ExplorerTab
             await Paste();
             Check(File.ReadAllText(Path.Combine(Target, "External.txt")) == "Windows file-drop contents" && File.Exists(ExternalFile),
                 "Ctrl+V accepts an external Windows file-drop payload and preserves its source");
+            await this.NavigateAsync(Source, RecordHistory: false);
+            this.SelectPath(FilePath);
+            this.SelectPath(FolderPath, Append: true);
+            this.FileGrid.UpdateLayout();
+            var Writer = this.WriteClipboardFiles;
+            this.WriteClipboardFiles = _ => throw new System.Runtime.InteropServices.COMException("Owned clipboard contention");
+            Press(Key.C);
+            await this.NavigateAsync(Directory.CreateDirectory(Path.Combine(Fixture, "FailedCopyTarget")).FullName, RecordHistory: false);
+            await this.PasteAsync();
+            Check(!this.Entries.Any() && this.StatusText.Text.Contains("Owned clipboard contention"),
+                "A failed Ctrl+C blocks pasting the previous file payload and reports the clipboard error");
+            this.WriteClipboardFiles = Writer;
+            await this.NavigateAsync(Source, RecordHistory: false);
+            this.SelectPath(FilePath);
+            this.SelectPath(FolderPath, Append: true);
+            this.Loading = true;
+            this.OperationBusy = true;
+            try { Press(Key.C); }
+            finally { this.Loading = false; this.OperationBusy = false; }
+            Check(ClipboardData?.GetData(DataFormats.FileDrop) is string[] NewPaths
+                && NewPaths.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(new[] { FilePath, FolderPath }),
+                "Ctrl+C replaces an old clipboard with the complete multi-selection even during loading or a file operation");
+            var MultiTarget = Directory.CreateDirectory(Path.Combine(Fixture, "MultiTarget")).FullName;
+            await this.NavigateAsync(MultiTarget, RecordHistory: false);
+            var Refreshes = Enumerable.Range(0, 4).Select(_ => this.RefreshAsync()).ToArray();
+            await Paste();
+            await Task.WhenAll(Refreshes);
+            Check(File.Exists(Path.Combine(MultiTarget, "报告.txt")) && Directory.Exists(Path.Combine(MultiTarget, "Folder"))
+                && this.View!.Cast<CDir.Models.FileEntry>().Select(Entry => Entry.Name).ToHashSet().SetEquals(new[] { "报告.txt", "Folder" }),
+                "Mixed multi-selection paste refreshes the visible panel before completion despite overlapping watcher refreshes");
             await this.RunCutClipboardSmokeChecksAsync(Passed, Source, Target, FilePath, FolderPath);
         }
         finally
@@ -100,6 +133,7 @@ public partial class ExplorerTab
             this.ClearClipboardFiles = ClipboardClearer;
             this.ReadClipboardVersion = ClipboardVersionReader;
             SetCutClipboard(null);
+            FailedFileClipboard = null;
             await this.NavigateAsync(InitialPath, RecordHistory: false);
             if (!AppMain.IsInsideSmokeScope(Fixture) || (File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException("Refusing cleanup outside the owned clipboard fixture.");

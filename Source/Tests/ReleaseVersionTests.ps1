@@ -132,4 +132,45 @@ foreach ($Invalid in @('1.2', '01.2.3', '1.2.3.4', '1.2.3/other', '65535.0.1')) 
 }
 Move-Item -LiteralPath $Manifest -Destination ($Manifest + '.saved')
 Check (Rejects { & $Worker }) 'Packaging rejects a missing release manifest instead of guessing a filename.'
+. (Join-Path $PSScriptRoot '../Scripts/PublicationWorkspace.ps1')
+$Profile = Join-Path $Fixture 'PublicationProfile'
+$Snapshots = Join-Path $Fixture 'PublicationSnapshots'
+New-Item -ItemType Directory -Path $Profile, $Snapshots | Out-Null
+$OldSettings = '{"CustomCategories":[{"Id":"kept","Name":"Saved","Folders":[{"FullPath":"C:\\Saved"}]}]}'
+$OldState = @{ Version=1; LastActivatedUtc='2026-11-06T01:00:00Z'; ActiveTab=0
+    Tabs=@(@{ Alias='Existing'; Settings=($OldSettings | ConvertFrom-Json) }) } | ConvertTo-Json -Depth 20 -Compress
+$NewState = @{ Version=1; LastActivatedUtc='2026-11-06T02:00:00Z'; ActiveTab=1
+    Tabs=@(@{ Alias='Existing'; Settings=($OldSettings | ConvertFrom-Json) },
+        @{ Alias='Unsaved second tab'; Settings=@{ CustomCategories=@(@{Id='new'; Name='Latest folders'
+            Folders=@(@{FullPath='C:\Unsaved Folder 中文'})}) } }) } | ConvertTo-Json -Depth 20 -Compress
+[IO.File]::WriteAllText((Join-Path $Profile 'Settings.json'), $OldSettings)
+[IO.File]::WriteAllText((Join-Path $Profile 'Settings.json.workspace.json'), $OldState)
+$Records = @()
+foreach ($Item in @(@{Id=1;Json=$OldState;Activated='2026-11-06T01:00:00Z'}, @{Id=2;Json=$NewState;Activated='2026-11-06T02:00:00Z'})) {
+    $SnapshotFile = Join-Path $Snapshots ($Item.Id.ToString() + '.workspace.json')
+    [IO.File]::WriteAllText($SnapshotFile, $Item.Json)
+    $Records += [pscustomobject]@{ ProcessId=$Item.Id; SnapshotFile=$SnapshotFile; LastActivatedUtc=$Item.Activated
+        Sha256=(Get-FileHash -LiteralPath $SnapshotFile).Hash }
+}
+$Capture = [pscustomobject]@{ProfileDirectory=$Profile; Snapshots=$Records}
+$Chosen = Restore-PublicationWorkspace $Capture
+$SavedState = Get-Content (Join-Path $Profile 'Settings.json.workspace.json') -Raw | ConvertFrom-Json
+$SavedSettings = Get-Content (Join-Path $Profile 'Settings.json') -Raw | ConvertFrom-Json
+Check ($Chosen.ProcessId -eq 2 -and $SavedState.Tabs.Count -eq 2 -and $SavedState.ActiveTab -eq 1 -and
+    $SavedState.Tabs[1].Alias -eq 'Unsaved second tab') 'Publication preserves the most recently active live workspace, including every unsaved tab.'
+Check ($SavedSettings.CustomCategories[0].Folders[0].FullPath -ceq 'C:\Unsaved Folder 中文' -and
+    $SavedState.Tabs[0].Settings.CustomCategories[0].Folders[0].FullPath -ceq 'C:\Saved') 'Publication keeps unsaved folder entries and other tabs while saving active-tab preferences.'
+Check ([IO.File]::ReadAllText((Join-Path $Profile 'Settings.json.bak')) -ceq $OldSettings -and
+    [IO.File]::ReadAllText((Join-Path $Profile 'Settings.json.workspace.json.bak')) -ceq $OldState) 'Publication retains the prior complete settings and workspace as verified backups.'
+Check (@($Records | Where-Object { (Get-FileHash -LiteralPath $_.SnapshotFile).Hash -ne $_.Sha256 }).Count -eq 0) 'Every instance snapshot remains intact for recovery after selecting the active window.'
+$PreservedHash = (Get-FileHash (Join-Path $Profile 'Settings.json.workspace.json')).Hash
+foreach ($Invalid in @('null', '{"Version":1,"ActiveTab":0,"Tabs":[]}', '{"Version":1,"ActiveTab":2,"Tabs":[{"Settings":{}}]}', '{"Version":1,"ActiveTab":0,"Tabs":[{}]}')) {
+    Check (Rejects { Assert-PublicationWorkspaceJson $Invalid }) 'Incomplete live snapshots stop publication before an instance can be terminated.'
+}
+$Records[1].Sha256 = 'changed'
+Check (Rejects { Restore-PublicationWorkspace $Capture }) 'A damaged live snapshot cannot overwrite user state.'
+Check ((Get-FileHash (Join-Path $Profile 'Settings.json.workspace.json')).Hash -eq $PreservedHash) 'Rejected restoration leaves the preserved workspace unchanged.'
+$WrongInstance = @{ Executable=(Join-Path $Fixture 'Unrelated.exe'); Instances=@([pscustomobject]@{ProcessId=$PID})
+    BackupDirectory=(Join-Path $Fixture 'RejectedPublication'); ProfileDirectory=$Profile }
+Check (Rejects { Export-PublicationWorkspaces @WrongInstance }) 'Publication rejects processes whose executable paths do not match before requesting live state.'
 Write-Host ('Release checks: ' + $Checks + ' passed.')

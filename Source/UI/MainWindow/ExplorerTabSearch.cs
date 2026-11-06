@@ -58,6 +58,7 @@ public partial class ExplorerTab
 
     private void WindowInputPreviewMouseDown(object Sender, MouseButtonEventArgs E)
     {
+        this.DismissFileDragFeedback();
         if (E.ChangedButton != MouseButton.Left || E.OriginalSource is DependencyObject PressSource && !this.SidebarPanel.IsAncestorOf(PressSource))
             this.CancelSidebarFolderClick();
         this.ClearSelectionOnBlankMouseDown(E);

@@ -159,6 +159,8 @@ public partial class ExplorerTab
         var PreviousReader = this.ReadDriveUsage;
         var PreviousWidth = this.SidebarColumn.Width;
         var PreviousLanguage = LanguageService.CurrentLanguage;
+        var PreviousPaths = this.Settings.ShowBookmarkPaths;
+        var PreviousUsage = this.Settings.ShowSidebarDriveUsage;
         var Nodes = new[] { new FolderNode("Longest drive name (Q:)", @"Q:\", true), new FolderNode("R:", @"R:\", true), new FolderNode("Unavailable drive", @"T:\", true) };
         foreach (var Node in Nodes) { Node.IsLoaded = true; Node.Children.Clear(); this.Roots.Add(Node); }
         void Check(bool Condition, string Name)
@@ -186,6 +188,14 @@ public partial class ExplorerTab
         }
         try
         {
+            Check(!new AppSettings().ShowSidebarDriveUsage
+                && !System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.ShowSidebarDriveUsage,
+                "Fresh and older settings hide My Computer drive usage by default");
+            this.ChangeShowSidebarDriveUsage(false);
+            this.UpdateLayout();
+            Check(Nodes.All(Node => !Element<Grid>(Node, "SidebarDriveUsage").IsVisible),
+                "Disabling drive usage hides capacity text, bars and percentages for every drive");
+            this.ChangeShowSidebarDriveUsage(true);
             this.SidebarColumn.Width = new GridLength(390);
             var Reads = 0;
             this.ReadDriveUsage = Root =>
@@ -194,6 +204,43 @@ public partial class ExplorerTab
                 return Root == @"Q:\" ? new(Root, 256 * GB, 512 * GB) : Root == @"R:\" ? new(Root, 950 * GB, 1000 * GB) : null;
             };
             await Refresh();
+            this.ChangeShowBookmarkPaths(true);
+            this.SidebarColumn.Width = new GridLength(700);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
+            foreach (var Node in Nodes)
+            {
+                Check(!Children<TextBlock>((TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node))
+                    .Any(Text => Text.IsVisible && Text.Text == Node.FullPath),
+                    "My Computer drive rows do not repeat the drive root beside their name: " + Node.Name);
+            }
+            var FavoriteHeader = FindVisualChild<Button>(this.FavoritesList)!;
+            var FavoritePath = Children<TextBlock>(FavoriteHeader).Single(Text => Text.Name == "BookmarkPath");
+            Check(Nodes.All(Node => Math.Abs(Element<Grid>(Node, "SidebarDriveUsage").TranslatePoint(new Point(), this.SidebarScroll).X
+                - FavoritePath.TranslatePoint(new Point(), this.SidebarScroll).X) < 1),
+                "All drive capacity panels align exactly with the folder path column");
+            foreach (var Width in new[] { 850d, 620d })
+            {
+                this.SidebarColumn.Width = new GridLength(Width);
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                this.UpdateLayout();
+                Check(Nodes.All(Node => Math.Abs(Element<Grid>(Node, "SidebarDriveUsage").TranslatePoint(new Point(), this.SidebarScroll).X
+                    - FavoritePath.TranslatePoint(new Point(), this.SidebarScroll).X) < 1),
+                    "Drive capacity and folder path columns stay aligned after resizing the sidebar to " + Width);
+                if (Width == 850 && AppMain.ScreenshotPath is { } AlignedOutput)
+                {
+                    var Bitmap = new RenderTargetBitmap((int)this.HostWindow.ActualWidth, (int)this.HostWindow.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    Bitmap.Render(this.HostWindow);
+                    var Encoder = new PngBitmapEncoder();
+                    Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
+                    using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(AlignedOutput)!, "SidebarAlignedPaths.png"));
+                    Encoder.Save(Stream);
+                }
+            }
+            this.ChangeShowBookmarkPaths(false);
+            this.SidebarColumn.Width = new GridLength(390);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
             Check(Nodes[0].DriveCapacityText == LanguageService.Text("DriveUsageCompact", 256.0, 512.0)
                 && !Nodes[0].DriveCapacityText.Contains("Q:", StringComparison.Ordinal)
                 && Element<TextBlock>(Nodes[0], "SidebarDriveCapacity").IsVisible
@@ -225,8 +272,14 @@ public partial class ExplorerTab
                     "Sidebar percentages retain exactly one decimal place at " + Expected + " percent");
             }
             Nodes[0].UpdateDriveUsage(new(@"Q:\", 55 * GB, 1000 * GB));
-            void CheckUsageLayout(double FontSize)
+            async Task CheckUsageLayoutAsync(double FontSize)
             {
+                // Toggling the preference intentionally refreshes drive capacity.
+                // Reapply the single-digit fixture after that refresh has finished.
+                await this.SidebarDriveUsageTask;
+                Nodes[0].UpdateDriveUsage(new(@"Q:", 55 * GB, 1000 * GB));
+                this.UpdateLayout();
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
                 this.UpdateLayout();
                 var Capacity = Element<TextBlock>(Nodes[0], "SidebarDriveCapacity");
                 var Meter = Element<ProgressBar>(Nodes[0], "SidebarDriveMeter");
@@ -245,12 +298,16 @@ public partial class ExplorerTab
                     && Summary.ActualHeight < Capacity.ActualHeight * 1.5,
                     "Usage, meter and percentage appear left to right on one spacious row");
                 var NameWidths = Nodes.Select(Node => Element<TextBlock>(Node, "SidebarDriveName").ActualWidth).ToArray();
+                // Inline-rename labels size to their text; their parent grid owns the aligned column.
+                var NameColumnWidths = Nodes.Select(Node => FindAncestor<Grid>(Element<TextBlock>(Node, "SidebarDriveName"))!.ColumnDefinitions[0].ActualWidth).ToArray();
                 var CapacityLefts = Nodes.Select(Node => Element<TextBlock>(Node, "SidebarDriveCapacity").TranslatePoint(new Point(), this.FolderTree).X).ToArray();
                 var MeterLefts = Nodes.Take(2).Select(Node => Element<ProgressBar>(Node, "SidebarDriveMeter").TranslatePoint(new Point(), this.FolderTree).X).ToArray();
                 var PercentLefts = Nodes.Take(2).Select(Node => Element<TextBlock>(Node, "SidebarDrivePercentage").TranslatePoint(new Point(), this.FolderTree).X).ToArray();
-                Check(NameWidths.Max() - NameWidths.Min() < 1 && CapacityLefts.Max() - CapacityLefts.Min() < 1
+                Check(NameColumnWidths.Max() - NameColumnWidths.Min() < 1 && CapacityLefts.Max() - CapacityLefts.Min() < 1
                     && MeterLefts.Max() - MeterLefts.Min() < 1 && PercentLefts.Max() - PercentLefts.Min() < 1,
-                    "Drive names, capacity, meters and percentages share aligned columns: " + FontSize);
+                    "Drive names, capacity, meters and percentages share aligned columns: " + FontSize
+                    + "; name columns=" + string.Join(",", NameColumnWidths) + "; capacity=" + string.Join(",", CapacityLefts)
+                    + "; meters=" + string.Join(",", MeterLefts) + "; percentages=" + string.Join(",", PercentLefts));
                 var Percentages = Nodes.Take(2).Select(Node => Element<TextBlock>(Node, "SidebarDrivePercentage")).ToArray();
                 var PercentRights = Percentages.Select(Text => Text.TranslatePoint(new Point(Text.ActualWidth, 0), this.FolderTree).X).ToArray();
                 Check(Percentages.All(Text => Text.TextAlignment == TextAlignment.Right)
@@ -266,11 +323,11 @@ public partial class ExplorerTab
                 Check(Math.Abs(NameWidths[0] - NaturalNameWidth) < 2,
                     "The name column fits the longest drive label without including expanded folder names");
             }
-            CheckUsageLayout(this.Settings.FontSizes!["Sidebar"]);
+            await CheckUsageLayoutAsync(this.Settings.FontSizes!["Sidebar"]);
             await this.RunPreferencesSmokeChecksAsync(Passed, FontSizes: new Dictionary<string, double> { ["Sidebar"] = 20 });
-            CheckUsageLayout(20);
+            await CheckUsageLayoutAsync(20);
             await this.RunPreferencesSmokeChecksAsync(Passed, FontSizes: new Dictionary<string, double> { ["Sidebar"] = 13 });
-            CheckUsageLayout(13);
+            await CheckUsageLayoutAsync(13);
             double? FixedCapacityLeft = null;
             double? FixedMeterLeft = null;
             foreach (var Width in new[] { 690.0, 390.0, 238.0, 690.0 })
@@ -280,7 +337,7 @@ public partial class ExplorerTab
                 Viewer.ScrollToLeftEnd();
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
                 this.UpdateLayout();
-                CheckUsageLayout(13);
+                await CheckUsageLayoutAsync(13);
                 var Summary = Element<Grid>(Nodes[0], "SidebarDriveUsage");
                 var Right = Summary.TranslatePoint(new Point(Summary.ActualWidth, 0), this.FolderTree).X;
                 Check(Summary.IsVisible && Summary.ActualWidth > 0 && Right <= Viewer.ExtentWidth + 2,
@@ -314,6 +371,8 @@ public partial class ExplorerTab
             foreach (var Node in Nodes) this.Roots.Remove(Node);
             this.ReadDriveUsage = PreviousReader;
             this.SidebarColumn.Width = PreviousWidth;
+            this.ChangeShowBookmarkPaths(PreviousPaths);
+            this.ChangeShowSidebarDriveUsage(PreviousUsage);
             this.ChangeLanguage(PreviousLanguage, Persist: false);
         }
     }

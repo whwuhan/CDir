@@ -8,6 +8,12 @@ namespace CDir.Controls;
 /// <summary>Draws branch and indentation guides through expanded folders.</summary>
 public sealed class TreeBranchLines : FrameworkElement
 {
+    public static readonly DependencyProperty IsPinnedProperty = DependencyProperty.Register(nameof(IsPinned), typeof(bool),
+        typeof(TreeBranchLines), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool IsPinned { get => (bool)GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
+    public static readonly DependencyProperty PinnedDepthProperty = DependencyProperty.Register(nameof(PinnedDepth), typeof(int),
+        typeof(TreeBranchLines), new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsRender));
+    public int PinnedDepth { get => (int)GetValue(PinnedDepthProperty); set => SetValue(PinnedDepthProperty, value); }
     public static readonly DependencyProperty HeaderHeightProperty = DependencyProperty.Register(
         nameof(HeaderHeight), typeof(double), typeof(TreeBranchLines),
         new FrameworkPropertyMetadata(20d, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -27,6 +33,23 @@ public sealed class TreeBranchLines : FrameworkElement
 
     private static readonly Pen GuidePen = CreateGuidePen();
     private ItemsControl? Owner;
+    internal bool HasIncomingGuide => this.Owner is TreeViewItem || this.Owner is TreeView { Tag: "SidebarFolderChildren" };
+    internal double ChildGuideColumn
+    {
+        get
+        {
+            ItemsControl? Children = this.TemplatedParent is TreeViewItem Item ? Item
+                : this.TemplatedParent is DependencyObject Container ? FindChildTree(Container) : null;
+            if (Children?.ItemContainerGenerator.ContainerFromIndex(0) is TreeViewItem Child
+                && Child.Template.FindName("BranchLines", Child) is TreeBranchLines { ActualWidth: > 0 } Guides)
+                return Guides.TranslatePoint(new Point(Math.Floor(Guides.ActualWidth / 2) + .5, 0), this).X;
+            return double.NaN;
+        }
+    }
+    internal IReadOnlyList<double>? PinnedColumns { get; set; }
+    internal double PinnedHeaderEnd { get; set; } = double.NaN;
+    internal double PinnedChildColumn { get; set; } = double.NaN;
+    internal double PinnedTailColumn { get; set; } = double.NaN;
 
     public TreeBranchLines()
     {
@@ -114,10 +137,27 @@ public sealed class TreeBranchLines : FrameworkElement
     protected override void OnRender(DrawingContext Context)
     {
         base.OnRender(Context);
+        if (this.IsPinned)
+        {
+            var PinnedCenter = this.ActualHeight / 2;
+            if (this.PinnedColumns is { } Columns)
+            {
+                foreach (var GuideX in Columns)
+                    Context.DrawLine(GuidePen, new Point(GuideX, 0), new Point(GuideX, this.ActualHeight));
+                if (Columns.Count > 0 && double.IsFinite(this.PinnedHeaderEnd))
+                    Context.DrawLine(GuidePen, new Point(Columns[^1], PinnedCenter), new Point(this.PinnedHeaderEnd, PinnedCenter));
+                if (this.IsExpanded && this.ChildCount > 0)
+                    foreach (var GuideX in new[] { this.PinnedTailColumn, this.PinnedChildColumn }.Where(double.IsFinite))
+                        Context.DrawLine(GuidePen, new Point(GuideX, PinnedCenter), new Point(GuideX, this.ActualHeight));
+                return;
+            }
+            // Wait for the real tree's layout rather than briefly drawing guessed columns.
+            return;
+        }
         // A bookmark's visible root is outside its child TreeView; those first-level children still need guides.
         // Roots connect only their own expanded subtree. Descendants also connect sibling rows.
         var Owner = this.Owner;
-        var HasParentFolder = this.IsBookmarkRoot || Owner is TreeViewItem || Owner is TreeView { Tag: "SidebarFolderChildren" };
+        var HasParentFolder = this.HasIncomingGuide;
         if (Owner is null || this.TemplatedParent is not DependencyObject Container
             || this.ActualWidth <= 0 || this.ActualHeight <= 0) return;
         var Index = Owner.ItemContainerGenerator.IndexFromContainer(Container);
@@ -149,10 +189,11 @@ public sealed class TreeBranchLines : FrameworkElement
         }
         if (this.IsExpanded && this.ChildCount > 0)
         {
-            // Bridge the folder icon to its children's expander column, one level to the right.
-            // The icon paints over the top of the bridge, keeping the glyph unobstructed.
-            var ChildX = this.ActualWidth + X;
-            Context.DrawLine(GuidePen, new Point(ChildX, Center), new Point(ChildX, Math.Min(this.HeaderHeight, this.ActualHeight)));
+            // Independent bookmark child trees can add their own padding. Use the
+            // child's rendered column for both the real tree and its pinned copy.
+            var ChildX = this.ChildGuideColumn;
+            if (double.IsFinite(ChildX))
+                Context.DrawLine(GuidePen, new Point(ChildX, Center), new Point(ChildX, Math.Min(this.HeaderHeight, this.ActualHeight)));
         }
     }
 }

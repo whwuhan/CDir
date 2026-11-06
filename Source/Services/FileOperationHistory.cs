@@ -50,7 +50,7 @@ internal sealed class FileOperationHistory(string Root)
         new FileSystemService().CopyItems([Source], DirectoryPath, false);
         var Backup = Path.Combine(DirectoryPath, Path.GetFileName(Source));
         if (Snapshot != Fingerprint(Backup) || Snapshot != Fingerprint(Source))
-            throw new IOException(LanguageService.Text("ServiceSourceChanged"));
+            throw new IOException(LanguageService.Text("HistoryBackupUnverified", Source));
         return Backup;
     }
 
@@ -88,7 +88,14 @@ internal sealed class FileOperationHistory(string Root)
             if (!From.TryPeek(out var Batch)) throw new IOException(LanguageService.Text(Redo ? "NothingToRedo" : "NothingToUndo"));
             var Changes = (Redo ? Batch.Changes : Batch.Changes.AsEnumerable().Reverse()).ToArray();
             // Preflight the whole batch, including conflicts, before changing any item.
-            foreach (var Change in Changes) Validate(Change, Redo);
+            var Vacated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var Change in Changes)
+            {
+                Validate(Change, Redo, Vacated);
+                if (Change.Kind == "Move") Vacated.Add(Redo ? Change.Source : Change.Target);
+                else if (Change.Kind == "Delete" && Redo) Vacated.Add(Change.Source);
+                else if (Change.Kind != "Delete" && !Redo) Vacated.Add(Change.Target);
+            }
             this.Write(Redo ? "Redo" : "Undo", "Started", Changes.SelectMany(Change => new[] { Change.Source, Change.Target }).ToArray(), null);
             var Done = new List<Change>();
             try
@@ -124,7 +131,7 @@ internal sealed class FileOperationHistory(string Root)
         }
     }
 
-    private static void Validate(Change Change, bool Redo)
+    private static void Validate(Change Change, bool Redo, HashSet<string> Vacated)
     {
         var Active = Change.Kind == "Delete" ? (Redo ? Change.Source : Change.Target)
             : Change.Kind == "Move" ? (Redo ? Change.Source : Change.Target)
@@ -133,7 +140,7 @@ internal sealed class FileOperationHistory(string Root)
         var Destination = Change.Kind == "Delete" ? (Redo ? null : Change.Source)
             : Change.Kind == "Move" ? (Redo ? Change.Target : Change.Source)
             : Redo ? Change.Target : null;
-        if (Destination is not null && !string.Equals(Active, Destination, StringComparison.OrdinalIgnoreCase))
+        if (Destination is not null && !Vacated.Contains(Destination) && !string.Equals(Active, Destination, StringComparison.OrdinalIgnoreCase))
             RequireAbsent(Destination);
     }
 
@@ -203,7 +210,12 @@ internal sealed class FileOperationHistory(string Root)
             var Attributes = File.GetAttributes(PathValue);
             if ((Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException(LanguageService.Text("ServiceLinkUnsupported", PathValue));
             Add(Path.GetRelativePath(Root, PathValue));
-            Add(((int)Attributes).ToString());
+            // Compression, sparse allocation, encryption and cloud residency belong to
+            // the volume/storage provider. A verified copy can have different storage
+            // flags; the archive bit can also change independently of file contents.
+            const FileAttributes ContentAttributes = FileAttributes.Directory | FileAttributes.ReadOnly
+                | FileAttributes.Hidden | FileAttributes.System | FileAttributes.NotContentIndexed;
+            Add(((int)(Attributes & ContentAttributes)).ToString());
             if ((Attributes & FileAttributes.Directory) != 0)
                 foreach (var Child in Directory.EnumerateFileSystemEntries(PathValue).Order(StringComparer.OrdinalIgnoreCase)) Read(Child);
             else

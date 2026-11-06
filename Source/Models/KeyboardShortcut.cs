@@ -24,7 +24,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         new("Refresh", "Refresh", true),
         new("NewFolder", "NewFolder"),
         new("Copy", "Copy", FixedGesture: "Ctrl+C"),
-        new("Cut", "Cut"),
+        new("Cut", "Cut", FixedGesture: "Ctrl+X"),
         new("Paste", "Paste", FixedGesture: "Ctrl+V"),
         new("Undo", "Undo", true, FixedGesture: "Ctrl+Z"),
         new("Redo", "Redo", true, FixedGesture: "Ctrl+Y"),
@@ -36,8 +36,8 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         new("ToggleSidebar", "ToggleSidebar", true),
         new("TerminalFontIncrease", "TerminalFontIncrease", TerminalOnly: true),
         new("TerminalFontDecrease", "TerminalFontDecrease", TerminalOnly: true),
-        new("TerminalFontIncreaseWheel", "TerminalFontIncreaseWheel", TerminalOnly: true),
-        new("TerminalFontDecreaseWheel", "TerminalFontDecreaseWheel", TerminalOnly: true),
+        new("TerminalFontIncreaseWheel", "TerminalFontIncreaseWheel", TerminalOnly: true, FixedGesture: "Ctrl+WheelUp"),
+        new("TerminalFontDecreaseWheel", "TerminalFontDecreaseWheel", TerminalOnly: true, FixedGesture: "Ctrl+WheelDown"),
         new("TerminalFontReset", "TerminalFontReset", TerminalOnly: true)
     ]);
 
@@ -123,7 +123,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         {
             if (Item.IsFixed || Overrides is null || !Overrides.TryGetValue(Item.Id, out var Value)) continue;
             if (Value == "") Result[Item.Id] = "";
-            else if (TryNormalize(Value, Item.TerminalOnly, out var Gesture)) Result[Item.Id] = Gesture;
+            else if (TryNormalize(Value, Item.DefaultGesture.Contains("Wheel", StringComparison.Ordinal), out var Gesture)) Result[Item.Id] = Gesture;
         }
         // Damaged or manually edited settings must not leave commands competing for a key.
         // A newly introduced default must not take over an existing personal binding.

@@ -61,6 +61,8 @@ public partial class ExplorerTab
             Splitter.Move(55, 0);
             await Settle();
             var SavedWidth = Probe.SidebarColumn.ActualWidth;
+            Probe.ChangeShowBookmarkPaths(true);
+            Probe.ChangeShowSidebarDriveUsage(true);
             var Work = Probe.CustomCategories.Single(Category => Category.Id == "layout-work");
             var WorkSection = Probe.SidebarSectionElement(Work)!;
             await Probe.NavigateAsync(Deep, TreeKey: Probe.TreeKeyForSection(WorkSection));
@@ -100,6 +102,8 @@ public partial class ExplorerTab
                 && Probe.CaptureSidebarTreeLayouts()["custom:layout-other"].SelectedPaths!.Count == 0,
                 "Upgrading saved per-category selections restores only one highlight in the active category");
             Check(Math.Abs(Probe!.SidebarColumn.ActualWidth - SavedWidth) < 1
+                && Probe.Settings.ShowBookmarkPaths && Probe.ShowBookmarkPaths
+                && Probe.Settings.ShowSidebarDriveUsage && Probe.ShowSidebarDriveUsage
                 && SamePath(Probe.CurrentPath, Deep) && Probe.NavigationTreeKey == "custom:layout-work"
                 && !Probe.DirectoryTreeSection.IsExpanded && !Probe.FavoritesSection.IsExpanded
                 && Probe.CustomCategories.All(Category => !Category.IsExpanded)
@@ -128,6 +132,10 @@ public partial class ExplorerTab
             await Open(LegacyFile);
             Check(Math.Abs(Probe!.SidebarColumn.ActualWidth - DefaultSettings.Current.SidebarWidth) < 1 && !Probe.FavoritesSection.IsExpanded && !Probe.DirectoryTreeSection.IsExpanded,
                 "Older settings and invalid widths fall back safely without reopening collapsed sections");
+            Check(!Probe.Settings.ShowSidebarDriveUsage && !Probe.ShowSidebarDriveUsage,
+                "Legacy settings leave drive usage disabled by default");
+            Check(!Probe.Settings.ShowBookmarkPaths && !Probe.ShowBookmarkPaths,
+                "Legacy settings leave bookmark paths disabled by default");
             Probe.HostWindow.RequestExit();
             Probe = null;
         }

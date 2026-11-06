@@ -6,6 +6,12 @@ namespace CDir.Models;
 
 public sealed class FileEntry : INotifyPropertyChanged
 {
+    private bool CurrentIsRenaming;
+    public bool IsRenaming
+    {
+        get => this.CurrentIsRenaming;
+        set { if (this.CurrentIsRenaming == value) return; this.CurrentIsRenaming = value; PropertyChanged?.Invoke(this, new(nameof(IsRenaming))); }
+    }
     private bool CurrentIsCut;
     public bool IsCut
     {
@@ -40,6 +46,14 @@ public sealed class FileEntry : INotifyPropertyChanged
         this.CurrentSize = Bytes;
         this.FolderSizeComplete = Complete;
         this.FolderSizePartial = !Complete;
+        PropertyChanged?.Invoke(this, new(nameof(Size)));
+        PropertyChanged?.Invoke(this, new(nameof(DisplaySize)));
+    }
+    internal void ResetFolderSize()
+    {
+        if (!this.IsDirectory) return;
+        this.CurrentSize = null;
+        this.FolderSizeComplete = this.FolderSizePartial = false;
         PropertyChanged?.Invoke(this, new(nameof(Size)));
         PropertyChanged?.Invoke(this, new(nameof(DisplaySize)));
     }

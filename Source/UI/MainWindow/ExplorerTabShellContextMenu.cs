@@ -61,14 +61,7 @@ public partial class ExplorerTab
         if (string.Equals(Verb, "paste", StringComparison.OrdinalIgnoreCase)) { await this.PasteAsync(); return; }
         if (string.Equals(Verb, "NewFolder", StringComparison.OrdinalIgnoreCase))
         {
-            var Parent = this.CurrentPath;
-            var Name = LanguageService.Text("NewFolder");
-            for (var Index = 2; System.IO.Directory.Exists(System.IO.Path.Combine(Parent, Name)) || System.IO.File.Exists(System.IO.Path.Combine(Parent, Name)); Index++)
-                Name = LanguageService.Text("NumberedNewFolder", Index);
-            var FinalName = Name;
-            string? Created = null;
-            if (await this.RunOperationAsync(LanguageService.Text("CreatingFolder"), () => Created = this.Files.CreateFolder(Parent, FinalName), LanguageService.Text("FolderCreated")))
-                this.SelectPath(Created!);
+            await this.NewFolderAsync();
             return;
         }
         if (string.Equals(Menu.DescribeCommand(Id), "cut", StringComparison.OrdinalIgnoreCase))
@@ -90,12 +83,13 @@ public partial class ExplorerTab
         {
             var Paths = Menu.SelectionPaths;
             if (Paths.Length == 0) return;
+            if (Paths.Length == 1) { this.BeginFileRename(Paths[0]); return; }
             var InitialName = System.IO.Path.GetFileName(Paths[0]);
             var Dialog = new NameDialog(this.HostWindow, LanguageService.Text("Rename"), InitialName, !System.IO.Directory.Exists(Paths[0]));
             if (Dialog.ShowDialog() != true || Paths.Length == 1 && Dialog.EnteredName == InitialName) return;
             var NewName = Dialog.EnteredName;
             var Renamed = await this.RunOperationAsync(LanguageService.Text("Renaming"),
-                () => this.Files.RenameItems(Paths, NewName), LanguageService.Text("RenameComplete"));
+                () => ShellContextMenu.Rename(IntPtr.Zero, Paths, NewName, AppMain.SmokeTest), LanguageService.Text("RenameComplete"), RequiresSta: true);
             if (Renamed && Paths.Length == 1)
                 this.SelectPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Paths[0])!, NewName));
             return;
@@ -112,22 +106,15 @@ public partial class ExplorerTab
 
     private Task<bool> DeleteShellSelectionAsync(string[] Paths, bool Permanently)
     {
+        this.CancelInlineRename();
         var Delete = this.DeleteShellItems;
         return this.RunOperationAsync(LanguageService.Text("Recycling"), () =>
         {
-            using var Transaction = SharedFileHistory.Begin(Permanently ? "PermanentDelete" : "Recycle");
             var TopLevel = Paths.Where(Path => !Paths.Any(Other => !SamePath(Path, Other)
                 && Path.StartsWith(Other.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             foreach (var Path in TopLevel)
                 if (System.IO.Directory.GetParent(Path) is null) throw new System.IO.IOException(LanguageService.Text("ServiceDeleteRootDenied"));
-            var Backups = TopLevel.Select(Path => (Path, Backup: SharedFileHistory.Backup(Path))).ToArray();
-            try { Delete(TopLevel, Permanently); }
-            finally
-            {
-                foreach (var Item in Backups)
-                    if (!System.IO.File.Exists(Item.Path) && !System.IO.Directory.Exists(Item.Path))
-                        SharedFileHistory.RecordDeletion(Item.Path, Item.Backup, Path => Delete([Path], Permanently));
-            }
+            Delete(TopLevel, Permanently);
         },
             LanguageService.Text("RecycleComplete"), RequiresSta: true);
     }

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using CDir.Models;
+using CDir.Services;
 
 namespace CDir.UI;
 
@@ -104,6 +105,7 @@ public partial class ExplorerTab
 
     private async void SidebarDragMouseDown(object Sender, MouseButtonEventArgs E)
     {
+        if (FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(E.OriginalSource as DependencyObject) is not null) return;
         // A sidebar gesture wins over a focus reveal that was queued before it.
         ++this.PanelFocusVersion;
         this.PanelTreeSyncRequested = false;
@@ -198,10 +200,14 @@ public partial class ExplorerTab
         this.ClearSidebarDropFeedback();
         if (this.IsSidebarFileTransfer(E)) { this.FileTransferDragOver(Sender, E); return; }
         E.Handled = true;
-        E.Effects = this.UpdateSidebarDragFeedback(E.Data, E.GetPosition(this.SidebarPanel));
+        E.Effects = this.UpdateSidebarDragFeedback(E.Data, E.GetPosition(this.SidebarPanel), E.AllowedEffects);
     }
 
-    private DragDropEffects UpdateSidebarDragFeedback(IDataObject Data, Point Position)
+    private static DragDropEffects FolderAdditionEffect(DragDropEffects Allowed) => (Allowed & DragDropEffects.Link) != 0
+        ? DragDropEffects.Link : (Allowed & DragDropEffects.Copy) != 0 ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private DragDropEffects UpdateSidebarDragFeedback(IDataObject Data, Point Position,
+        DragDropEffects Allowed = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link)
     {
         this.SidebarCategoryDropHighlight.Visibility = Visibility.Collapsed;
         var Folder = this.DraggedCategoryFolder(Data);
@@ -215,17 +221,18 @@ public partial class ExplorerTab
         }
         if (Addition is not null)
         {
-            if (this.FolderAdditionDropTarget(Addition, Position) is not { } Category) { this.ClearSidebarDropFeedback(); return DragDropEffects.None; }
+            var Effect = FolderAdditionEffect(Allowed);
+            if (Effect == DragDropEffects.None || this.FolderAdditionDropTarget(Addition, Position) is not { } Category) { this.ClearSidebarDropFeedback(); return DragDropEffects.None; }
             this.ShowMainPanelDropHighlight(Category);
-            return DragDropEffects.Link;
+            return Effect;
         }
         else if (Folder is not null)
         {
             if (this.MainPanelDropCategory(Position) is { } Other && !ReferenceEquals(Other, Folder.Category))
             {
-                if (this.OperationBusy || this.Loading || this.FolderAdditionDropTarget(CategoryFolderAddition(Folder), Position) is null) { this.ClearSidebarDropFeedback(); return DragDropEffects.None; }
+                if (this.WindowClosed || this.OperationBusy || this.Loading) { this.ClearSidebarDropFeedback(); return DragDropEffects.None; }
                 this.ShowMainPanelDropHighlight(Other);
-                return DragDropEffects.Link;
+                return DragDropEffects.Move;
             }
             if (this.CategoryFolderInsertion(Folder, Position) is not { } Target) { this.SidebarDropMarker.Visibility = Visibility.Collapsed; return DragDropEffects.None; }
             this.ShowCategoryFolderDropMarker(Target);
@@ -253,16 +260,16 @@ public partial class ExplorerTab
         E.Handled = true;
         E.Effects = DragDropEffects.None;
         var Position = E.GetPosition(this.SidebarPanel);
-        var IsAddition = this.SidebarFolderAddition(E.Data) is not null
-            || (this.DraggedCategoryFolder(E.Data) is { } Folder && this.MainPanelDropCategory(Position) is { } Category && !ReferenceEquals(Category, Folder.Category));
-        if (this.CompleteSidebarDrop(E.Data, Position)) E.Effects = IsAddition ? DragDropEffects.Link : DragDropEffects.Move;
+        var IsAddition = this.SidebarFolderAddition(E.Data) is not null;
+        var Effect = IsAddition ? FolderAdditionEffect(E.AllowedEffects) : DragDropEffects.Move;
+        if (Effect != DragDropEffects.None && this.CompleteSidebarDrop(E.Data, Position)) E.Effects = Effect;
     }
 
-    private bool IsSidebarFileTransfer(DragEventArgs E) => HasFileDrop(E.Data)
+    private bool IsSidebarFileTransfer(DragEventArgs E) => (HasFileDrop(E.Data) || ShellDropData.IsPresent(E.Data))
         // A concrete directory always wins over the surrounding category. Even an
         // invalid transfer must not fall back to creating a category shortcut.
         && (this.FileTransferTarget(E.OriginalSource as DependencyObject, Sidebar: true) is not null
-            || this.ActiveMainPanelFolderDrag is null && this.ActiveSidebarFolderAddDrag is null
+            || this.SidebarFolderAddition(E.Data) is null
             || this.MainPanelDropCategory(E.GetPosition(this.SidebarPanel)) is null);
 
     private bool CompleteSidebarDrop(IDataObject Data, Point Position)
@@ -274,7 +281,7 @@ public partial class ExplorerTab
             if (this.DraggedCategoryFolder(Data) is { } Folder)
             {
                 if (this.MainPanelDropCategory(Position) is { } Other && !ReferenceEquals(Other, Folder.Category))
-                    return this.AddDroppedFolders(CategoryFolderAddition(Folder), Position);
+                    return this.TryTransferCategoryFolder(Folder.Category, Folder.Folder, Other);
                 return this.CategoryFolderInsertion(Folder, Position) is { } Target
                     && this.TryMoveCategoryFolder(Folder.Category, Folder.Folder, Target.Index);
             }

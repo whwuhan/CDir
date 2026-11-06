@@ -16,7 +16,7 @@ public partial class ExplorerTab
     {
         var Definition = KeyboardShortcut.All.FirstOrDefault(Item => Item.Id == Id);
         if (Definition is null || Definition.IsFixed) return false;
-        if (Gesture.Length > 0 && !KeyboardShortcut.TryNormalize(Gesture, Definition.TerminalOnly, out Gesture)) return false;
+        if (Gesture.Length > 0 && !KeyboardShortcut.TryNormalize(Gesture, Definition.DefaultGesture.Contains("Wheel", StringComparison.Ordinal), out Gesture)) return false;
         if (Gesture.Length > 0 && this.ShortcutBindings.Any(Item => Item.Key != Id && Item.Value == Gesture)) return false;
         var Previous = this.Settings.Shortcuts;
         this.Settings.Shortcuts = new(this.ShortcutBindings, StringComparer.Ordinal) { [Id] = Gesture };
@@ -28,6 +28,7 @@ public partial class ExplorerTab
         }
         this.ShortcutBindings[Id] = Gesture;
         this.ApplyShortcutHints();
+        this.UpdateTerminalStatus();
         return true;
     }
 
@@ -81,7 +82,7 @@ public partial class ExplorerTab
             case "Back": await this.BackAsync(); break;
             case "Forward": await this.ForwardAsync(); break;
             case "Up": await this.UpAsync(); break;
-            case "Refresh": this.VersionControl.Invalidate(); ShellIconService.InvalidateCache(); await this.RefreshRootsAsync(); await this.RefreshAsync(true); break;
+            case "Refresh": this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); await this.RefreshRootsAsync(); await this.RefreshAsync(true); break;
             case "NewFolder": await this.NewFolderAsync(); break;
             case "Copy": this.CopySelection(false); break;
             case "Cut": this.CopySelection(true); break;

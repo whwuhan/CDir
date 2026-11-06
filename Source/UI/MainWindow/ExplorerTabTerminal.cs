@@ -18,6 +18,35 @@ public partial class ExplorerTab
     private Task? TerminalStartupTask;
     private double SavedTerminalHeight = 240;
     private IInputElement? TerminalReturnFocus;
+    private bool UpdatingTerminalScrollBar;
+
+    private void UpdateTerminalScrollBar()
+    {
+        if (this.TerminalSurface is not CDir.Controls.EmbeddedTerminalControl Surface) return;
+        this.UpdatingTerminalScrollBar = true;
+        try
+        {
+            this.TerminalScrollBar.Maximum = Surface.HistoryLines;
+            this.TerminalScrollBar.ViewportSize = Surface.Session?.Buffer.Rows ?? 1;
+            this.TerminalScrollBar.LargeChange = this.TerminalScrollBar.ViewportSize;
+            this.TerminalScrollBar.Value = Surface.HistoryLines - Surface.HistoryOffset;
+            this.TerminalScrollBar.IsEnabled = Surface.HistoryLines > 0;
+        }
+        finally { this.UpdatingTerminalScrollBar = false; }
+    }
+
+    private void TerminalScrollValueChanged(object Sender, RoutedPropertyChangedEventArgs<double> E)
+    {
+        if (!this.UpdatingTerminalScrollBar && this.TerminalSurface is CDir.Controls.EmbeddedTerminalControl Surface)
+            Surface.SetHistoryPosition(E.NewValue);
+    }
+
+    private void TerminalViewportResized(object? Sender, EventArgs E)
+    {
+        // The terminal debounces its grid resize and may suppress screen events.
+        // Render after it finishes adjusting the history offset, even for a quiet shell.
+        this.TerminalSurface?.InvalidateVisual();
+    }
 
     private async void ToggleTerminalClick(object Sender, RoutedEventArgs E)
     {
@@ -57,6 +86,7 @@ public partial class ExplorerTab
             if (this.WindowClosed) { Session.Dispose(); return; }
             this.TerminalSession = Session;
             Session.Disconnected += this.TerminalDisconnected;
+            Session.ViewportResized += this.TerminalViewportResized;
             if (this.TerminalSurface is null)
             {
                 this.TerminalSurface = new CDir.Controls.EmbeddedTerminalControl
@@ -70,6 +100,7 @@ public partial class ExplorerTab
                 };
                 this.TerminalSurface.SetResourceReference(System.Windows.Automation.AutomationProperties.NameProperty, "TextTerminal");
                 this.TerminalHost.Child = this.TerminalSurface;
+                ((CDir.Controls.EmbeddedTerminalControl)this.TerminalSurface).ScrollStateChanged += (_, _) => this.UpdateTerminalScrollBar();
                 var Menu = new ContextMenu();
                 foreach (var (Key, Command) in new[] { ("Copy", TerminalControl.CopyCommand), ("Paste", TerminalControl.PasteCommand), ("ClearTerminal", TerminalControl.ClearCommand) })
                 {
@@ -78,11 +109,12 @@ public partial class ExplorerTab
                     Menu.Items.Add(Item);
                 }
                 this.TerminalSurface.ContextMenu = Menu;
-                ((CDir.Controls.EmbeddedTerminalControl)this.TerminalSurface).FontWheel = this.TerminalThemeMouseWheel;
                 ((CDir.Controls.EmbeddedTerminalControl)this.TerminalSurface).ClipboardFailed = Error =>
                     this.ShowNotice(LanguageService.Text("ClipboardError", FriendlyError(Error)), true);
             }
             this.TerminalSurface.Session = Session;
+            this.TerminalSurface.ScrollToBottom();
+            this.UpdateTerminalScrollBar();
             // The glyph renderer uses explicit fallback families rather than WPF's composite-font fallback.
             ((TerminalDecoder)Session.Decoder).Options.FontFallback = CDir.Controls.EmbeddedTerminalControl.UnicodeFontFallback;
             this.TerminalSurface.FontFamily = new FontFamily("Consolas");
@@ -134,6 +166,7 @@ public partial class ExplorerTab
         if (this.TerminalSession is { } Session)
         {
             Session.Disconnected -= this.TerminalDisconnected;
+            Session.ViewportResized -= this.TerminalViewportResized;
             this.TerminalSession = null;
             Session.Dispose();
         }

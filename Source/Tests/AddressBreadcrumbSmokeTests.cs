@@ -170,17 +170,20 @@ public partial class ExplorerTab
             foreach (var (ClickSurface, Name) in new (UIElement, string)[]
             {
                 (this.FileGrid, "file list"), (this.SidebarPanel, "sidebar"), (this.RightPanel, "main panel"),
-                (this.StatusText, "status bar"), (this.HostWindow.TitleBrand, "title bar"), (this.NavigationBar, "toolbar"), (this.HostWindow.WindowFrame, "window frame")
+                (this.StatusText, "status bar"), (this.HostWindow.TitleBrand, "title bar"), (this.NavigationBar, "toolbar"), (this.HostWindow.WindowFrame, "window frame"),
+                (this.HostWindow.TabBar, "blank tab strip"), (this.HostWindow.TabScroll, "blank tab scroller")
             })
             {
                 this.BeginAddressEdit();
                 FocusManager.SetFocusedElement(this, this.AddressBox);
+                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(this.AddressBox), this.AddressBox);
                 this.AddressBox.Text = ParentPath;
                 var OutsideClick = Press(ClickSurface, 1);
                 // A routed file-list press can legitimately start a marquee at the desktop pointer's
                 // current position. The editor must dismiss without preventing that normal action.
                 var StartedMarquee = ReferenceEquals(ClickSurface, this.FileGrid) && this.MarqueeOrigin is not null;
                 Check(OutsideClick.Handled == StartedMarquee && !this.AddressEditing && !this.AddressBox.IsFocused && !this.AddressBox.IsKeyboardFocusWithin
+                    && !ReferenceEquals(FocusManager.GetFocusedElement(FocusManager.GetFocusScope(this.AddressBox)), this.AddressBox)
                     && this.AddressDisplay.IsVisible && !this.AddressBox.IsVisible && this.AddressBox.Text == ChildPath
                     && SamePath(this.CurrentPath, ChildPath) && this.History.SequenceEqual(BeforeDismissalHistory),
                     "Clicking the " + Name + " removes address focus and discards its draft without navigating or swallowing the click");
@@ -209,7 +212,7 @@ public partial class ExplorerTab
             FocusManager.SetFocusedElement(this, this.AddressBox);
             this.AddressBox.Text = ParentPath;
             var CaptionHandled = false;
-            this.AddressWindowMouseMessage(IntPtr.Zero, 0x00A1, (IntPtr)2, IntPtr.Zero, ref CaptionHandled);
+            this.HostWindow.BrowserAppCommand(IntPtr.Zero, 0x00A1, (IntPtr)2, IntPtr.Zero, ref CaptionHandled);
             Check(!CaptionHandled && !this.AddressEditing && !this.AddressBox.IsFocused && SamePath(this.CurrentPath, ChildPath),
                 "A native caption press dismisses address focus while preserving normal window dragging and caption actions");
 

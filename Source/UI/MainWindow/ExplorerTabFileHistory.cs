@@ -15,13 +15,16 @@ public partial class ExplorerTab
         AppMain.SmokeTest ? Path.Combine(AppMain.SmokeRoot!, "OperationHistory")
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CDir", "OperationHistory"));
     private static FileOperationHistory? HistoryInstance;
+    private Action<IntPtr, string, bool> ReplayShellOperation = ShellContextMenu.Replay;
     internal Task HandleHistoryCommandAsync(bool Redo) => this.ReplayFileOperationAsync(Redo);
 
     private async Task ReplayFileOperationAsync(bool Redo)
     {
         if (this.HostWindow.Tabs.Any(Tab => Tab.OperationBusy) || this.Loading) return;
+        var Owner = new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle;
+        var Folder = this.IsRecycleBin ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : this.CurrentPath;
         await this.RunOperationAsync(LanguageService.Text(Redo ? "Redoing" : "Undoing"),
-            () => SharedFileHistory.Replay(Redo), LanguageService.Text(Redo ? "RedoComplete" : "UndoComplete"), RequiresSta: true);
+            () => this.ReplayShellOperation(Owner, Folder, Redo), LanguageService.Text(Redo ? "RedoComplete" : "UndoComplete"), RequiresSta: true);
         foreach (var Tab in this.HostWindow.Tabs.Where(Tab => !ReferenceEquals(Tab, this))) Tab.ScheduleRefresh();
         this.FocusMainFilePanel();
     }

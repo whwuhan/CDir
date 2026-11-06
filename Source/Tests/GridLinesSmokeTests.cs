@@ -120,6 +120,27 @@ public partial class ExplorerTab
             Screenshot("GridLines-Scrolled");
             Check(Scroll.VerticalOffset > 0 && RenderGuides().Rows.Any(Y => Math.Abs(Y - (Math.Round(RowBottom) - 1)) <= 1),
                 "Horizontal guides remain aligned with actual rows after vertical scrolling");
+            var RowHeight = Row.ActualHeight;
+            var Cell = FindVisualChild<DataGridCell>(Row)!;
+            var CellOrigin = Cell.TranslatePoint(new Point(), Row);
+            for (var Repeat = 0; Repeat < 4; Repeat++)
+            {
+                this.ChangeGridLines(Repeat % 2 != 0);
+                await Settle();
+                Row = (DataGridRow)this.FileGrid.ItemContainerGenerator.ContainerFromIndex((int)Scroll.VerticalOffset);
+                Cell = FindVisualChild<DataGridCell>(Row)!;
+                Check(Row.BorderThickness == new Thickness(0) && Math.Abs(Row.ActualHeight - RowHeight) < .01
+                    && Cell.TranslatePoint(new Point(), Row) == CellOrigin,
+                    "Grid toggles preserve row heights and content insets without residual row separators: " + Repeat);
+                var Origin = Row.TranslatePoint(new Point(), this.FileGrid);
+                for (var Frame = 0; Frame < 5; Frame++)
+                {
+                    await Settle();
+                    Check(Row.TranslatePoint(new Point(), this.FileGrid) == Origin,
+                        "Repeated layouts keep file rows stationary: " + Repeat + "/" + Frame);
+                }
+            }
+            this.ChangeGridLines(true);
             this.SearchBox.Text = "no-matching-gridline-file";
             await Settle();
             Check(this.FileGrid.Items.Count == 0 && RenderGuides().Rows.Length >= 5,

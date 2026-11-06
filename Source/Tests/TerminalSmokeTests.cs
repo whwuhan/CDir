@@ -229,6 +229,33 @@ public partial class ExplorerTab
             await WaitUntil(() => File.Exists(ScrollbackReady) && CurrentInput() == "",
                 "A real shell fills terminal scrollback before continuous editing checks");
             var EditingSurface = (CDir.Controls.EmbeddedTerminalControl)this.TerminalSurface!;
+            await Settle();
+            Check(this.TerminalScrollBar.IsVisible && this.TerminalScrollBar.IsEnabled
+                && this.TerminalScrollBar.Maximum == EditingSurface.HistoryLines
+                && this.TerminalScrollBar.Value == this.TerminalScrollBar.Maximum
+                && this.TerminalScrollBar.TranslatePoint(new Point(), this.TerminalHost).X >= this.TerminalHost.ActualWidth,
+                "The right-side terminal scrollbar reserves its own width and follows live output");
+            this.TerminalScrollBar.Value = 0;
+            await Settle();
+            Check(EditingSurface.HistoryOffset == EditingSurface.HistoryLines
+                && EditingSurface.GetVisibleScreenText().Contains("scrollback ", StringComparison.Ordinal),
+                "Dragging the scrollbar to the top displays real terminal history");
+            System.Windows.Controls.Primitives.ScrollBar.PageDownCommand.Execute(null, this.TerminalScrollBar);
+            await Settle();
+            Check(this.TerminalScrollBar.Value > 0 && EditingSurface.HistoryOffset
+                == EditingSurface.HistoryLines - (int)Math.Round(this.TerminalScrollBar.Value),
+                "Clicking the scrollbar track pages through the same terminal history");
+            EditingSurface.ScrollToBottom();
+            await Settle();
+            var Wheel = new MouseWheelEventArgs(Mouse.PrimaryDevice, 0, 120) { RoutedEvent = Mouse.PreviewMouseWheelEvent };
+            EditingSurface.RaiseEvent(Wheel);
+            await Settle();
+            Check(Wheel.Handled && EditingSurface.HistoryOffset == 3
+                && this.TerminalScrollBar.Value == this.TerminalScrollBar.Maximum - 3,
+                "Terminal wheel scrolling synchronizes the visible scrollbar");
+            this.TerminalScrollBar.Value = this.TerminalScrollBar.Maximum;
+            await Settle();
+            Check(EditingSurface.HistoryOffset == 0, "Dragging the scrollbar to the bottom restores live terminal input");
             var EditorWidth = EditingSurface.InputEditor.Width;
             TypeText(new string('d', 160));
             await WaitUntil(() => CurrentInput() == new string('d', 160), "A wrapped draft reaches the real shell with populated scrollback");
@@ -358,6 +385,8 @@ public partial class ExplorerTab
             var Rows = Session.Buffer.Rows;
             this.TerminalRow.Height = new GridLength(160);
             await WaitUntil(() => Session.Buffer.Rows < Rows, "Changing panel height resizes the actual terminal grid");
+            await WaitUntil(() => this.TerminalScrollBar.ViewportSize == Session.Buffer.Rows,
+                "Resizing the terminal updates the scrollbar viewport size");
             Check(this.TerminalRow.ActualHeight >= 96 && this.MainPanelContent.ActualHeight >= 120,
                 "Resizing retains usable minimum heights for both file browsing and terminal input");
             foreach (var Language in LanguageService.SupportedLanguages)
@@ -390,6 +419,10 @@ public partial class ExplorerTab
                 && ProcessExited(ProcessId), "Restart opens a new terminal in the currently displayed directory and releases the old process");
             Session = this.TerminalSession;
             await WaitUntil(() => Screen().Contains("PS ", StringComparison.Ordinal), "The restarted terminal renders a new prompt");
+            await Settle();
+            Check(((CDir.Controls.EmbeddedTerminalControl)this.TerminalSurface!).HistoryOffset == 0
+                && this.TerminalScrollBar.Maximum == Session!.Buffer.ScrollbackCount,
+                "Restarting resets the scrollbar to the new session history");
             await OpenAndCloseFileMenu();
             PressKey(Key.Up);
             await Task.Delay(100);

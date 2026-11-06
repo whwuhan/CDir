@@ -88,13 +88,36 @@ public partial class ExplorerTab
             await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled && !this.VersionRefreshPending
                 && Volatile.Read(ref this.VersionInvalidationQueued) == 0);
             var IdleCommands = this.VersionControl.NativeCommandCount;
+            var IdleReads = this.VersionReadCount;
             var LockNoise = System.IO.Path.Combine(GitPath, ".git", "index.lock");
             File.WriteAllText(LockNoise, "owned transient lock noise");
             File.Delete(LockNoise);
             await Task.Delay(3300);
             await this.RefreshVersionStatusesAsync();
+            Check(this.VersionReadCount == IdleReads,
+                "Unchanged viewport refreshes reuse displayed snapshots without repository discovery or SVN merging");
             Check(this.VersionControl.NativeCommandCount == IdleCommands,
                 $"unchanged repositories and transient Git locks do not poll and display refreshes reuse the verified snapshot (commands: {IdleCommands} -> {this.VersionControl.NativeCommandCount})");
+            var BadgeChanges = 0;
+            var Observed = Entry("Modified.txt");
+            System.ComponentModel.PropertyChangedEventHandler BadgeChanged = (_, E) => { if (E.PropertyName == nameof(FileEntry.VersionStatus)) BadgeChanges++; };
+            Observed.PropertyChanged += BadgeChanged;
+            try
+            {
+                await Git(GitPath, "status", "--porcelain");
+                await Git(GitPath, "log", "-1", "--oneline");
+                await Git(GitPath, "diff", "--name-only");
+                await Task.Delay(500);
+                await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled);
+                Check(BadgeChanges == 0, "Read-only Git status log and diff preserve verified badges without pending flashes");
+                var BeforeTouch = this.VersionControl.NativeCommandCount;
+                File.SetLastWriteTimeUtc(System.IO.Path.Combine(GitPath, ".git", "index"), DateTime.UtcNow.AddSeconds(1));
+                await Task.Delay(500);
+                Check(this.VersionControl.NativeCommandCount == BeforeTouch && BadgeChanges == 0,
+                    "Metadata timestamp notifications with identical content do not query Git or redraw badges");
+                IdleCommands = this.VersionControl.NativeCommandCount;
+            }
+            finally { Observed.PropertyChanged -= BadgeChanged; }
             await this.NavigateAsync(ChildPath);
             await this.RefreshVersionStatusesAsync();
             await this.NavigateAsync(GitPath);
@@ -118,6 +141,18 @@ public partial class ExplorerTab
             Icon.SetCurrentValue(ShellIcon.VersionStatusProperty, Status);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
             Check(!IconPixelsEqual(Plain, Decorated), "verified status badges render separately from the base Shell bitmap");
+            Icon.SetCurrentValue(ShellIcon.VersionStatusProperty, new VersionStatus(VersionState.Unknown, "Git"));
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var PendingGit = new RenderTargetBitmap(16, 16, 96, 96, PixelFormats.Pbgra32); PendingGit.Render(Icon);
+            Icon.SetCurrentValue(ShellIcon.VersionStatusProperty, new VersionStatus(VersionState.Unknown, "SVN"));
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var PendingSvn = new RenderTargetBitmap(16, 16, 96, 96, PixelFormats.Pbgra32); PendingSvn.Render(Icon);
+            Icon.SetCurrentValue(ShellIcon.VersionStatusProperty, new VersionStatus(VersionState.Unknown, "Git", Error: "Owned query failure"));
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var FailedIcon = new RenderTargetBitmap(16, 16, 96, 96, PixelFormats.Pbgra32); FailedIcon.Render(Icon);
+            Check(IconPixelsEqual(PendingGit, PendingSvn) && !IconPixelsEqual(PendingGit, FailedIcon) && !IconPixelsEqual(PendingGit, Plain),
+                "Git and SVN pending badges draw the same lower-right three dots and remain distinct from query failures and undecorated icons");
+            Icon.SetCurrentValue(ShellIcon.VersionStatusProperty, Status);
 
             File.AppendAllText(System.IO.Path.Combine(ChildPath, "Deep.txt"), "deep change\n");
             await WaitUntil(() => Entry("Child").VersionStatus.State == VersionState.Modified);
@@ -140,11 +175,19 @@ public partial class ExplorerTab
             File.WriteAllText(System.IO.Path.Combine(SvnPath, "Property.txt"), "unchanged content\n");
             var SvnChild = Directory.CreateDirectory(System.IO.Path.Combine(SvnPath, "Child")).FullName;
             File.WriteAllText(System.IO.Path.Combine(SvnChild, "深层 文件.txt"), "initial\n");
+            var SvnDeep = Directory.CreateDirectory(System.IO.Path.Combine(SvnChild, "Nested", "Deeper")).FullName;
+            var SvnDeepFile = System.IO.Path.Combine(SvnDeep, "Hidden From The Current View.txt");
+            File.WriteAllText(SvnDeepFile, "initial\n");
             await Svn(SvnPath, "add", "Clean.txt", "Property.txt", "Child"); await Svn(SvnPath, "commit", "-qm", "Initial fixture");
             await Svn(SvnPath, "propset", "custom:property", "value", "Property.txt");
             if (!await this.NavigateAsync(SvnPath)) throw new InvalidOperationException("Cannot open SVN UI fixture");
-            await WaitUntil(() => Entry("Property.txt").VersionStatus.State == VersionState.Modified && Entry("Clean.txt").VersionStatus.State == VersionState.Clean);
+            await WaitUntil(() => Entry("Property.txt").VersionStatus.State == VersionState.Modified && Entry("Clean.txt").VersionStatus.State == VersionState.Clean
+                && TreeNode(SvnPath).VersionStatus.State == VersionState.Modified);
             Check(TreeNode(SvnPath).VersionStatus.State == VersionState.Modified, "SVN property-only changes get verified badges while unchanged files remain clean");
+            File.AppendAllText(SvnDeepFile, "deep recursive change\n");
+            await WaitUntil(() => Entry("Child").VersionStatus is { State: VersionState.Modified, ContainsChanges: true });
+            Check(Entry("Clean.txt").VersionStatus.State == VersionState.Clean,
+                "SVN aggregates changes several levels below an unopened folder without decorating clean sibling files as modified");
             File.AppendAllText(System.IO.Path.Combine(SvnPath, "Clean.txt"), "content change\n");
             await WaitUntil(() => Entry("Clean.txt").VersionStatus.State == VersionState.Modified);
             Check(true, "SVN watcher events invalidate cached XML paths after content changes");
@@ -160,6 +203,28 @@ public partial class ExplorerTab
             await Svn(SvnPath, "revert", "-R", ".");
             await WaitUntil(() => Entry("Property.txt").VersionStatus.State == VersionState.Clean && TreeNode(SvnPath).VersionStatus.State == VersionState.Clean);
             Check(true, "SVN revert refreshes working-copy metadata and clears obsolete dirty badges");
+            await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled);
+            var SvnBadgeChanges = 0;
+            var SvnObserved = Entry("Property.txt");
+            System.ComponentModel.PropertyChangedEventHandler SvnBadgeChanged = (_, E) => { if (E.PropertyName == nameof(FileEntry.VersionStatus)) SvnBadgeChanges++; };
+            SvnObserved.PropertyChanged += SvnBadgeChanged;
+            try
+            {
+                await Svn(SvnPath, "status");
+                await Svn(SvnPath, "info", ".");
+                var Noise = System.IO.Path.Combine(SvnPath, ".svn", "tmp", "CDirOwnedNoise");
+                File.WriteAllText(Noise, "temporary notification fixture");
+                File.Delete(Noise);
+                await Task.Delay(500);
+                await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled);
+                Check(SvnBadgeChanges == 0, "Read-only SVN commands and administrative temporary files preserve verified badges");
+                var BeforeTouch = this.VersionControl.NativeCommandCount;
+                File.SetLastWriteTimeUtc(System.IO.Path.Combine(SvnPath, ".svn", "wc.db"), DateTime.UtcNow.AddSeconds(1));
+                await Task.Delay(500);
+                Check(this.VersionControl.NativeCommandCount == BeforeTouch && SvnBadgeChanges == 0,
+                    "Unchanged SVN metadata content does not launch status queries or redraw badges");
+            }
+            finally { SvnObserved.PropertyChanged -= SvnBadgeChanged; }
 
             var OldQuery = this.RefreshVersionStatusesAsync();
             if (!await this.NavigateAsync(GitPath)) throw new InvalidOperationException("Cannot switch back to Git fixture");
@@ -236,9 +301,11 @@ public partial class ExplorerTab
             Check(Icons.Where(Icon => Icon.IsVisible).All(Icon => Icon.VersionStatus.State == VersionState.Clean),
                 "restoring Git and SVN files clears category dirty badges without navigating into the repositories");
 
-            this.MarkVersionStatusesPending();
-            Check(BookmarkNodes.All(Node => Node.VersionStatus.State == VersionState.Unknown),
-                "pending status invalidation includes all independent bookmark trees");
+            this.InvalidateVersionStatuses();
+            Check(BookmarkNodes.All(Node => Node.VersionStatus.State == VersionState.Clean),
+                "Background invalidation keeps verified badges on every independent bookmark tree");
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            this.CaptureVersionControlPreview("VersionControlCached.png");
             this.ScheduleVersionRefresh();
             await WaitUntil(() => BookmarkNodes.All(Node => Node.VersionStatus.State == VersionState.Clean));
             var Section = (Expander)this.SidebarSectionElement(Category)!;

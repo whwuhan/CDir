@@ -78,9 +78,12 @@ public partial class ExplorerTab
         this.CancelAddressNavigation();
         this.EndAddressEdit();
         FocusManager.SetFocusedElement(this, this.FileGrid);
+        // Clear the real window focus scope as well as the page's saved focus.
+        // Non-focusable blank surfaces must not leave the collapsed editor selected.
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(this.AddressBox), this.FileGrid);
     }
 
-    private void AddressEditPreviewMouseDown(MouseButtonEventArgs E)
+    internal void AddressEditPreviewMouseDown(MouseButtonEventArgs E)
     {
         if (!this.AddressEditing) return;
         var InsideBar = false;
@@ -101,6 +104,8 @@ public partial class ExplorerTab
     private void AddressDisplayMouseDown(object Sender, MouseButtonEventArgs E)
     {
         if (this.AddressEditing) return;
+        this.PrepareAddressFolderDrag(E.OriginalSource as DependencyObject, E.ClickCount, E.GetPosition(this.AddressBar));
+        if (this.AddressFolderDragCandidate?.Element == this.AddressIcon) { E.Handled = true; return; }
         var Button = FindAncestor<ButtonBase>(E.OriginalSource as DependencyObject);
         // Copy, Go and the ancestor menu retain their own button actions.
         if (Button is not null && Button.Tag is not string) return;
@@ -119,6 +124,7 @@ public partial class ExplorerTab
     private async void AddressSegmentClick(object Sender, RoutedEventArgs E)
     {
         E.Handled = true;
+        if (this.AddressFolderDragActive) return;
         this.CancelSidebarFolderClick();
         if (Sender is not FrameworkElement { Tag: string Path }) return;
         var TreeKey = this.NavigationTreeKey;

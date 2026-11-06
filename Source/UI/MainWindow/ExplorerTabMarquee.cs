@@ -10,6 +10,7 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    private FileEntry? MarqueeClickEntry;
     private Point? MarqueeOrigin;
     private Point MarqueeDocumentOrigin;
     private Point MarqueePointer;
@@ -57,6 +58,7 @@ public partial class ExplorerTab
     {
         if (!this.CanStartMarqueeSelection(Source, Origin, Modifiers, ClickCount) || this.MarqueeViewport() is not { } Viewport) return false;
         this.EndMarqueeSelection();
+        this.MarqueeClickEntry = FindAncestor<DataGridRow>(Source)?.Item as FileEntry;
         this.MarqueeInitialSelection = this.SelectedEntries().ToHashSet();
         this.MarqueeModifiers = Modifiers;
         this.MarqueeOrigin = Origin;
@@ -65,7 +67,7 @@ public partial class ExplorerTab
             Origin.Y - Viewport.Bounds.Top + Viewport.Offset);
         this.MainPanelDragCandidate = null;
         this.MainPanelDeferredSelection = null;
-        if (Modifiers == ModifierKeys.None) this.FileGrid.SelectedItems.Clear();
+        if (Modifiers == ModifierKeys.None && this.MarqueeClickEntry is null) this.FileGrid.SelectedItems.Clear();
         return true;
     }
 
@@ -138,10 +140,13 @@ public partial class ExplorerTab
         if (this.MarqueeOrigin is null) return;
         this.MarqueeScrollTimer?.Stop();
         this.MarqueeOrigin = null;
+        var Click = !Cancel && !this.MarqueeActive ? this.MarqueeClickEntry : null;
+        this.MarqueeClickEntry = null;
         this.MarqueeActive = false;
         this.FileSelectionRectangle.Visibility = Visibility.Collapsed;
         if (this.FileGrid.IsMouseCaptured) this.FileGrid.ReleaseMouseCapture();
         if (Cancel) this.ApplyMarqueeSelection(this.MarqueeInitialSelection);
+        else if (Click is not null) this.SelectFileByClick(Click, this.MarqueeModifiers);
         this.MarqueeInitialSelection = [];
     }
 

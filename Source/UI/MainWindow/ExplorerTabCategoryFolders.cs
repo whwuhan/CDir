@@ -74,4 +74,20 @@ public partial class ExplorerTab
         this.SaveSidebarCategories();
         return true;
     }
+
+    private bool TryTransferCategoryFolder(SidebarCategory Source, CategoryFolder Folder, SidebarCategory Destination)
+    {
+        if (this.WindowClosed || this.OperationBusy || this.Loading || ReferenceEquals(Source, Destination)
+            || !this.CustomCategories.Contains(Source) || !this.CustomCategories.Contains(Destination)
+            || !Source.Folders.Contains(Folder)) return false;
+        this.ChangeSidebarLayout(() =>
+        {
+            Source.Folders.Remove(Folder);
+            if (!Destination.Folders.Any(Existing => SamePath(Existing.FullPath, Folder.FullPath)))
+                Destination.Folders.Add(Folder);
+            if (this.SidebarSectionElement(Destination) is { } Section) Section.IsExpanded = true;
+        });
+        this.SaveSidebarCategories();
+        return true;
+    }
 }

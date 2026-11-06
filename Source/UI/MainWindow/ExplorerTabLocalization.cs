@@ -7,6 +7,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using CDir.Localization;
 using CDir.Models;
+using CDir.Services;
 
 namespace CDir.UI;
 
@@ -153,7 +154,7 @@ public partial class ExplorerTab
 
     private static AppSettings ReadSettings(string SettingsFile)
     {
-        using var Document = JsonDocument.Parse(File.ReadAllText(SettingsFile));
+        using var Document = JsonDocument.Parse(DurableJsonStore.ReadText(SettingsFile));
         var Restored = Document.RootElement.Deserialize<AppSettings>() ?? new();
         // Apply the compact title once when upgrading existing settings. Later title
         // font choices remain independent of the sidebar and survive restarts.
@@ -166,7 +167,7 @@ public partial class ExplorerTab
 
     private static AppSettings ReadSettingsWithMigration(string SettingsFile, params string[] LegacyFiles)
     {
-        if (File.Exists(SettingsFile)) return ReadSettings(SettingsFile);
+        if (File.Exists(SettingsFile) || File.Exists(SettingsFile + ".bak")) return ReadSettings(SettingsFile);
         var LegacyFile = LegacyFiles.FirstOrDefault(File.Exists);
         if (LegacyFile is null) return new();
         var Restored = ReadSettings(LegacyFile);
@@ -176,47 +177,56 @@ public partial class ExplorerTab
         return Restored;
     }
 
+    internal AppSettings CaptureSaveSettings()
+    {
+        var Bounds = this.HostWindow.WindowState == WindowState.Normal ? new Rect(this.HostWindow.Left, this.HostWindow.Top, this.HostWindow.Width, this.HostWindow.Height) : this.HostWindow.RestoreBounds;
+        return new AppSettings
+        {
+            LastPath = string.IsNullOrEmpty(this.CurrentPath) ? this.Settings.LastPath : this.CurrentPath,
+            ShowHidden = this.Settings.ShowHidden,
+            ShowSidebar = this.Settings.ShowSidebar,
+            SidebarWidth = this.Settings.ShowSidebar ? this.SidebarColumn.Width.Value : this.ExpandedSidebarWidth.Value,
+            SidebarScrollOffset = this.SidebarScroll.VerticalOffset,
+            NavigationTreeKey = this.NavigationTreeKey,
+            SidebarTreeLayouts = this.CaptureSidebarTreeLayouts(),
+            ShowGridLines = this.Settings.ShowGridLines,
+            Use12HourClock = this.Settings.Use12HourClock,
+            ExitOnClose = this.Settings.ExitOnClose,
+            CopyOnDrop = this.Settings.CopyOnDrop,
+            CalculateFolderSizes = this.Settings.CalculateFolderSizes,
+            ShowBookmarkPaths = this.Settings.ShowBookmarkPaths,
+            ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
+            ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
+            HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
+            FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
+            TitleBarFontRevision = this.Settings.TitleBarFontRevision,
+            Shortcuts = this.Settings.Shortcuts is null ? null : new(this.Settings.Shortcuts, StringComparer.Ordinal),
+            TerminalFontSize = this.Settings.TerminalFontSize,
+            TerminalBackgroundColor = this.Settings.TerminalBackgroundColor,
+            TerminalForegroundColor = this.Settings.TerminalForegroundColor,
+            FavoritesExpanded = this.FavoritesSection.IsExpanded,
+            DirectoryTreeExpanded = this.DirectoryTreeSection.IsExpanded,
+            Width = Bounds.Width,
+            Height = Bounds.Height,
+            Maximized = this.HostWindow.WindowState == WindowState.Maximized,
+            Language = LanguageService.CurrentLanguage,
+            CustomCategories = this.CustomCategories.Select(Category => Category.Clone()).ToList(),
+            SidebarOrder = this.SidebarSections.Select(this.SidebarSectionKey).ToList()
+        };
+    }
+
     private bool SaveSettings(string? SettingsFile = null)
     {
         if (SettingsFile is null && (this.RestoringWindowLayout || AppMain.SmokeTest && this.LayoutProbeSettingsFile is null)) return true;
         try
         {
             var Destination = SettingsFile ?? this.LayoutProbeSettingsFile ?? this.SettingsPath;
-            var Bounds = this.HostWindow.WindowState == WindowState.Normal ? new Rect(this.HostWindow.Left, this.HostWindow.Top, this.HostWindow.Width, this.HostWindow.Height) : this.HostWindow.RestoreBounds;
-            this.Settings = new AppSettings
-            {
-                LastPath = string.IsNullOrEmpty(this.CurrentPath) ? this.Settings.LastPath : this.CurrentPath,
-                ShowHidden = this.Settings.ShowHidden,
-                ShowSidebar = this.Settings.ShowSidebar,
-                SidebarWidth = this.Settings.ShowSidebar ? this.SidebarColumn.Width.Value : this.ExpandedSidebarWidth.Value,
-                SidebarScrollOffset = this.SidebarScroll.VerticalOffset,
-                NavigationTreeKey = this.NavigationTreeKey,
-                SidebarTreeLayouts = this.CaptureSidebarTreeLayouts(),
-                ShowGridLines = this.Settings.ShowGridLines,
-                Use12HourClock = this.Settings.Use12HourClock,
-                ExitOnClose = this.Settings.ExitOnClose,
-                CopyOnDrop = this.Settings.CopyOnDrop,
-                ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
-                HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
-                FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
-                TitleBarFontRevision = this.Settings.TitleBarFontRevision,
-                Shortcuts = this.Settings.Shortcuts is null ? null : new(this.Settings.Shortcuts, StringComparer.Ordinal),
-                TerminalFontSize = this.Settings.TerminalFontSize,
-                TerminalBackgroundColor = this.Settings.TerminalBackgroundColor,
-                TerminalForegroundColor = this.Settings.TerminalForegroundColor,
-                FavoritesExpanded = this.FavoritesSection.IsExpanded,
-                DirectoryTreeExpanded = this.DirectoryTreeSection.IsExpanded,
-                Width = Bounds.Width,
-                Height = Bounds.Height,
-                Maximized = this.HostWindow.WindowState == WindowState.Maximized,
-                Language = LanguageService.CurrentLanguage,
-                CustomCategories = this.CustomCategories.Select(Category => Category.Clone()).ToList(),
-                SidebarOrder = this.SidebarSections.Select(this.SidebarSectionKey).ToList()
-            };
-            Directory.CreateDirectory(Path.GetDirectoryName(Destination)!);
-            var Temporary = Destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            File.WriteAllText(Temporary, JsonSerializer.Serialize(this.Settings));
-            File.Move(Temporary, Destination, true);
+            this.Settings = this.CaptureSaveSettings();
+            if (!this.HostWindow.CanPersistSharedState) return true;
+            var Json = JsonSerializer.Serialize(this.Settings);
+            DurableJsonStore.Write(Destination, Json);
+            this.HostWindow.RecordSharedWrite(Destination, Json);
+            this.HostWindow.PersistWorkspaceNow();
             return true;
         }
         catch (Exception Ex) when (Ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { return false; }

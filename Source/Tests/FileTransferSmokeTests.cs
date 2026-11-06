@@ -31,6 +31,7 @@ public partial class ExplorerTab
         static DataObject FileData(params string[] Paths) { var Data = new DataObject(); Data.SetData(DataFormats.FileDrop, Paths); return Data; }
         try
         {
+            await this.RunTransferProgressSmokeChecksAsync(Passed, Fixture);
             File.WriteAllText(Path.Combine(Source, "A.txt"), "Original file");
             Directory.CreateDirectory(Path.Combine(Source, "Folder", "Nested"));
             File.WriteAllText(Path.Combine(Source, "Folder", "Nested", "B.txt"), "Nested file");
@@ -53,12 +54,14 @@ public partial class ExplorerTab
             SourcePage.MainPanelDeferredSelection = null;
             await this.NavigateAsync(Target, RecordHistory: false);
             await Settle();
-            Check(!new AppSettings().CopyOnDrop && !ReadSettings(SettingsFile).CopyOnDrop, "Fresh settings default to moving dropped files");
+            Check(new AppSettings().CopyOnDrop && ReadSettings(SettingsFile).CopyOnDrop, "Fresh settings default to copying dropped files");
             var Legacy = Path.Combine(Fixture, "Legacy.json");
             File.WriteAllText(Legacy, "{}");
-            Check(!ReadSettings(Legacy).CopyOnDrop, "Existing settings without a drag mode default to move");
+            Check(ReadSettings(Legacy).CopyOnDrop, "Existing settings without a drag mode default to copy");
             File.WriteAllText(Legacy, "{\"CopyOnDrop\":true}");
             Check(ReadSettings(Legacy).CopyOnDrop, "An explicitly saved copy preference is preserved");
+            File.WriteAllText(Legacy, "{\"CopyOnDrop\":false}");
+            Check(!ReadSettings(Legacy).CopyOnDrop, "An explicitly saved move preference is preserved");
             this.ChangeCopyOnDrop(true);
             Check(this.FileTransferTarget(this.FileGrid, false)?.Path == Target
                 && this.ShowFileTransferFeedback(Data, this.FileGrid, false, DragDropEffects.Copy | DragDropEffects.Move) == DragDropEffects.Copy
@@ -130,6 +133,10 @@ public partial class ExplorerTab
                 && !this.OperationBusy && this.FileDropHint.Visibility == Visibility.Collapsed,
                 "The real routed Drop handler completes its asynchronous operation before reporting success to the Windows drag source");
             await this.RunSidebarDropRoutingSmokeChecksAsync(Passed);
+            await this.RunBatchFileTransferSmokeChecksAsync(Passed, Fixture, SourcePage, Other);
+            await this.RunNativeTransferConflictSmokeChecksAsync(Passed, Fixture);
+            await this.RunExternalMainPanelDropSmokeChecksAsync(Passed, Fixture);
+            await this.RunRecycleBinTransferSmokeChecksAsync(Passed, Fixture);
         }
         finally
         {

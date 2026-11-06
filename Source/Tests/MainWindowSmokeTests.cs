@@ -1,4 +1,4 @@
-using CDir.UI.Dialogs;
+﻿using CDir.UI.Dialogs;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -31,6 +31,11 @@ public partial class ExplorerTab
 
     private async Task<List<string>> RunSmokeChecksAsync()
     {
+        // Layout/selection checks use settled geometry; motion has its own timed
+        // checks with animations explicitly enabled on the real disclosure hosts.
+        CDir.Controls.AnimatedDisclosure.SetAnimationsEnabled(this.HostWindow, false);
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+            new RoutedEventHandler((Sender, _) => CDir.Controls.AnimatedDisclosure.SetAnimationsEnabled((Window)Sender, false)));
         var Passed = new List<string>();
         var Group = AppMain.SmokeGroup;
         async Task RunGroup(string Name, Func<Task> Run)
@@ -112,6 +117,7 @@ public partial class ExplorerTab
         await this.RunMainPanelFolderDragSmokeChecksAsync(Passed);
         await this.RunSidebarCopySmokeChecksAsync(Passed);
         await this.RunSidebarFolderAddSmokeChecksAsync(Passed);
+        await this.RunAddressFolderDragSmokeChecksAsync(Passed);
         await this.RunSidebarDragSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
@@ -156,6 +162,8 @@ public partial class ExplorerTab
                 "expanding sidebar sections restores contents and the current directory selection");
             await this.RunTreeBranchSmokeChecksAsync(Passed);
             await this.RunSidebarScrollSmokeChecksAsync(Passed);
+            await this.RunStickyAncestorSmokeChecksAsync(Passed);
+            await this.RunTreeMotionSmokeChecksAsync(Passed);
             await this.RunSidebarLayoutSmokeChecksAsync(Passed);
         }
         finally
@@ -169,6 +177,7 @@ public partial class ExplorerTab
     // this run's owned temporary directory; clipboard and recycle bin are untouched.
     private async Task RunExtendedSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunFileLaunchSmokeChecksAsync(Passed);
         await this.RunFileHistorySmokeChecksAsync(Passed);
         this.RunWindowAppearanceSmokeChecks(Passed);
         await this.RunShellContextMenuSmokeChecksAsync(Passed);
@@ -182,7 +191,7 @@ public partial class ExplorerTab
         var InitialDirection = this.SortDirection;
         var InitialColumnDirections = this.FileGrid.Columns.Select(Column => Column.SortDirection).ToArray();
         var FixtureId = Guid.NewGuid().ToString("N");
-        var Fixture = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CDirUI" + FixtureId));
+        var Fixture = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "UI-" + FixtureId[..8]));
         var Marker = System.IO.Path.Combine(Fixture, ".CDirUIOwner");
         System.IO.Directory.CreateDirectory(Fixture);
         System.IO.File.WriteAllText(Marker, FixtureId);
@@ -223,18 +232,19 @@ public partial class ExplorerTab
             Check(await this.NavigateAsync(Fixture), "extended fixture navigation");
             Check(this.Entries.Count == 3 && !this.Entries.Any(Entry => Entry.IsHidden), "hidden items excluded by default");
 
-            await this.AcceptSmokeNameDialogAsync(this.NewFolderAsync, LanguageService.Text("NewFolder"), "Cancelled", ConfirmDialog: false);
-            Check(!Directory.Exists(Path.Combine(Fixture, "Cancelled")), "Escape cancels folder creation without creating a directory");
-            await this.AcceptSmokeNameDialogAsync(this.NewFolderAsync, LanguageService.Text("NewFolder"), "新建 测试");
+            await this.AcceptSmokeInlineRenameAsync(this.NewFolderAsync, "Cancelled", Confirm: false);
+            Check(Directory.Exists(Path.Combine(Fixture, LanguageService.Text("NewFolder"))) && !Directory.Exists(Path.Combine(Fixture, "Cancelled")),
+                "Escape leaves the newly created folder under its default name");
+            await this.AcceptSmokeInlineRenameAsync(this.NewFolderAsync, "新建 测试");
             var CreatedPath = System.IO.Path.Combine(Fixture, "新建 测试");
-            Check(System.IO.Directory.Exists(CreatedPath), "real new-folder dialog creates directory");
+            Check(System.IO.Directory.Exists(CreatedPath), "inline new-folder editor renames the created directory");
             Check(this.FileGrid.SelectedItem is FileEntry Created && SamePath(Created.FullPath, CreatedPath), "new folder is selected after refresh");
 
-            await this.AcceptSmokeNameDialogAsync(this.RenameAsync, LanguageService.Text("Rename"), "Cancelled", ConfirmDialog: false);
+            await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, "Cancelled", Confirm: false);
             Check(Directory.Exists(CreatedPath) && !Directory.Exists(Path.Combine(Fixture, "Cancelled")), "Escape cancels renaming and preserves the original directory");
-            await this.AcceptSmokeNameDialogAsync(this.RenameAsync, LanguageService.Text("Rename"), "重命名 测试");
+            await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, "重命名 测试");
             var RenamedPath = System.IO.Path.Combine(Fixture, "重命名 测试");
-            Check(System.IO.Directory.Exists(RenamedPath) && !System.IO.Directory.Exists(CreatedPath), "real rename dialog renames directory");
+            Check(System.IO.Directory.Exists(RenamedPath) && !System.IO.Directory.Exists(CreatedPath), "inline editor renames directory");
             Check(this.FileGrid.SelectedItem is FileEntry Renamed && SamePath(Renamed.FullPath, RenamedPath), "renamed item is selected after refresh");
 
             var SizeColumn = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.Size));
@@ -286,14 +296,17 @@ public partial class ExplorerTab
             {
                 var TempRoot = System.IO.Path.GetFullPath(System.IO.Path.GetTempPath()).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
                 if (!Fixture.StartsWith(TempRoot, StringComparison.OrdinalIgnoreCase)
-                    || System.IO.Path.GetFileName(Fixture) != "CDirUI" + FixtureId
+                    || System.IO.Path.GetFileName(Fixture) != "UI-" + FixtureId[..8]
                     || !System.IO.File.Exists(Marker) || System.IO.File.ReadAllText(Marker) != FixtureId
                     || (System.IO.File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)
                     throw new InvalidOperationException("Refusing cleanup outside the owned UI smoke fixture.");
                 System.IO.Directory.Delete(Fixture, true);
             }
         }
+        await this.RunInlineRenameSmokeChecksAsync(Passed);
         await this.RunOperationRefreshSmokeChecksAsync(Passed);
+        await this.RunShellDeletionRefreshSmokeChecksAsync(Passed);
+        await this.RunTreeFolderCreationSmokeChecksAsync(Passed);
     }
 
     private static void CloseSmokeDialogWithEscape(Window Dialog, UIElement Source)
@@ -320,12 +333,17 @@ public partial class ExplorerTab
             if (FindDialog() is { } Dialog) Dialog.DialogResult = false;
         };
 
-        var Pending = Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new System.Action(() =>
+        // Some actions prepare their suggested name off the UI thread before
+        // opening the modal dialog. Wait for the actual dialog to appear.
+        var Pending = new DispatcherTimer(DispatcherPriority.ContextIdle, Dispatcher) { Interval = TimeSpan.FromMilliseconds(25) };
+        Pending.Tick += (_, _) =>
         {
             NameDialog? Dialog = null;
             try
             {
-                Dialog = FindDialog() ?? throw new InvalidOperationException("Expected name dialog was not opened: " + ExpectedTitle);
+                Dialog = FindDialog();
+                if (Dialog is not { IsVisible: true }) return;
+                Pending.Stop();
                 CheckSquareWindowCorners(Dialog);
                 if (Dialog.Title != ExpectedTitle)
                     throw new InvalidOperationException("Name dialog title does not match the current language: " + Dialog.Title);
@@ -346,14 +364,15 @@ public partial class ExplorerTab
                 AutomationFailure = Ex;
                 if (Dialog is { IsVisible: true }) Dialog.DialogResult = false;
             }
-        }));
+        };
 
         Timeout.Start();
+        Pending.Start();
         try { await Action(); }
         finally
         {
             Timeout.Stop();
-            if (Pending.Status == DispatcherOperationStatus.Pending) Pending.Abort();
+            Pending.Stop();
         }
         if (AutomationFailure is not null) throw new InvalidOperationException("Could not automate the real name dialog.", AutomationFailure);
         if (!Confirmed) throw new InvalidOperationException("The name operation returned without showing its dialog: " + ExpectedTitle);

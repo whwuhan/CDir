@@ -14,6 +14,9 @@ internal sealed class DefaultSettings
     public required bool Use12HourClock { get; init; }
     public required bool ExitOnClose { get; init; }
     public required bool CopyOnDrop { get; init; }
+    public required bool CalculateFolderSizes { get; init; }
+    public required bool ShowSidebarDriveUsage { get; init; }
+    public required bool ShowBookmarkPaths { get; init; }
     public required IReadOnlyList<string> ColumnOrder { get; init; }
     public required IReadOnlyList<string> HiddenColumns { get; init; }
     public required IReadOnlyDictionary<string, double> FontSizes { get; init; }

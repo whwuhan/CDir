@@ -135,23 +135,36 @@ public partial class ExplorerTab
             var CategoryData = new DataObject();
             CategoryData.SetData(CategoryFolderDragFormat, CategoryPayload);
             this.ActiveCategoryFolderDrag = CategoryPayload;
-            Check(this.UpdateSidebarDragFeedback(CategoryData, Target(Other)) == DragDropEffects.Link
-                && this.CompleteSidebarDrop(CategoryData, Target(Other)) && Work.Folders.Count == 2
-                && ReferenceEquals(Work.Folders[0], SourceFolder) && Other.Folders.Count == 1,
-                "Dragging between custom categories adds the shortcut and preserves the source membership and order");
+            Check(this.UpdateSidebarDragFeedback(CategoryData, Target(Other)) == DragDropEffects.Move
+                && this.CompleteSidebarDrop(CategoryData, Target(Other)) && Work.Folders.Count == 1
+                && SamePath(Work.Folders[0].FullPath, Beta) && ReferenceEquals(Other.Folders.Single(), SourceFolder),
+                "Dragging between custom categories moves the original shortcut out of the source and into the destination");
             await Settle();
             Check(Other.IsExpanded && this.SidebarSectionElement(Other)!.IsExpanded
                 && this.UpdateSidebarDragFeedback(CategoryData, Target(Other)) == DragDropEffects.None
                 && !this.CompleteSidebarDrop(CategoryData, Target(Other)) && Other.Folders.Count == 1,
-                "Cross-category additions expand a collapsed target and suppress duplicate drops");
-            var WorkList = FindVisualChild<ItemsControl>(this.SidebarSectionElement(Work)!)!;
-            var LastRow = (FrameworkElement)WorkList.ItemContainerGenerator.ContainerFromIndex(1);
-            var AfterLast = LastRow.TranslatePoint(new Point(8, LastRow.ActualHeight - 1), this.SidebarPanel);
-            Check(this.UpdateSidebarDragFeedback(CategoryData, AfterLast) == DragDropEffects.Move
-                && this.CompleteSidebarDrop(CategoryData, AfterLast) && ReferenceEquals(Work.Folders[^1], SourceFolder),
-                "The same drag source continues to reorder within its original category");
-            Check(!this.FinishCategoryFolderDrag(CategoryPayload, false) && Work.Folders.Count == 2
-                && Other.Folders.Count == 1, "Finishing an in-sidebar category copy retains both memberships");
+                "Cross-category moves expand a collapsed target and invalidate the completed source drag");
+            Check(!this.FinishCategoryFolderDrag(CategoryPayload, true) && Work.Folders.Count == 1
+                && Other.Folders.Count == 1, "Finishing a completed move cannot remove the destination shortcut");
+            this.AddFoldersToCategory(Work, [new FileEntry { FullPath = Alpha, IsDirectory = true }]);
+            CategoryPayload = new CategoryFolderDragPayload(this, Work, Work.Folders[^1]);
+            CategoryData = new DataObject();
+            CategoryData.SetData(CategoryFolderDragFormat, CategoryPayload);
+            this.ActiveCategoryFolderDrag = CategoryPayload;
+            await Settle();
+            this.OperationBusy = true;
+            try
+            {
+                Check(this.UpdateSidebarDragFeedback(CategoryData, Target(Other)) == DragDropEffects.None
+                    && !this.CompleteSidebarDrop(CategoryData, Target(Other)) && Work.Folders.Count == 2 && Other.Folders.Count == 1,
+                    "Busy operations reject a category move without removing either membership");
+            }
+            finally { this.OperationBusy = false; }
+            Check(this.UpdateSidebarDragFeedback(CategoryData, Target(Other)) == DragDropEffects.Move
+                && this.CompleteSidebarDrop(CategoryData, Target(Other)) && Work.Folders.Count == 1
+                && ReferenceEquals(Other.Folders.Single(), SourceFolder) && SamePath(this.CurrentPath, InitialPath)
+                && this.History.SequenceEqual(History) && Directory.Exists(Alpha) && Directory.Exists(Beta),
+                "Moving onto an existing destination shortcut removes the source without duplicates navigation or filesystem changes");
             this.ActiveCategoryFolderDrag = null;
             this.ActiveSidebarFolderAddDrag = TreePayload;
             this.OperationBusy = true;
@@ -168,9 +181,9 @@ public partial class ExplorerTab
             Check(this.SaveSettings(SettingsFile), "Sidebar drag additions save to owned settings");
             var Saved = ReadSettings(SettingsFile);
             this.RestoreSidebarCategories(Saved.CustomCategories, Saved.SidebarOrder);
-            Check(this.CustomCategories[0].Folders.Select(Folder => Folder.FullPath).SequenceEqual(new[] { Beta, Alpha })
+            Check(this.CustomCategories[0].Folders.Select(Folder => Folder.FullPath).SequenceEqual(new[] { Beta })
                 && this.CustomCategories[1].Folders.Single().FullPath == Alpha && Directory.Exists(Alpha) && Directory.Exists(Beta),
-                "Restart restoration preserves tree Quick Access and cross-category additions without moving directories");
+                "Restart restoration keeps the moved shortcut only in its destination without moving directories");
         }
         finally
         {

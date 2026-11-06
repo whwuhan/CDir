@@ -19,7 +19,7 @@ public partial class ExplorerTab
     {
         this.MainPanelDragCandidate = null;
         this.MainPanelDeferredSelection = null;
-        if (this.IsRecycleBin || this.OperationBusy || this.Loading || ClickCount != 1
+        if (this.OperationBusy || this.Loading || ClickCount != 1
             || FindAncestor<DataGridRow>(Source) is not { Item: FileEntry Entry } Row
             || !ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(Row), this.FileGrid)) return false;
         this.MainPanelDragCandidate = Entry;
@@ -35,7 +35,7 @@ public partial class ExplorerTab
 
     private MainPanelFolderDragPayload? CreateMainPanelFolderDrag()
     {
-        if (this.MainPanelDragCandidate is not { } Candidate || this.OperationBusy || this.Loading
+        if (this.IsRecycleBin || this.MainPanelDragCandidate is not { } Candidate || this.OperationBusy || this.Loading
             || !this.FileGrid.SelectedItems.Contains(Candidate)) return null;
         var Selection = this.SelectedEntries();
         return Selection.Length > 0 && Selection.All(Entry => Entry.IsDirectory) ? new(this, Selection) : null;
@@ -43,6 +43,7 @@ public partial class ExplorerTab
 
     private void FileGridDragMouseDown(object Sender, MouseButtonEventArgs E)
     {
+        if (FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(E.OriginalSource as DependencyObject) is not null) return;
         if (this.PrepareMarqueeSelection(E.OriginalSource as DependencyObject, E.GetPosition(this.FileGrid), Keyboard.Modifiers, E.ClickCount))
         {
             if (!AppMain.SmokeTest) this.FileGrid.Focus();
@@ -50,7 +51,18 @@ public partial class ExplorerTab
             return;
         }
         if (this.PrepareMainPanelFolderDrag(E.OriginalSource as DependencyObject, E.GetPosition(this.FileGrid), Keyboard.Modifiers, E.ClickCount))
+        {
+            // Handling a press on an existing multi-selection bypasses DataGrid's
+            // default focus transfer. Clipboard keys must still reach the file list.
+            if (!AppMain.SmokeTest) this.FileGrid.Focus();
             E.Handled = true;
+        }
+        else if (E.ClickCount == 1 && FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject) is { Item: FileEntry Entry })
+        {
+            if (!AppMain.SmokeTest) this.FileGrid.Focus();
+            this.SelectFileByClick(Entry, Keyboard.Modifiers);
+            E.Handled = true;
+        }
     }
 
     private void FileGridDragMouseUp(object Sender, MouseButtonEventArgs E)
@@ -61,8 +73,7 @@ public partial class ExplorerTab
         this.MainPanelDeferredSelection = null;
         if (Deferred is not null && FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject)?.Item == Deferred)
         {
-            this.FileGrid.SelectedItems.Clear();
-            this.FileGrid.SelectedItem = Deferred;
+            this.SelectFileByClick(Deferred, ModifierKeys.None);
             E.Handled = true;
         }
         this.ResumePendingPanelTreeSync();
@@ -119,6 +130,7 @@ public partial class ExplorerTab
     private void MainPanelPointerReleased(object Sender, MouseButtonEventArgs E)
     {
         if (E.ChangedButton != MouseButton.Left || this.MainPanelFileDragActive) return;
+        this.DismissFileDragFeedback();
         // A release over the sidebar must also finish a press that never became
         // an OLE drag, even when a child control handles the mouse-up event.
         this.MainPanelDragCandidate = null;
@@ -128,7 +140,9 @@ public partial class ExplorerTab
 
     private MainPanelFolderDragPayload? DraggedMainPanelFolders(IDataObject Data)
     {
-        if (!Data.GetDataPresent(MainPanelFolderDragFormat, false)
+        // Private payloads are meaningful only inside their originating tab.
+        // Other windows and processes must be read through standard FileDrop data.
+        if (this.ActiveMainPanelFolderDrag is null || !Data.GetDataPresent(MainPanelFolderDragFormat, false)
             || Data.GetData(MainPanelFolderDragFormat, false) is not MainPanelFolderDragPayload Payload) return null;
         return ReferenceEquals(Payload, this.ActiveMainPanelFolderDrag) && ReferenceEquals(Payload.Owner, this)
             && !this.OperationBusy && !this.Loading && Payload.Folders.Length > 0 && Payload.Folders.All(Entry => Entry.IsDirectory) ? Payload : null;

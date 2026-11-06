@@ -91,6 +91,14 @@ public sealed class ShellIcon : Image
         var Size = Math.Min(10, Math.Min(ActualWidth, ActualHeight));
         var Center = new Point(ActualWidth - Size / 2, ActualHeight - Size / 2);
         Context.DrawEllipse((Brush)new BrushConverter().ConvertFromString(Color)!, new Pen(Brushes.White, 0.8), Center, Size / 2, Size / 2);
+        if (State == VersionState.Unknown && string.IsNullOrEmpty(this.VersionStatus.Error))
+        {
+            // Draw the pending ellipsis as geometry so all three dots remain
+            // legible in a 16px icon, independently of the installed font.
+            for (var Index = -1; Index <= 1; Index++)
+                Context.DrawEllipse(Brushes.White, null, new Point(Center.X + Index * Size * 0.22, Center.Y + Size * 0.1), Size * 0.075, Size * 0.075);
+            return;
+        }
         var Text = new FormattedText(Glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal), 8, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
         Context.DrawText(Text, new Point(Center.X - Text.Width / 2, Center.Y - Text.Height / 2 - 0.2));

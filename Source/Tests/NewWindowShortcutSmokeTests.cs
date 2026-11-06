@@ -45,8 +45,8 @@ public partial class ExplorerTab
                     "Each Ctrl+N requests one independent instance and preserves the existing tabs and directory");
             }
             Check(Launches.All(Info => Info.FileName == Environment.ProcessPath && !Info.UseShellExecute
-                && Info.WorkingDirectory == AppContext.BaseDirectory && Info.ArgumentList.SequenceEqual(new[] { Fixture })),
-                "The new instance launches the same CDir executable with the current Unicode directory as a single argument");
+                && Info.WorkingDirectory == AppContext.BaseDirectory && Info.ArgumentList.SequenceEqual(new[] { "--clone-from", Environment.ProcessId.ToString() })),
+                "The new instance requests the complete live workspace from its exact parent process");
             var Failure = new Win32Exception(5);
             this.StartNewWindowProcess = _ => throw Failure;
             Press(this.FileGrid);

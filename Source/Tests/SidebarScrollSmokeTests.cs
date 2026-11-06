@@ -244,6 +244,12 @@ public partial class ExplorerTab
             this.SidebarScroll.ScrollToEnd();
             await Settle();
             var BottomOffset = this.SidebarScroll.VerticalOffset;
+            Check(this.StickySidebar.IsVisible && ReferenceEquals(this.StickySectionTarget, this.DirectoryTreeSection)
+                && ReferenceEquals(this.StickySidebarRoot.DataContext, Root) && this.StickySidebarRoot.IsVisible,
+                "Deep scrolling pins the owning category and outermost folder above the visible descendants");
+            Check(this.StickySidebarSection.TranslatePoint(new Point(), this.SidebarScroll).Y == 0
+                && this.StickySidebarRoot.TranslatePoint(new Point(), this.SidebarScroll).Y >= this.StickySidebarSection.ActualHeight,
+                "Pinned category and root remain ordered at the top of the sidebar viewport");
             var LastTop = Last.TranslatePoint(new Point(), this.SidebarScroll).Y;
             Check(LastTop >= 0 && LastTop + 20 <= this.SidebarScroll.ViewportHeight + 1,
                 "The outer sidebar scrollbar reaches the final folder without clipping it");
@@ -264,6 +270,62 @@ public partial class ExplorerTab
             var FirstTop = First.TranslatePoint(new Point(), this.SidebarScroll).Y;
             Check(this.SidebarScroll.VerticalOffset < BottomOffset && FirstTop >= -1 && FirstTop + 20 <= this.SidebarScroll.ViewportHeight + 1,
                 "Bringing a folder into view scrolls the outer sidebar to its header");
+            this.SidebarScroll.ScrollToEnd();
+            await Settle();
+            var OriginalPath = this.CurrentPath;
+            var Menu = this.StickySidebarRoot.ContextMenu;
+            Menu.PlacementTarget = this.StickySidebarRoot;
+            Menu.IsOpen = true;
+            await Settle();
+            Menu.Items.OfType<MenuItem>().Single(Item => Item.Tag?.ToString() == "CollapseAllSubfolders")
+                .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Settle();
+            Check(!Root.IsExpanded && Root.Children.All(Child => !Child.IsExpanded) && this.CurrentPath == OriginalPath,
+                "The pinned root context menu collapses its entire loaded branch without navigating");
+            this.SidebarScroll.ScrollToTop();
+            await Settle();
+            Check(!this.StickySidebar.IsVisible, "Pinned headers disappear when the original category header is visible");
+            var Category = new SidebarCategory { Name = "Pinned Category 中文" };
+            var Bookmark = new CategoryFolder { FullPath = Fixture };
+            Bookmark.Node.Children.Clear();
+            foreach (var Child in Root.Children) Bookmark.Node.Children.Add(Child);
+            Bookmark.Node.IsLoaded = true;
+            Bookmark.Node.IsExpanded = true;
+            Category.Folders.Add(Bookmark);
+            this.CustomCategories.Add(Category);
+            this.SidebarSections.Add(Category);
+            try
+            {
+                await Settle();
+                this.SidebarScroll.ScrollToEnd();
+                await Settle();
+                Check(this.StickySidebar.IsVisible && this.StickySidebarSection.Header?.ToString() == Category.Name
+                    && ReferenceEquals(this.StickySidebarRoot.DataContext, Bookmark.Node),
+                    "Custom categories pin their own header and independent bookmark root");
+                var CategoryMenu = this.StickySidebarSection.ContextMenu;
+                var StayOpen = CategoryMenu.StaysOpen;
+                try
+                {
+                    CategoryMenu.StaysOpen = true;
+                    CategoryMenu.PlacementTarget = this.StickySidebarSection;
+                    CategoryMenu.IsOpen = true;
+                    await Settle();
+                    Check(CategoryMenu.Items.OfType<MenuItem>().Single(Item => Item.Tag?.ToString() == "CollapseCategoryFolders").IsEnabled,
+                        "Pinned category menus resolve the real category and enable collapse");
+                    CategoryMenu.Items.OfType<MenuItem>().Single(Item => Item.Tag?.ToString() == "CollapseCategoryFolders")
+                        .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                    await Settle();
+                    Check(!Bookmark.Node.IsExpanded && this.CurrentPath == OriginalPath,
+                        "Pinned category collapse acts on its real roots without changing the current folder");
+                }
+                finally { CategoryMenu.IsOpen = false; CategoryMenu.StaysOpen = StayOpen; }
+            }
+            finally
+            {
+                this.SidebarSections.Remove(Category);
+                this.CustomCategories.Remove(Category);
+                await Settle();
+            }
         }
         finally
         {

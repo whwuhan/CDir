@@ -11,6 +11,8 @@
     <SolidColorBrush x:Key="FocusOutline" Color="#0078D4" />
     <SolidColorBrush x:Key="SurfaceHover" Color="#0078D4" />
     <SolidColorBrush x:Key="SurfacePressed" Color="#005A9E" />
+    <SolidColorBrush x:Key="CloseHover" Color="#C42B1C" />
+    <SolidColorBrush x:Key="ClosePressed" Color="#A4262C" />
     <SolidColorBrush x:Key="SurfaceSelected" Color="#0067B8" />
     <SolidColorBrush x:Key="TreeSelected" Color="#0067B8" />
     <SolidColorBrush x:Key="SidebarHover" Color="#C6DFF3" />
@@ -254,7 +256,22 @@
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="ExitMenuItem" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
+        <Border x:Name="MenuSurface" Background="Transparent" Padding="{TemplateBinding Padding}">
+          <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="MenuSurface" Property="Background" Value="{StaticResource CloseHover}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="MenuSurface" Property="Background" Value="{StaticResource CloseHover}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4" /></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style TargetType="Separator"><Setter Property="Margin" Value="2,2" /><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Separator"><Border Background="{StaticResource Line}" Height="1" /></ControlTemplate></Setter.Value></Setter></Style>
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator" BasedOn="{StaticResource {x:Type Separator}}">
+      <Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="SnapsToDevicePixels" Value="True" /><Setter Property="UseLayoutRounding" Value="True" />
+    </Style>
     <Style TargetType="ContextMenu">
       <Setter Property="FontSize" Value="{DynamicResource UIFontMenus}" /><Setter Property="Background" Value="{StaticResource SurfaceInner}" /><Setter Property="Foreground" Value="{StaticResource Ink}" /><Setter Property="BorderBrush" Value="{StaticResource Line}" />
       <Setter Property="BorderThickness" Value="1" /><Setter Property="Padding" Value="2" />

@@ -44,6 +44,25 @@ public partial class ExplorerTab
             this.SortDirection = ListSortDirection.Ascending;
             this.ApplySort();
             await Settle();
+            // Exercise first-to-last ranges across virtualization, reverse ranges and toggling.
+            var Ordered = this.FileGrid.Items.Cast<FileEntry>().ToArray();
+            this.SelectFileByClick(Ordered[0], ModifierKeys.None);
+            this.SelectFileByClick(Ordered[^1], ModifierKeys.Shift);
+            Check(this.SelectedEntries().ToHashSet().SetEquals(Ordered), "Shift-click selects the entire first-to-last range including virtualized files and folders");
+            this.SelectFileByClick(Ordered[2], ModifierKeys.Shift);
+            Check(this.SelectedEntries().ToHashSet().SetEquals(Ordered.Take(3)), "A repeated Shift-click keeps its original anchor and contracts the range");
+            this.SelectFileByClick(Ordered[^1], ModifierKeys.None);
+            this.SelectFileByClick(Ordered[0], ModifierKeys.Shift);
+            Check(this.FileGrid.SelectedItems.Count == Ordered.Length, "Reverse Shift-click selects from last to first");
+            this.SelectFileByClick(Ordered[0], ModifierKeys.None);
+            this.SelectFileByClick(Ordered[2], ModifierKeys.Control);
+            this.SelectFileByClick(Ordered[4], ModifierKeys.Control);
+            Check(this.SelectedEntries().ToHashSet().SetEquals(new[] { Ordered[0], Ordered[2], Ordered[4] }), "Ctrl-click adds nonadjacent files and folders");
+            this.SelectFileByClick(Ordered[2], ModifierKeys.Control);
+            Check(this.SelectedEntries().ToHashSet().SetEquals(new[] { Ordered[0], Ordered[4] }), "Ctrl-click on a selected item removes only that item");
+            this.SelectFileByClick(Ordered[6], ModifierKeys.Control | ModifierKeys.Shift);
+            Check(this.SelectedEntries().ToHashSet().SetEquals(new[] { Ordered[0] }.Concat(Ordered.Skip(2).Take(5))), "Ctrl+Shift-click adds the anchored range without discarding other selections");
+            this.ClearFileSelection();
             // This test drives owned geometry directly. Ignore incidental desktop mouse
             // movement over the inactive window, whose released button would end the simulated drag.
             this.FileGrid.IsHitTestVisible = false;
@@ -51,6 +70,17 @@ public partial class ExplorerTab
             var Cell = NameCell(0);
             var Start = Cell.TranslatePoint(new Point(Cell.ActualWidth - 8, Cell.ActualHeight / 2), this.FileGrid);
             var End = new Point(Start.X - 70, Viewport.Bounds.Top + Viewport.RowHeight * 3.5);
+            this.PrepareMarqueeSelection(Cell, Start, ModifierKeys.None, 1);
+            this.EndMarqueeSelection();
+            var ThirdCell = NameCell(2);
+            var ThirdPoint = ThirdCell.TranslatePoint(new Point(ThirdCell.ActualWidth - 8, ThirdCell.ActualHeight / 2), this.FileGrid);
+            this.PrepareMarqueeSelection(ThirdCell, ThirdPoint, ModifierKeys.Shift, 1);
+            this.EndMarqueeSelection();
+            Check(this.SelectedEntries().ToHashSet().SetEquals(Ordered.Take(3)), "Clicks in name-cell whitespace select the same Shift range as item text");
+            this.PrepareMarqueeSelection(ThirdCell, ThirdPoint, ModifierKeys.Control, 1);
+            this.EndMarqueeSelection();
+            Check(this.SelectedEntries().ToHashSet().SetEquals(Ordered.Take(2)), "A Ctrl-click in row whitespace toggles the item instead of swallowing the click");
+            this.ClearFileSelection();
             Check(this.PrepareMarqueeSelection(Cell, Start, ModifierKeys.None, 1), "Name-cell whitespace starts a marquee without starting a folder drag");
             Check(!this.UpdateMarqueeSelection(new Point(Start.X + 1, Start.Y + 1)) && !this.MarqueeActive
                 && this.FileSelectionRectangle.Visibility == Visibility.Collapsed, "An ordinary click does not display a selection rectangle");

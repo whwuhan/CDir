@@ -10,12 +10,23 @@ namespace CDir.UI;
 public partial class ExplorerTab
 {
     private long FolderRefreshVersion;
+    private readonly SemaphoreSlim FolderRefreshGate = new(1);
 
     // Refresh the current location without navigating, rebuilding its controls, or
     // collapsing the sidebar. A later navigation/operation always wins an old read.
     private async Task RefreshCurrentFolderAsync(bool RefreshTree)
     {
+        // A watcher read must not supersede the refresh awaited by a completed
+        // operation. Serialize reads so completion also means the visible rows are current.
+        await this.FolderRefreshGate.WaitAsync();
+        try { await this.RefreshCurrentFolderCoreAsync(RefreshTree); }
+        finally { this.FolderRefreshGate.Release(); }
+    }
+
+    private async Task RefreshCurrentFolderCoreAsync(bool RefreshTree)
+    {
         if (this.WindowClosed || this.CurrentPath.Length == 0) return;
+        if (this.InlineRenameTarget is not null) { this.FolderRefreshPending = true; return; }
         if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(); return; }
         var Request = ++this.FolderRefreshVersion;
         var Navigation = this.NavigationVersion;
@@ -27,9 +38,19 @@ public partial class ExplorerTab
         this.RefreshTimer.Stop();
         try
         {
-            var Result = await Task.Run(() =>
+            var Updated = await Task.Run(() => this.Files.GetEntries(Path, ShowHidden));
+            bool Current() => !this.WindowClosed && !this.OperationBusy && !this.Loading && Navigation == this.NavigationVersion
+                && Search == this.SearchVersion && Request == this.FolderRefreshVersion && SamePath(Path, this.CurrentPath);
+            if (this.InlineRenameTarget is not null) { this.FolderRefreshPending = true; return; }
+            if (!Current()) return;
+            this.FolderEntries = Updated;
+            this.FolderRefreshPending = false;
+            // The main panel must reflect deletion before scanning unrelated expanded trees.
+            if (this.CurrentSearch.IsActive) { this.QueueSearch(Debounce: false); Search = this.SearchVersion; }
+            else this.RefreshFileRows(Updated);
+            this.QueueDriveUsageRefresh(Path);
+            var Trees = await Task.Run(() =>
             {
-                var Entries = this.Files.GetEntries(Path, ShowHidden);
                 var Known = new Dictionary<string, IReadOnlyList<DirectoryEntry>?>(StringComparer.OrdinalIgnoreCase);
                 IReadOnlyList<DirectoryEntry>? ReadChildren(string Directory)
                 {
@@ -38,20 +59,16 @@ public partial class ExplorerTab
                     catch (Exception Error) when (Error is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                     { return Known[Directory] = null; }
                 }
-                return (Entries, Trees: Nodes.Select(Item => (Item.Node, Item.Version, Children: ReadChildren(Item.Node.FullPath))).ToArray());
+                return Nodes.Select(Item => (Item.Node, Item.Version, Children: ReadChildren(Item.Node.FullPath))).ToArray();
             });
-            if (this.WindowClosed || this.OperationBusy || this.Loading || Navigation != this.NavigationVersion
-                || Search != this.SearchVersion || Request != this.FolderRefreshVersion || !SamePath(Path, this.CurrentPath)) return;
-
-            this.FolderEntries = Result.Entries;
-            this.FolderRefreshPending = false;
+            if (!Current()) return;
             var WasSyncing = this.SyncingTree;
             var WasSuppressed = this.SuppressTreeSelectionScroll;
             this.SyncingTree = true;
             this.SuppressTreeSelectionScroll = true;
             try
             {
-                foreach (var Tree in Result.Trees)
+                foreach (var Tree in Trees)
                 {
                     if (Tree.Children is null || !Tree.Node.IsLoaded || Tree.Node.LoadTask is not null || Tree.Node.LoadVersion != Tree.Version) continue;
                     var Existing = Tree.Node.Children.Where(Node => !Node.IsPlaceholder)
@@ -63,9 +80,7 @@ public partial class ExplorerTab
             }
             finally { this.SyncingTree = WasSyncing; this.SuppressTreeSelectionScroll = WasSuppressed; }
 
-            if (this.CurrentSearch.IsActive) this.QueueSearch(Debounce: false);
-            else this.RefreshFileRows(Result.Entries);
-            this.QueueDriveUsageRefresh(Path);
+
             this.ScheduleVersionRefresh();
         }
         catch (Exception Error) when (Error is IOException or UnauthorizedAccessException or System.Security.SecurityException)

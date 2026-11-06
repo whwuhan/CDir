@@ -13,6 +13,9 @@ internal sealed class AppSettings
     public bool Use12HourClock { get; set; } = DefaultSettings.Current.Use12HourClock;
     public bool ExitOnClose { get; set; } = DefaultSettings.Current.ExitOnClose;
     public bool CopyOnDrop { get; set; } = DefaultSettings.Current.CopyOnDrop;
+    public bool CalculateFolderSizes { get; set; } = DefaultSettings.Current.CalculateFolderSizes;
+    public bool ShowSidebarDriveUsage { get; set; } = DefaultSettings.Current.ShowSidebarDriveUsage;
+    public bool ShowBookmarkPaths { get; set; } = DefaultSettings.Current.ShowBookmarkPaths;
     public List<string>? ColumnOrder { get; set; } = DefaultSettings.Current.ColumnOrder.ToList();
     public List<string>? HiddenColumns { get; set; } = DefaultSettings.Current.HiddenColumns.ToList();
     public Dictionary<string, double>? FontSizes { get; set; } = new(DefaultSettings.Current.FontSizes, StringComparer.Ordinal);

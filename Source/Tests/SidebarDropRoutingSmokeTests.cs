@@ -10,6 +10,30 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    // A foreign process may advertise CDir's private formats without being able
+    // to marshal their objects. The receiver must use its standard file paths.
+    private sealed class ExternalSidebarFileData(string[] Paths) : IDataObject
+    {
+        private readonly IDataObject Files = new DataObject(DataFormats.FileDrop, Paths);
+        private static void CheckFormat(string Format)
+        {
+            if (Format.StartsWith("CDir.", StringComparison.Ordinal))
+                throw new InvalidOperationException("A foreign private drag format was queried.");
+        }
+        public object GetData(string Format, bool AutoConvert) { CheckFormat(Format); return this.Files.GetData(Format, AutoConvert); }
+        public object GetData(string Format) => this.GetData(Format, true);
+        public object GetData(Type Format) => this.GetData(Format.FullName!);
+        public bool GetDataPresent(string Format, bool AutoConvert) { CheckFormat(Format); return this.Files.GetDataPresent(Format, AutoConvert); }
+        public bool GetDataPresent(string Format) => this.GetDataPresent(Format, true);
+        public bool GetDataPresent(Type Format) => this.GetDataPresent(Format.FullName!);
+        public string[] GetFormats(bool AutoConvert) => this.Files.GetFormats(AutoConvert);
+        public string[] GetFormats() => this.Files.GetFormats();
+        public void SetData(string Format, object Data, bool AutoConvert) => this.Files.SetData(Format, Data, AutoConvert);
+        public void SetData(string Format, object Data) => this.Files.SetData(Format, Data);
+        public void SetData(Type Format, object Data) => this.Files.SetData(Format, Data);
+        public void SetData(object Data) => this.Files.SetData(Data);
+    }
+
     private async Task RunSidebarDropRoutingSmokeChecksAsync(List<string> Passed)
     {
         var InitialPath = this.CurrentPath;
@@ -39,10 +63,11 @@ public partial class ExplorerTab
             Data.SetData(MainPanelFolderDragFormat, Payload);
             return Data;
         }
-        DragEventArgs Route(UIElement Element, RoutedEvent Event, IDataObject Data)
+        DragEventArgs Route(UIElement Element, RoutedEvent Event, IDataObject Data,
+            DragDropEffects Allowed = DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link)
         {
             var Input = (DragEventArgs)Activator.CreateInstance(typeof(DragEventArgs), BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null, args: [Data, DragDropKeyStates.None, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link, Element, new Point(8, 8)], culture: null)!;
+                binder: null, args: [Data, DragDropKeyStates.None, Allowed, Element, new Point(8, 8)], culture: null)!;
             Input.RoutedEvent = Event;
             Element.RaiseEvent(Input);
             return Input;
@@ -117,10 +142,101 @@ public partial class ExplorerTab
             Check(NativeDrop.Effects == DragDropEffects.Copy && Directory.Exists(NativeFolder)
                 && Directory.Exists(Path.Combine(Target, "External Folder")) && Work.Folders.Count == 1,
                 "Standard Windows folder-drop data continues to copy into a concrete sidebar directory");
+            await Settle();
+            foreach (var Copy in new[] { false, true })
+            {
+                this.ChangeCopyOnDrop(Copy);
+                var Mode = Copy ? "Copy" : "Move";
+                var External = Directory.CreateDirectory(Path.Combine(Source, "External Category " + Mode + " 中文")).FullName;
+                var FilePath = Path.Combine(Source, "External File " + Mode + ".txt");
+                File.WriteAllText(FilePath, Mode);
+                var ExternalData = new DataObject(DataFormats.FileDrop, new[] { External, FilePath, External + Path.DirectorySeparatorChar });
+                var Count = Archive.Folders.Count;
+                this.SidebarSectionElement(Archive)!.IsExpanded = false;
+                await Settle();
+                var ExternalOver = Route(Header(Archive), DragDrop.PreviewDragOverEvent, ExternalData);
+                Check(ExternalOver.Handled && ExternalOver.Effects == DragDropEffects.Link
+                    && this.SidebarCategoryDropHighlight.IsVisible && this.FileDropHint.Visibility == Visibility.Collapsed,
+                    "External directories preview category membership with " + Mode + " enabled");
+                var ExternalDrop = Route(Header(Archive), DragDrop.PreviewDropEvent, ExternalData);
+                Check(ExternalDrop.Effects == DragDropEffects.Link && Archive.Folders.Count == Count + 1
+                    && Archive.Folders.Count(Folder => SamePath(Folder.FullPath, External)) == 1
+                    && Directory.Exists(External) && File.ReadAllText(FilePath) == Mode
+                    && this.SidebarSectionElement(Archive)!.IsExpanded && SamePath(this.CurrentPath, Source),
+                    "External mixed drops add unique directory shortcuts, skip files and expand the category without transferring sources (" + Mode + ")");
+                await Settle();
+                Check(Route(Header(Archive), DragDrop.PreviewDropEvent, ExternalData).Effects == DragDropEffects.None
+                    && Archive.Folders.Count == Count + 1,
+                    "Repeated external category drops do not duplicate entries (" + Mode + ")");
+                var FileData = new DataObject(DataFormats.FileDrop, new[] { FilePath });
+                Check(Route(Header(Archive), DragDrop.PreviewDropEvent, FileData).Effects == DragDropEffects.None
+                    && File.Exists(FilePath) && Archive.Folders.Count == Count + 1,
+                    "Files alone cannot become directory shortcuts (" + Mode + ")");
+                var FileDrop = Route(FolderButton(Work), DragDrop.PreviewDropEvent, FileData);
+                Check(FileDrop.Effects == (Copy ? DragDropEffects.Copy : DragDropEffects.Move)
+                    && File.Exists(FilePath) == Copy && File.ReadAllText(Path.Combine(Target, Path.GetFileName(FilePath))) == Mode,
+                    "External files dropped on concrete folders obey the copy setting (" + Mode + ")");
+                await Settle();
+                var DirectoryData = new DataObject(DataFormats.FileDrop, new[] { External });
+                var DirectoryDrop = Route(FolderButton(Work), DragDrop.PreviewDropEvent, DirectoryData);
+                Check(DirectoryDrop.Effects == (Copy ? DragDropEffects.Copy : DragDropEffects.Move)
+                    && Directory.Exists(External) == Copy && Directory.Exists(Path.Combine(Target, Path.GetFileName(External)))
+                    && Work.Folders.Count == 1,
+                    "External directories dropped on concrete folders obey the copy setting (" + Mode + ")");
+                await Settle();
+            }
+            var CopyOnly = Directory.CreateDirectory(Path.Combine(Source, "Copy-only source")).FullName;
+            var CopyOnlyData = new DataObject(DataFormats.FileDrop, new[] { CopyOnly });
+            Check(Route(Header(Archive), DragDrop.PreviewDragOverEvent, CopyOnlyData, DragDropEffects.Copy).Effects == DragDropEffects.Copy
+                && Route(Header(Archive), DragDrop.PreviewDropEvent, CopyOnlyData, DragDropEffects.Copy).Effects == DragDropEffects.Copy
+                && Archive.Folders.Any(Folder => SamePath(Folder.FullPath, CopyOnly)) && Directory.Exists(CopyOnly),
+                "Sources that allow only copy can add category shortcuts without removing their directories");
+            await Settle();
+            var MoveOnly = Directory.CreateDirectory(Path.Combine(Source, "Move-only source")).FullName;
+            var MoveOnlyData = new DataObject(DataFormats.FileDrop, new[] { MoveOnly });
+            Check(Route(Header(Archive), DragDrop.PreviewDragOverEvent, MoveOnlyData, DragDropEffects.Move).Effects == DragDropEffects.None
+                && Route(Header(Archive), DragDrop.PreviewDropEvent, MoveOnlyData, DragDropEffects.Move).Effects == DragDropEffects.None
+                && !Archive.Folders.Any(Folder => SamePath(Folder.FullPath, MoveOnly)) && Directory.Exists(MoveOnly),
+                "Move-only external sources are rejected for shortcut addition so the source cannot be deleted");
+            var RelativeData = new DataObject(DataFormats.FileDrop, new[] { "relative", CopyOnly });
+            Check(Route(Header(Archive), DragDrop.PreviewDropEvent, RelativeData).Effects == DragDropEffects.None,
+                "Malformed external path lists cannot partially add category shortcuts");
+            var ForeignFolder = Directory.CreateDirectory(Path.Combine(Source, "Other CDir process 中文")).FullName;
+            var ForeignData = new ExternalSidebarFileData([ForeignFolder]);
+            Check(Route(Header(Archive), DragDrop.PreviewDragOverEvent, ForeignData).Effects == DragDropEffects.Link
+                && Route(Header(Archive), DragDrop.PreviewDropEvent, ForeignData).Effects == DragDropEffects.Link
+                && Archive.Folders.Any(Folder => SamePath(Folder.FullPath, ForeignFolder)) && Directory.Exists(ForeignFolder),
+                "Another CDir process adds category shortcuts without querying its private drag objects");
+            await Settle();
+            foreach (var Copy in new[] { false, true })
+            {
+                this.ChangeCopyOnDrop(Copy);
+                var Folder = Directory.CreateDirectory(Path.Combine(Source, "Sidebar Source " + Copy)).FullName;
+                var Entry = new FileEntry { FullPath = Folder, IsDirectory = true };
+                var Payload = new SidebarFolderAddPayload(this, Entry);
+                var Data = CreateFileTransferData([Entry]);
+                Data.SetData(SidebarFolderAddDragFormat, Payload);
+                this.ActiveSidebarFolderAddDrag = Payload;
+                var Drop = Route(FolderButton(Work), DragDrop.PreviewDropEvent, Data);
+                Check(Drop.Effects == (Copy ? DragDropEffects.Copy : DragDropEffects.Move) && Directory.Exists(Folder) == Copy
+                    && Directory.Exists(Path.Combine(Target, Path.GetFileName(Folder))) && Work.Folders.Count == 1,
+                    "Directory-tree, Quick Access and address-folder payloads transfer into concrete folders (copy=" + Copy + ")");
+                this.ActiveSidebarFolderAddDrag = null;
+                await Settle();
+            }
+            var CountBeforeBusy = Archive.Folders.Count;
+            this.OperationBusy = true;
+            try
+            {
+                Check(Route(Header(Archive), DragDrop.PreviewDropEvent, MoveOnlyData).Effects == DragDropEffects.None
+                    && Archive.Folders.Count == CountBeforeBusy, "Busy windows reject external shortcut drops");
+            }
+            finally { this.OperationBusy = false; }
         }
         finally
         {
             this.ActiveMainPanelFolderDrag = null;
+            this.ActiveSidebarFolderAddDrag = null;
             this.ClearFileTransferFeedback();
             this.ClearSidebarDropFeedback();
             this.ChangeCopyOnDrop(InitialCopy);

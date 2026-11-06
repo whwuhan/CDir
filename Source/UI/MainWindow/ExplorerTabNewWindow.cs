@@ -17,7 +17,8 @@ public partial class ExplorerTab
         {
             var Executable = Environment.ProcessPath ?? throw new InvalidOperationException("The application path is unavailable.");
             var Info = new ProcessStartInfo(Executable) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory };
-            if (this.CurrentPath.Length > 0) Info.ArgumentList.Add(this.CurrentPath);
+            Info.ArgumentList.Add("--clone-from");
+            Info.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             this.StartNewWindowProcess(Info);
         }
         catch (Exception Error) when (Error is Win32Exception or InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)

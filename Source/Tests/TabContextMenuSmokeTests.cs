@@ -66,6 +66,9 @@ public partial class ExplorerTab
             Check(Items.All(Item => Item.FontSize == FontSize && Item.ActualHeight <= FontSize * 1.4 + 8)
                 && Menu.ActualWidth <= Width + 25,
                 "Compact tab menu preserves the configured font and removes excess row padding and icon gutters: " + FontSize);
+            Check(Menu.Items.OfType<Separator>().All(Separator => Separator.Margin.Left == 2 && Separator.Margin.Right == 2
+                && Separator.ActualWidth >= Items.Max(Item => Item.ActualWidth) - 5),
+                "Tab menu separators keep their full compact width at menu font size " + FontSize);
         }
         try
         {
@@ -142,9 +145,12 @@ public partial class ExplorerTab
             await Invoke(Current, "CloseTab");
             Check(Current.WindowClosed && ReferenceEquals(Probe.ActiveTab, Survivor),
                 "Close Tab selects the surviving neighbor when the clicked tab was active");
+            Survivor.ChangeExitOnClose(false);
             await Invoke(Survivor, "CloseTab");
-            Check(Survivor.WindowClosed && !Probe.IsVisible && this.HostWindow.IsVisible && !this.WindowClosed,
-                "Closing the final tab keeps normal window-close behavior without affecting another window");
+            Check(!Survivor.WindowClosed && !Probe.IsVisible && Probe.TrayIcon?.IsVisible == true
+                && Probe.Tabs.Count == 1 && ReferenceEquals(Probe.ActiveTab, Survivor)
+                && this.HostWindow.IsVisible && !this.WindowClosed,
+                "Closing the final tab from its menu hides to the tray and preserves the tab without affecting another window");
         }
         finally
         {

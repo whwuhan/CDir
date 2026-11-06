@@ -33,7 +33,7 @@ public partial class ExplorerTab
         Check(new[] { "Ctrl+", "Win+R", "Alt+F4", "Escape", "A", "Ctrl+Ctrl+A", "9999" }
             .All(Value => !KeyboardShortcut.TryParse(Value, out _, out _)), "Reserved, incomplete, and typing keys are rejected");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "invalid", ["Cut"] = "", ["Copy"] = "", ["Paste"] = "F8", ["NewWindow"] = "F9" }) is var Loaded
-            && Loaded["Search"] == "Ctrl+F" && Loaded["Cut"] == "" && Loaded["Copy"] == "Ctrl+C" && Loaded["Paste"] == "Ctrl+V" && Loaded["NewWindow"] == "Ctrl+N"
+            && Loaded["Search"] == "Ctrl+F" && Loaded["Cut"] == "Ctrl+X" && Loaded["Copy"] == "Ctrl+C" && Loaded["Paste"] == "Ctrl+V" && Loaded["NewWindow"] == "Ctrl+N"
             && KeyboardShortcut.Resolve(new Dictionary<string, string> { ["NewWindow"] = "" })["NewWindow"] == "Ctrl+N",
             "Saved settings preserve customizable unassignment and cannot clear or rebind fixed new-window copy and paste shortcuts");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Ctrl+C" })["Search"] == "Ctrl+F",
@@ -62,8 +62,8 @@ public partial class ExplorerTab
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
                 Dialog.UpdateLayout();
                 Check(Dialog.ShortcutsPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
-                    && Dialog.ShortcutEditors.Count == 24 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
-                    "The keyboard shortcuts page lists the twenty-four customizable bindings");
+                    && Dialog.ShortcutEditors.Count == 21 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
+                    "The keyboard shortcuts page lists the twenty-one customizable bindings");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
@@ -97,7 +97,7 @@ public partial class ExplorerTab
                 Check(this.ShortcutBindings["ToggleSidebar"] == "", "The sidebar shortcut can be unassigned");
                 Dialog.ShortcutResetButtons["ToggleSidebar"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(this.ShortcutBindings["ToggleSidebar"] == "Alt+1", "Reset restores the sidebar shortcut to Alt+1");
-                foreach (var Id in new[] { "Copy", "Paste", "NewWindow" })
+                foreach (var Id in new[] { "Copy", "Cut", "Paste", "NewWindow", "TerminalFontIncreaseWheel", "TerminalFontDecreaseWheel" })
                 {
                     Check(!Dialog.ShortcutRows.ContainsKey(Id) && !Dialog.ShortcutEditors.ContainsKey(Id)
                         && !Dialog.ShortcutClearButtons.ContainsKey(Id) && !Dialog.ShortcutResetButtons.ContainsKey(Id)
@@ -138,34 +138,27 @@ public partial class ExplorerTab
                     "Clear unassigns a command and removes its old key");
                 Dialog.ShortcutResetButtons["Search"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(this.ShortcutBindings["Search"] == "Ctrl+F" && Editor.Text == "Ctrl+F", "Reset restores an individual shortcut");
-                FocusManager.SetFocusedElement(Dialog, Dialog.ShortcutEditors["TerminalFontIncreaseWheel"]);
-                Check(Dialog.RecordShortcutWheel("TerminalFontIncreaseWheel", 120, ModifierKeys.Alt)
-                    && this.ShortcutBindings["TerminalFontIncreaseWheel"] == "Alt+WheelUp"
-                    && Dialog.ShortcutEditors["TerminalFontIncreaseWheel"].Text == "Alt+WheelUp",
-                    "A focused terminal shortcut editor records modified mouse-wheel gestures and saves them immediately");
-                Check(!Dialog.SetShortcut("TerminalFontDecreaseWheel", "Alt+WheelUp") && Dialog.ShortcutError.IsVisible,
-                    "Duplicate terminal wheel bindings show the same conflict feedback as keyboard bindings");
-                Dialog.ShortcutClearButtons["TerminalFontIncreaseWheel"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(this.ShortcutBindings["TerminalFontIncreaseWheel"] == "", "Terminal wheel shortcuts can be cleared");
-                Dialog.ShortcutResetButtons["TerminalFontIncreaseWheel"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(this.ShortcutBindings["TerminalFontIncreaseWheel"] == "Ctrl+WheelUp", "Terminal wheel shortcuts can be reset individually");
-                Check(Dialog.SetShortcut("TerminalFontIncrease", "F6")
-                    && Dialog.SetShortcut("TerminalFontIncreaseWheel", "Alt+WheelUp"), "Terminal font keys and wheel bindings are independently customizable");
+                Check(!Dialog.RecordShortcutWheel("TerminalFontIncreaseWheel", 120, ModifierKeys.Alt)
+                    && !Dialog.SetShortcut("TerminalFontIncreaseWheel", "Alt+WheelUp")
+                    && !Dialog.SetShortcut("TerminalFontDecreaseWheel", "")
+                    && !Dialog.SetShortcut("TerminalFontIncrease", "Alt+WheelUp")
+                    && Dialog.SetShortcut("TerminalFontIncrease", "F6"),
+                    "Wheel zoom is fixed while keyboard font shortcuts remain customizable");
                 Check(Dialog.ShortcutEditors["TerminalFontReset"].Text == "Ctrl+0"
                     && Dialog.SetShortcut("TerminalFontReset", "Ctrl+R")
                     && KeyboardShortcut.Match(this.ShortcutBindings, Key.R, ModifierKeys.Control)?.Id == "TerminalFontReset",
                     "The terminal font reset shortcut is listed and can be rebound");
                 Dialog.ShortcutResetButtons["TerminalFontReset"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(Dialog.SetShortcut("Cut", "Ctrl+Shift+K")
-                    && Application.Current.Resources["TextCutTooltip"].ToString()!.Contains("Ctrl+Shift+K")
+                Check(Dialog.SetShortcut("NewFolder", "Ctrl+Shift+K")
+                    && Application.Current.Resources["TextNewFolderTooltip"].ToString()!.Contains("Ctrl+Shift+K")
                     && this.ShortcutHelpBody().Contains("Ctrl+Shift+K"), "Tooltips and help reflect changed shortcuts without changing Windows Shell menus");
                 Check(!await this.HandleShortcutAsync(Key.K, ModifierKeys.Control | ModifierKeys.Shift, true, false),
                     "File-operation shortcuts preserve native editing while a text field has focus");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
-                    var Tooltip = Application.Current.Resources["TextCutTooltip"].ToString()!;
-                    Check(Tooltip.Contains("Ctrl+Shift+K") && !Tooltip.Contains("Ctrl + X"),
+                    var Tooltip = Application.Current.Resources["TextNewFolderTooltip"].ToString()!;
+                    Check(Tooltip.Contains("Ctrl+Shift+K") && !Tooltip.Contains("Ctrl+Shift+N"),
                         Language.Code + " changed tooltips replace the old key, including full-width parentheses");
                 }
                 Dialog.LanguagePicker.SelectedValue = "en-US";
@@ -191,9 +184,9 @@ public partial class ExplorerTab
                     "Ctrl+A inside Preferences keeps the modal window open and leaves the main-panel selection unchanged");
                 Check(Dialog.SetShortcut("Search", "F8") && this.SaveSettings(SavedFile), "Changed shortcuts serialize to an owned settings file");
                 var Restored = KeyboardShortcut.Resolve(ReadSettings(SavedFile).Shortcuts);
-                Check(Restored["Search"] == "F8" && Restored["Cut"] == "Ctrl+Shift+K" && Restored["SelectAll"] == "Ctrl+A"
+                Check(Restored["Search"] == "F8" && Restored["Cut"] == "Ctrl+X" && Restored["NewFolder"] == "Ctrl+Shift+K" && Restored["SelectAll"] == "Ctrl+A"
                     && Restored["Copy"] == "Ctrl+C" && Restored["Paste"] == "Ctrl+V"
-                    && Restored["TerminalFontIncrease"] == "F6" && Restored["TerminalFontIncreaseWheel"] == "Alt+WheelUp",
+                    && Restored["TerminalFontIncrease"] == "F6" && Restored["TerminalFontIncreaseWheel"] == "Ctrl+WheelUp",
                     "Changed bindings survive saving and loading settings");
                 Dialog.LanguagePicker.SelectedValue = "zh-CN";
                 Dialog.ShortcutSearch.Text = "";
@@ -216,17 +209,17 @@ public partial class ExplorerTab
             await this.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: async Dialog =>
             {
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
-                Check(Dialog.ShortcutEditors["Search"].Text == "F8" && Dialog.ShortcutEditors["Cut"].Text == "Ctrl+Shift+K"
+                Check(Dialog.ShortcutEditors["Search"].Text == "F8" && Dialog.ShortcutEditors["NewFolder"].Text == "Ctrl+Shift+K" && !Dialog.ShortcutEditors.ContainsKey("Cut")
                     && !Dialog.ShortcutEditors.ContainsKey("Copy") && !Dialog.ShortcutEditors.ContainsKey("Paste"),
                     "Reopening Preferences retains changed bindings");
-                Dialog.CopyOnDropCheck.IsChecked = true;
+                Dialog.CopyOnDropCheck.IsChecked = false;
                 Dialog.RestoreDefaultsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(this.Settings.Shortcuts is null && KeyboardShortcut.All.All(Item => this.ShortcutBindings[Item.Id] == Item.DefaultGesture)
                     && KeyboardShortcut.All.Where(Item => !Item.IsFixed).All(Item => Dialog.ShortcutEditors[Item.Id].Text == Item.DefaultGesture)
-                    && Dialog.ShortcutEditors.Count == 24, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
-                Check(Dialog.CopyOnDropCheck.IsChecked == false && !this.Settings.CopyOnDrop,
-                    "Restore Default Settings turns drag-copy mode off");
+                    && Dialog.ShortcutEditors.Count == 21, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
+                Check(Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop,
+                    "Restore Default Settings turns drag-copy mode on");
             });
         }
         finally

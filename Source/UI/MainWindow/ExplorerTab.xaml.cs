@@ -47,6 +47,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private Func<IDataObject?> ReadClipboardFiles = Clipboard.GetDataObject;
     private Action ClearClipboardFiles = Clipboard.Clear;
     private Func<uint> ReadClipboardVersion = GetClipboardSequenceNumber;
+    private static (uint Version, string Error)? FailedFileClipboard;
 
     internal ExplorerTab(MainWindow HostWindow, string? LayoutSettingsFile = null, string? InitialPath = null, AppSettings? InitialSettings = null, bool RunStartupChecks = false, FolderNode[]? InitialRoots = null)
     {
@@ -69,6 +70,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyUIFonts();
         AppMain.RecordSmokeProgress("Loading window XAML");
         InitializeComponent();
+        this.ShowBookmarkPaths = this.Settings.ShowBookmarkPaths;
+        this.ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage;
         CutClipboardChanged += this.RefreshCutFeedback;
         this.AddHandler(Mouse.MouseUpEvent, new MouseButtonEventHandler(this.MainPanelPointerReleased), handledEventsToo: true);
         this.InitializeDriveUsage();
@@ -199,6 +202,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
 
     private async Task<bool> NavigateAsync(string Raw, int? HistoryIndex = null, bool RecordHistory = true, bool PreserveFilter = false, bool RevealTree = true, bool SyncNavigationTree = true, string TreeKey = "folder-tree")
     {
+        this.CancelInlineRename();
+        this.DismissFileDragFeedback();
         if (ShellLocations.IsRecycleBin(Raw)) return await this.NavigateRecycleBinAsync(HistoryIndex, RecordHistory);
         // A background refresh must not cancel a user's pending breadcrumb click.
         if (!PreserveFilter || RecordHistory || HistoryIndex.HasValue)
@@ -274,7 +279,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             }
             return false;
         }
-        finally { if (Version == this.NavigationVersion) { this.NavigatingPath = null; this.NavigatingTreeKey = null; this.SyncingTree = false; this.Loading = false; this.UpdateActions(); } }
+        finally { if (Version == this.NavigationVersion) { this.NavigatingPath = null; this.NavigatingTreeKey = null; this.SyncingTree = false; this.Loading = false; this.UpdateActions(); this.UpdateStickySidebar(); } }
     }
 
     private async Task EnsureChildrenAsync(FolderNode Node)
@@ -432,7 +437,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async Task ForwardAsync() { if (this.HistoryIndex + 1 < this.History.Count) await this.NavigateAsync(this.History[this.HistoryIndex + 1], this.HistoryIndex + 1, TreeKey: this.HistoryTreeKeys[this.HistoryIndex + 1]); }
     private async void UpClick(object Sender, RoutedEventArgs E) => await this.UpAsync();
     private async Task UpAsync() { if (!this.IsRecycleBin && !string.IsNullOrEmpty(this.CurrentPath) && this.Files.GetParent(this.CurrentPath) is { } Parent) await this.NavigateAsync(Parent, TreeKey: this.NavigationTreeKey); }
-    private async void RefreshClick(object Sender, RoutedEventArgs E) { this.VersionControl.Invalidate(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAsync(true); }
+    private async void RefreshClick(object Sender, RoutedEventArgs E) { this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAsync(true); }
     private async Task RefreshAsync(bool RefreshTree = false)
     {
         if (string.IsNullOrEmpty(this.CurrentPath) || this.WindowClosed) return;
@@ -563,11 +568,12 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.FileGrid.SelectedItem is not FileEntry Entry || this.Loading) return;
         if (this.IsRecycleBin) { await this.ExecuteRecycleSelectionAsync("properties"); return; }
         if (Entry.IsDirectory) await this.NavigateAsync(Entry.FullPath, TreeKey: this.NavigationTreeKey);
-        else { try { SharedFileHistory.Audit("Open", [Entry.FullPath], "Invoked"); this.Files.OpenPath(Entry.FullPath); } catch (System.Exception Ex) { this.ShowNotice(LanguageService.Text("OpenFileError", FriendlyError(Ex)), true); } }
+        else { try { SharedFileHistory.Audit("Open", [Entry.FullPath], "Invoked"); this.Files.OpenPath(Entry.FullPath, this.FileSystemWorkingDirectory); } catch (System.Exception Ex) { this.ShowNotice(LanguageService.Text("OpenFileError", FriendlyError(Ex)), true); } }
     }
     private async void OpenClick(object Sender, RoutedEventArgs E) => await this.OpenSelectedAsync();
     private async void FileGridMouseDoubleClick(object Sender, MouseButtonEventArgs E)
     {
+        if (FindAncestor<TextBoxBase>(E.OriginalSource as DependencyObject) is not null) return;
         if (E.ChangedButton != MouseButton.Left || FindAncestor<ButtonBase>(E.OriginalSource as DependencyObject) is not null
             || FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject) is null) return;
         E.Handled = true;
@@ -596,7 +602,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     private void CopyFilePathsToClipboard(string[] FilePaths, bool Cut)
     {
-        if (this.OperationBusy || this.Loading) return;
+        // Publishing selected paths does not mutate files. In particular, a pending
+        // navigation or operation must not silently keep the previous clipboard.
         if (FilePaths.Length == 0) return;
         try
         {
@@ -608,12 +615,17 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             var CutId = Guid.NewGuid().ToString("N");
             if (Cut) Data.SetData(CutClipboardFormat, CutId);
             this.WriteClipboardFiles(Data);
+            FailedFileClipboard = null;
             SetCutClipboard(Cut ? new(CutId, FilePaths.ToHashSet(StringComparer.OrdinalIgnoreCase),
                 this.ReadClipboardVersion(), this.ReadClipboardVersion, this.ReadClipboardFiles, this.ClearClipboardFiles) : null);
             SharedFileHistory.Audit(Cut ? "Cut" : "CopyToClipboard", FilePaths);
             this.ShowNotice(LanguageService.Text(Cut ? "CutItemsNotice" : "CopiedItemsNotice", FilePaths.Length));
         }
-        catch (System.Exception Ex) { this.ShowNotice(LanguageService.Text("ClipboardError", Ex.Message), true); }
+        catch (System.Exception Ex)
+        {
+            FailedFileClipboard = (this.ReadClipboardVersion(), Ex.Message);
+            this.ShowNotice(LanguageService.Text("ClipboardError", Ex.Message), true);
+        }
     }
     private async void PasteClick(object Sender, RoutedEventArgs E) => await this.PasteAsync();
     private async Task PasteAsync()
@@ -621,6 +633,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.OperationBusy || this.Loading || this.IsRecycleBin || this.CurrentPath.Length == 0) return;
         try
         {
+            if (FailedFileClipboard is { } Failed && this.ReadClipboardVersion() == Failed.Version)
+            {
+                this.ShowNotice(LanguageService.Text("ClipboardError", Failed.Error), true);
+                return;
+            }
             var Data = this.ReadClipboardFiles();
             var ClipboardVersion = this.ReadClipboardVersion();
             if (Data?.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } Paths) { this.ShowNotice(LanguageService.Text("ClipboardEmpty")); return; }
@@ -628,11 +645,20 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             var EffectBytes = Effect is MemoryStream Stream ? Stream.ToArray() : Effect as byte[];
             var Move = EffectBytes is { Length: >= 4 } Bytes && (BitConverter.ToInt32(Bytes) & 2) != 0;
             var Destination = this.CurrentPath;
-            var Success = await this.RunOperationAsync(LanguageService.Text(Move ? "MovingFiles" : "CopyingFiles"), () => this.Files.CopyItems(Paths, Destination, Move), LanguageService.Text(Move ? "MoveComplete" : "CopyComplete"));
-            if (Success && Move && this.ReadClipboardVersion() == ClipboardVersion)
+            var Success = await this.TransferFilesAsync(Paths, Destination, Move);
+            if (Move && this.ReadClipboardVersion() == ClipboardVersion)
             {
-                this.ClearClipboardFiles();
-                SetCutClipboard(null);
+                var Remaining = await Task.Run(() => Paths.Where(Path => File.Exists(Path) || Directory.Exists(Path)).ToArray());
+                if (this.ReadClipboardVersion() == ClipboardVersion)
+                {
+                    if (Remaining.Length == 0) { this.ClearClipboardFiles(); SetCutClipboard(null); }
+                    else if (Remaining.Length != Paths.Length)
+                    {
+                        var Notice = this.StatusText.Text;
+                        this.CopyFilePathsToClipboard(Remaining, Cut: true);
+                        this.ShowNotice(Notice, !Success);
+                    }
+                }
             }
         }
         catch (System.Exception Ex) { this.ShowNotice(LanguageService.Text("PasteError", FriendlyError(Ex)), true); }
@@ -641,25 +667,19 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async Task NewFolderAsync()
     {
         if (this.OperationBusy || this.Loading || this.IsRecycleBin || this.CurrentPath.Length == 0) return;
-        var Name = LanguageService.Text("NewFolder");
-        for (var Index = 2; this.FolderEntries.Any(X => string.Equals(X.Name, Name, StringComparison.OrdinalIgnoreCase)); Index++) Name = LanguageService.Text("NumberedNewFolder", Index);
-        var Dialog = new NameDialog(this.HostWindow, LanguageService.Text("NewFolder"), Name);
-        if (Dialog.ShowDialog() != true) return;
-        var EnteredName = Dialog.EnteredName;
+        this.CancelInlineRename();
         var Parent = this.CurrentPath;
+        var Navigation = this.NavigationVersion;
         string? NewPath = null;
-        if (await this.RunOperationAsync(LanguageService.Text("CreatingFolder"), () => NewPath = this.Files.CreateFolder(Parent, EnteredName), LanguageService.Text("FolderCreated")) && NewPath is not null) this.SelectPath(NewPath);
+        if (await this.RunOperationAsync(LanguageService.Text("CreatingFolder"), () => NewPath = this.CreateDefaultFolder(Parent), LanguageService.Text("FolderCreated"), RequiresSta: true)
+            && NewPath is not null && Navigation == this.NavigationVersion) this.BeginFileRename(NewPath);
     }
     private async void RenameClick(object Sender, RoutedEventArgs E) => await this.RenameAsync();
-    private async Task RenameAsync()
+    private Task RenameAsync()
     {
-        if (this.IsRecycleBin || this.OperationBusy || this.Loading || this.SelectedEntries() is not { Length: 1 } Entries) return;
-        var Entry = Entries[0];
-        var Dialog = new NameDialog(this.HostWindow, LanguageService.Text("Rename"), Entry.Name, !Entry.IsDirectory);
-        if (Dialog.ShowDialog() != true || Dialog.EnteredName == Entry.Name) return;
-        var EnteredName = Dialog.EnteredName;
-        string? NewPath = null;
-        if (await this.RunOperationAsync(LanguageService.Text("Renaming"), () => NewPath = this.Files.Rename(Entry.FullPath, EnteredName), LanguageService.Text("RenameComplete")) && NewPath is not null) this.SelectPath(NewPath);
+        if (!this.IsRecycleBin && !this.OperationBusy && !this.Loading && this.SelectedEntries() is { Length: 1 } Entries)
+            this.BeginFileRename(Entries[0].FullPath);
+        return Task.CompletedTask;
     }
     private async void DeleteClick(object Sender, RoutedEventArgs E) => await this.DeleteAsync();
     private async Task DeleteAsync()
@@ -668,14 +688,13 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.OperationBusy || this.Loading) return;
         var Entries = this.SelectedEntries();
         if (Entries.Length == 0) return;
-        var Subject = Entries.Length == 1 ? $"“{Entries[0].Name}”" : LanguageService.Text("RecycleItemsSubject", Entries.Length);
-        if (MessageBox.Show(this.HostWindow, LanguageService.Text("RecycleQuestion", Subject), LanguageService.Text("RecycleTitle"), MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
-        // The Windows recycle UI uses COM; keep its work on a dedicated STA thread.
-        await this.RunOperationAsync(LanguageService.Text("Recycling"), () => this.Files.RecycleItems(Entries.Select(X => X.FullPath).ToArray()), LanguageService.Text("RecycleComplete"), RequiresSta: true);
+        await this.DeleteShellSelectionAsync(Entries.Select(Entry => Entry.FullPath).ToArray(), Permanently: false);
     }
+    private long OperationVersion;
     private async Task<bool> RunOperationAsync(string Progress, System.Action Action, string Success, bool RequiresSta = false)
     {
         if (this.OperationBusy) return false;
+        var Version = ++this.OperationVersion;
         ++this.FolderRefreshVersion;
         this.RefreshTimer.Stop();
         this.OperationBusy = true;
@@ -696,17 +715,31 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         }
         catch (System.Exception Ex)
         {
-            Failure = Ex;
-            try { SharedFileHistory.Audit("FileOperation", [], Ex is OperationCanceledException ? "Cancelled" : "Failed", Ex.Message); }
+            Failure = Ex is COMException ShellError && ShellContextMenu.IsShellCancellation(ShellError.HResult)
+                ? new OperationCanceledException("The Windows operation was cancelled.", Ex) : Ex;
+            try { SharedFileHistory.Audit("FileOperation", [], Failure is OperationCanceledException ? "Cancelled" : "Failed", Ex.Message); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
         finally { this.OperationBusy = false; this.UpdateActions(); }
-        if (this.Loading) this.ScheduleRefresh();
-        else await this.RefreshCurrentFolderAsync(true);
-        if (Failure is OperationCanceledException) this.ShowNotice(LanguageService.Text("OperationCancelled"));
-        else if (Failure is not null) this.ShowNotice(LanguageService.Text("OperationIncomplete", FriendlyError(Failure)), true);
-        else this.ShowNotice(Success);
+        void ShowResult()
+        {
+            if (Version != this.OperationVersion || this.OperationBusy) return;
+            if (Failure is OperationCanceledException) this.ShowNotice(LanguageService.Text("OperationCancelled"));
+            else if (Failure is not null) this.ShowNotice(LanguageService.Text("OperationIncomplete", FriendlyError(Failure)), true);
+            else this.ShowNotice(Success);
+        }
+        // End progress before any slow folder/tree refresh, including after Cancel.
+        ShowResult();
+        try
+        {
+            if (this.Loading) this.ScheduleRefresh();
+            else await this.RefreshCurrentFolderAsync(true);
+            foreach (var Tab in this.HostWindow.Tabs.Where(Tab => !ReferenceEquals(Tab, this)).ToArray())
+                if (Tab.Loading || Tab.OperationBusy) Tab.ScheduleRefresh();
+                else await Tab.RefreshCurrentFolderAsync(false);
+        }
+        finally { ShowResult(); }
         return Failure is null;
     }
     private void TerminalClick(object Sender, RoutedEventArgs E) { try { this.Files.OpenTerminal(this.CurrentPath); } catch (System.Exception Ex) { this.ShowNotice(FriendlyError(Ex), true); } }
@@ -728,9 +761,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     };
     internal async void WindowPreviewKeyDown(object Sender, KeyEventArgs E)
     {
+        if (this.HandleInlineRenameKey(E)) return;
         System.Windows.Input.Key Key = E.Key == System.Windows.Input.Key.System ? E.SystemKey : E.Key;
         if (Key == Key.Escape)
         {
+            this.DismissFileDragFeedback();
             var InFiles = E.OriginalSource is DependencyObject Origin
                 ? FindAncestor<DataGrid>(Origin) == this.FileGrid : this.FileGrid.IsKeyboardFocusWithin;
             var Editing = this.AddressEditing;
@@ -805,7 +840,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.RestoreDefaultPreferencesAsync, this.ShortcutBindings, this.ChangeShortcut,
             this.GetTerminalFontSize(), this.GetTerminalBackgroundColor(), this.ChangeTerminalFontSize, this.ChangeTerminalBackgroundColor,
             this.GetTerminalForegroundColor(), this.ChangeTerminalForegroundColor,
-            this.Settings.ExitOnClose, this.ChangeExitOnClose, this.Settings.CopyOnDrop, this.ChangeCopyOnDrop).ShowDialog();
+            this.Settings.ExitOnClose, this.ChangeExitOnClose, this.Settings.CopyOnDrop, this.ChangeCopyOnDrop,
+            this.Settings.CalculateFolderSizes, this.ChangeCalculateFolderSizes,
+            this.Settings.ShowBookmarkPaths, this.ChangeShowBookmarkPaths,
+            this.Settings.ShowSidebarDriveUsage, this.ChangeShowSidebarDriveUsage,
+            this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 

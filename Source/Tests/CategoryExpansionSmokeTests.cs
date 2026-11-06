@@ -55,6 +55,14 @@ public partial class ExplorerTab
             ActiveMenu.Placement = PlacementMode.Bottom;
             ActiveMenu.IsOpen = true;
             await Settle();
+            if (!ActiveMenu.IsOpen)
+            {
+                // A close queued by the previous shared popup can finish after
+                // reopening on an inactive desktop test window. Drain it once.
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                ActiveMenu.IsOpen = true;
+                await Settle();
+            }
             Check(ActiveMenu.IsOpen && ActiveMenu.IsVisible && !ActiveMenu.Items.OfType<MenuItem>().Any(Item => Item.Tag?.ToString() == "AddCategory"),
                 $"Category context menus open visibly without Add Category (open={ActiveMenu.IsOpen}, visible={ActiveMenu.IsVisible}, section={Section.Header}, path={this.CurrentPath}, last={Passed.LastOrDefault()}, items={string.Join(',', ActiveMenu.Items.OfType<MenuItem>().Select(Item => Item.Tag))})");
             return ActiveMenu;

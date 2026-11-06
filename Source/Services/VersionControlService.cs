@@ -20,6 +20,11 @@ public sealed class VersionControlService
     private readonly bool CacheResults;
     private readonly object CacheSync = new();
     private readonly Dictionary<Repository, VersionSnapshot> Snapshots = new();
+    private readonly Dictionary<string, Repository> Discoveries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, VersionSnapshot> SvnViews = new(StringComparer.OrdinalIgnoreCase);
+    private long DiscoveryProbes;
+    internal long DiscoveryProbeCount => Interlocked.Read(ref this.DiscoveryProbes);
+    private readonly HashSet<string> VerifiedSvnRoots = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Stamp, string[] Metadata, VersionSnapshot Clean)> Inventories = new(StringComparer.OrdinalIgnoreCase);
     private long CacheGeneration;
     private long CommandCount;
@@ -32,6 +37,12 @@ public sealed class VersionControlService
         lock (this.CacheSync)
         {
             this.CacheGeneration++;
+            foreach (var Key in this.SvnViews.Keys.Where(Key => Path is null || this.SvnViews[Key].WatchDirectories.Any(Root => SamePath(Path, Root)
+                || Path.StartsWith(Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+                || Root.StartsWith(Path.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))).ToArray()) this.SvnViews.Remove(Key);
+            var DiscoveryPath = Path is not null && System.IO.Path.GetFileName(Path) is ".git" or ".svn" ? System.IO.Path.GetDirectoryName(Path) : Path;
+            foreach (var Key in this.Discoveries.Keys.Where(Key => DiscoveryPath is null || SamePath(Key, DiscoveryPath)
+                || Key.StartsWith(DiscoveryPath.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)).ToArray()) this.Discoveries.Remove(Key);
             foreach (var Key in this.Snapshots.Keys.Where(Key => Path is null || this.Snapshots[Key].WatchDirectories.Any(Root => SamePath(Path, Root)
                 || Path.StartsWith(Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
                 || Root.StartsWith(Path.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))).ToArray()) this.Snapshots.Remove(Key);
@@ -49,7 +60,8 @@ public sealed class VersionControlService
         this.CacheResults = CacheResults;
     }
 
-    public async Task<IReadOnlyList<VersionSnapshot>> ReadAsync(IEnumerable<string> Directories, CancellationToken Cancellation = default, bool ShallowSvn = false)
+    public async Task<IReadOnlyList<VersionSnapshot>> ReadAsync(IEnumerable<string> Directories, CancellationToken Cancellation = default, bool ShallowSvn = false,
+        Func<VersionSnapshot, Task>? SnapshotReady = null, string? PriorityDirectory = null)
     {
         var Inputs = Directories.Select(Path => System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path)))
             .Where(Path => !Path.Split(System.IO.Path.DirectorySeparatorChar).Any(Part => Part.Equals(".git", StringComparison.OrdinalIgnoreCase) || Part.Equals(".svn", StringComparison.OrdinalIgnoreCase)))
@@ -64,20 +76,105 @@ public sealed class VersionControlService
                 return ShallowSvn && Repository?.Provider == "SVN" ? Repository with { Scope = Path } : Repository;
             }).OfType<Repository>().Distinct().ToArray();
         }, Cancellation).ConfigureAwait(false);
-        var Results = await Task.WhenAll(Repositories.Select(Repository => this.ReadRepositoryAsync(Repository, Cancellation))).ConfigureAwait(false);
-        return ShallowSvn ? Results.GroupBy(Snapshot => Snapshot.Root, StringComparer.OrdinalIgnoreCase)
-            .Select(Group => Group.First().Provider == "SVN" ? VersionSnapshot.Combine(Group) : Group.First()).ToArray() : Results;
+        return await Task.WhenAll(Repositories.GroupBy(Item => Item.Root, StringComparer.OrdinalIgnoreCase).Select(Group => Task.Run(async () =>
+        {
+            var Repository = Group.First();
+            bool HaveCache;
+            lock (this.CacheSync) HaveCache = this.CacheResults && this.Snapshots.Keys.Any(Key => SamePath(Key.Root, Repository.Root));
+            if (!HaveCache && SnapshotReady is not null) await SnapshotReady(VersionSnapshot.Checking(Repository.Root, Repository.Provider)).ConfigureAwait(false);
+            VersionSnapshot Result;
+            if (ShallowSvn && Repository.Provider == "SVN")
+            {
+                var Priority = PriorityDirectory is not null && (SamePath(PriorityDirectory, Repository.Root)
+                    || PriorityDirectory.StartsWith(Repository.Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) ? PriorityDirectory : null;
+                var VisibleScopes = Priority is null ? Group.ToArray() : Group.Where(Item => SamePath(Item.Scope!, Priority)).ToArray();
+                if (VisibleScopes.Length == 0) VisibleScopes = Group.ToArray();
+                var ViewKey = Repository.Root + "\0" + Priority + "\0" + string.Join('\0', VisibleScopes.Select(Item => Item.Scope!).Order(StringComparer.OrdinalIgnoreCase));
+                VersionSnapshot? View;
+                long ViewGeneration;
+                lock (this.CacheSync)
+                {
+                    ViewGeneration = this.CacheGeneration;
+                    View = this.CacheResults ? this.SvnViews.GetValueOrDefault(ViewKey) : null;
+                }
+                if (View is not null)
+                {
+                    if (SnapshotReady is not null) await SnapshotReady(View).ConfigureAwait(false);
+                    return View;
+                }
+                var Inventory = await this.ReadSvnInventoriesAsync(VisibleScopes, Cancellation).ConfigureAwait(false);
+                var ChangesKey = new Repository(Repository.Root, "SVN", Priority is not null && !SamePath(Priority, Repository.Root) ? Priority : null, ChangesOnly: true);
+                VersionSnapshot? CachedChanges;
+                lock (this.CacheSync)
+                {
+                    var WholeCopy = new Repository(Repository.Root, "SVN", ChangesOnly: true);
+                    if (this.CacheResults && this.Snapshots.ContainsKey(WholeCopy)) ChangesKey = WholeCopy;
+                    this.Snapshots.TryGetValue(ChangesKey, out CachedChanges);
+                }
+                if (CachedChanges is null && SnapshotReady is not null)
+                    await SnapshotReady(Inventory.WithPendingDirectories()).ConfigureAwait(false);
+                var Changes = await this.ReadRepositoryAsync(ChangesKey, Cancellation).ConfigureAwait(false);
+                Result = VersionSnapshot.Combine([Inventory, Changes]);
+                if (ChangesKey.Scope is not null) Result = Result.WithCoverage(ChangesKey.Scope);
+                lock (this.CacheSync)
+                    if (this.CacheResults && ViewGeneration == this.CacheGeneration)
+                    {
+                        if (this.SvnViews.Count >= 256) this.SvnViews.Clear();
+                        this.SvnViews[ViewKey] = Result;
+                    }
+            }
+            else Result = await this.ReadRepositoryAsync(Repository, Cancellation).ConfigureAwait(false);
+            if (SnapshotReady is not null) await SnapshotReady(Result).ConfigureAwait(false);
+            return Result;
+        }, Cancellation))).ConfigureAwait(false);
+    }
+
+    private async Task<VersionSnapshot> ReadSvnInventoriesAsync(Repository[] Scopes, CancellationToken Cancellation)
+    {
+        var Parts = new List<VersionSnapshot>();
+        var Missing = new List<Repository>();
+        lock (this.CacheSync)
+            foreach (var Scope in Scopes)
+                if (this.CacheResults && this.Snapshots.TryGetValue(Scope, out var Cached)) Parts.Add(Cached);
+                else Missing.Add(Scope);
+        // Keep each native command comfortably below Windows' command-line limit.
+        for (var Offset = 0; Offset < Missing.Count;)
+        {
+            var Batch = new List<Repository>();
+            var Length = 0;
+            while (Offset < Missing.Count && Batch.Count < 64 && (Length < 16000 || Batch.Count == 0))
+            {
+                var Scope = Missing[Offset++];
+                Batch.Add(Scope);
+                Length += Scope.Scope!.Length + 3;
+            }
+            var Targets = Batch.Select(Item => Item.Scope!).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            long Generation;
+            lock (this.CacheSync) Generation = this.CacheGeneration;
+            var Snapshot = await this.ReadRepositoryAsync(new(Scopes[0].Root, "SVN", "batch:" + string.Join('\0', Targets)), Cancellation, Targets).ConfigureAwait(false);
+            if (Snapshot.Error is not null) return Snapshot;
+            lock (this.CacheSync)
+                if (this.CacheResults && Generation == this.CacheGeneration)
+                    foreach (var Scope in Batch) this.Snapshots[Scope] = Snapshot;
+            Parts.Add(Snapshot);
+        }
+        return VersionSnapshot.CombineRaw(Parts.Distinct());
     }
 
     private Repository? Discover(string DirectoryPath, Dictionary<string, Repository?> Cache, CancellationToken Cancellation)
     {
+        long Generation;
+        lock (this.CacheSync) Generation = this.CacheGeneration;
         var Visited = new List<string>();
         Repository? Found = null;
         for (var Current = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(DirectoryPath)); ;)
         {
             Cancellation.ThrowIfCancellationRequested();
             if (Cache.TryGetValue(Current, out Found)) break;
+            lock (this.CacheSync)
+                if (this.CacheResults && this.Discoveries.TryGetValue(Current, out Found)) break;
             Visited.Add(Current);
+            Interlocked.Increment(ref this.DiscoveryProbes);
             var Git = System.IO.Path.Combine(Current, ".git");
             if (Directory.Exists(Git) || File.Exists(Git)) { Found = new(Current, "Git"); break; }
             if (Directory.Exists(System.IO.Path.Combine(Current, ".svn"))) { Found = new(Current, "SVN"); break; }
@@ -86,11 +183,20 @@ public sealed class VersionControlService
             Current = Parent.FullName;
         }
         foreach (var Path in Visited) Cache[Path] = Found;
+        // Only positive discoveries are retained: ordinary directories have no repository watcher.
+        lock (this.CacheSync)
+            if (this.CacheResults && Found is not null && Generation == this.CacheGeneration)
+            {
+                if (this.Discoveries.Count + Visited.Count > 4096) this.Discoveries.Clear();
+                foreach (var Path in Visited) this.Discoveries[Path] = Found;
+            }
         return Found;
     }
 
-    private async Task<VersionSnapshot> ReadRepositoryAsync(Repository Repository, CancellationToken Cancellation)
+    private async Task<VersionSnapshot> ReadRepositoryAsync(Repository Repository, CancellationToken Cancellation, string[]? SvnScopes = null)
     {
+        lock (this.CacheSync)
+            if (this.CacheResults && this.Snapshots.TryGetValue(Repository, out var Ready)) return Ready;
         await this.Slots.WaitAsync(Cancellation).ConfigureAwait(false);
         long Generation;
         lock (this.CacheSync) Generation = this.CacheGeneration;
@@ -103,7 +209,7 @@ public sealed class VersionControlService
             RepositoryLocated?.Invoke(Repository.Root);
             var Snapshot = Repository.Provider == "Git"
                 ? await this.ReadGitAsync(Repository, Cancellation).ConfigureAwait(false)
-                : await this.ReadSvnAsync(Repository, Cancellation).ConfigureAwait(false);
+                : await this.ReadSvnAsync(Repository, Cancellation, SvnScopes).ConfigureAwait(false);
             lock (this.CacheSync)
                 if (this.CacheResults && Generation == this.CacheGeneration) this.Snapshots[Repository] = Snapshot;
             return Snapshot;
@@ -148,7 +254,7 @@ public sealed class VersionControlService
                 foreach (var Relative in Tracked.Split('\0', StringSplitOptions.RemoveEmptyEntries)) Clean.Set(Relative, VersionState.Clean);
                 Clean.Aggregate();
             }
-            var Status = await Git("status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching", "--ignore-submodules=none").ConfigureAwait(false);
+            var Status = await Git("status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignored=matching", "--ignore-submodules=none").ConfigureAwait(false);
             if (Before != ReadGitStamp(Metadata)) continue;
             lock (this.CacheSync) if (this.CacheResults) this.Inventories[Repository.Root] = (Before, Metadata, Clean);
             var Snapshot = Clean.Clone();
@@ -190,20 +296,26 @@ public sealed class VersionControlService
         }
     }
 
-    private async Task<VersionSnapshot> ReadSvnAsync(Repository Repository, CancellationToken Cancellation)
+    private async Task<VersionSnapshot> ReadSvnAsync(Repository Repository, CancellationToken Cancellation, string[]? Scopes = null)
     {
         var Tool = this.SvnExecutable ?? throw new InvalidOperationException("svn.exe was not found in PATH");
-        var Info = ParseXml(await this.RunAsync(Tool, Repository.Root, ["info", "--xml", "--non-interactive", "--depth=empty", "--", "."], Cancellation).ConfigureAwait(false));
-        var ReportedRoot = Info.Descendants("wcroot-abspath").SingleOrDefault()?.Value;
-        if (ReportedRoot is null || !SamePath(ReportedRoot, Repository.Root)) throw new InvalidOperationException("SVN working-copy root could not be verified");
-        var Root = System.IO.Path.GetFullPath(ReportedRoot);
+        bool Verified;
+        lock (this.CacheSync) Verified = this.CacheResults && this.VerifiedSvnRoots.Contains(Repository.Root);
+        if (!Verified)
+        {
+            var Info = ParseXml(await this.RunAsync(Tool, Repository.Root, ["info", "--xml", "--non-interactive", "--depth=empty", "--", "."], Cancellation).ConfigureAwait(false));
+            var ReportedRoot = Info.Descendants("wcroot-abspath").SingleOrDefault()?.Value;
+            if (ReportedRoot is null || !SamePath(ReportedRoot, Repository.Root)) throw new InvalidOperationException("SVN working-copy root could not be verified");
+            lock (this.CacheSync) if (this.CacheResults) this.VerifiedSvnRoots.Add(Repository.Root);
+        }
+        var Root = Repository.Root;
         // Large working copies must not enumerate every clean descendant just to decorate visible rows.
         // Absolute targets keep XML entry paths relative to the working-copy root unambiguous.
-        var Output = await this.RunAsync(Tool, Root, ["status", "--xml", "--verbose", "--no-ignore", "--ignore-externals",
-            Repository.Scope is null ? "--depth=infinity" : "--depth=immediates", "--non-interactive", "--", Repository.Scope ?? "."], Cancellation).ConfigureAwait(false);
+        var Output = await this.RunAsync(Tool, Root, ["status", "--xml", .. (Repository.ChangesOnly ? Array.Empty<string>() : new[] { "--verbose" }), "--no-ignore", "--ignore-externals",
+            Repository.ChangesOnly || Repository.Scope is null ? "--depth=infinity" : "--depth=immediates", "--non-interactive", "--", .. (Scopes ?? [Repository.Scope ?? "."])], Cancellation).ConfigureAwait(false);
         var Snapshot = new VersionSnapshot(Root, "SVN", [Root]);
         ParseSvnStatus(Output, Snapshot);
-        if (Repository.Scope is null) Snapshot.Aggregate();
+        if (Repository.Scope is null && !Repository.ChangesOnly) Snapshot.Aggregate();
         return Snapshot;
     }
 
@@ -335,7 +447,7 @@ public sealed class VersionControlService
         var FullPath = System.IO.Path.GetFullPath(Path);
         return SamePath(FullPath, this.DiscoveryBoundary) || FullPath.StartsWith(this.DiscoveryBoundary.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
     }
-    private sealed record Repository(string Root, string Provider, string? Scope = null);
+    private sealed record Repository(string Root, string Provider, string? Scope = null, bool ChangesOnly = false);
 }
 
 public sealed class VersionSnapshot
@@ -355,15 +467,44 @@ public sealed class VersionSnapshot
     public string Provider { get; }
     public IReadOnlyList<string> WatchDirectories { get; }
     public string? Error { get; private init; }
+    public string CoverageRoot { get; private set; } = "";
+    public bool IsComplete { get; private set; } = true;
+    public bool Covers(string Path)
+    {
+        Path = System.IO.Path.GetFullPath(Path);
+        return string.Equals(this.CoverageRoot, System.IO.Path.TrimEndingDirectorySeparator(Path), StringComparison.OrdinalIgnoreCase)
+            || Path.StartsWith(this.CoverageRoot.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+    }
+    internal VersionSnapshot WithCoverage(string Path) { this.CoverageRoot = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path)); return this; }
     public VersionSnapshot(string Root, string Provider, IReadOnlyList<string> WatchDirectories)
     {
         this.Root = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Root));
+        this.CoverageRoot = this.Root;
         this.Provider = Provider;
         this.WatchDirectories = WatchDirectories.Select(Path => System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path)))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     internal static VersionSnapshot Combine(IEnumerable<VersionSnapshot> Snapshots)
+    {
+        var Combined = CombineRaw(Snapshots);
+        if (Combined.Error is null) Combined.Aggregate();
+        return Combined;
+    }
+
+    internal VersionSnapshot WithPendingDirectories()
+    {
+        if (this.Error is not null) return this;
+        var Copy = CombineRaw([this]);
+        Copy.IsComplete = false;
+        foreach (var Pair in this.States)
+            if (Pair.Value.State == VersionState.Clean && (Pair.Key == "." || Directory.Exists(System.IO.Path.Combine(this.Root, Pair.Key.Replace('/', '\\')))))
+                Copy.Set(Pair.Key, VersionState.Unknown);
+        Copy.Aggregate();
+        return Copy;
+    }
+
+    internal static VersionSnapshot CombineRaw(IEnumerable<VersionSnapshot> Snapshots)
     {
         // Merge raw directory records before aggregating; a later clean parent must not erase a child's changes.
         var Parts = Snapshots.ToArray();
@@ -373,11 +514,11 @@ public sealed class VersionSnapshot
         var Combined = new VersionSnapshot(First.Root, First.Provider, Parts.SelectMany(Part => Part.WatchDirectories).ToArray());
         foreach (var Part in Parts)
             foreach (var Pair in Part.States) Combined.Set(Pair.Key, Pair.Value.State);
-        Combined.Aggregate();
         return Combined;
     }
 
     public static VersionSnapshot Unavailable(string Root, string Provider, string Error) => new(Root, Provider, [Root]) { Error = Error };
+    internal static VersionSnapshot Checking(string Root, string Provider) => new(Root, Provider, [Root]) { IsComplete = false };
     public bool Contains(string Path) => string.Equals(this.Root, System.IO.Path.TrimEndingDirectorySeparator(Path), StringComparison.OrdinalIgnoreCase)
         || Path.StartsWith(this.Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
 
@@ -386,6 +527,7 @@ public sealed class VersionSnapshot
         if (!this.Contains(Path)) return VersionStatus.None;
         var Relative = System.IO.Path.GetRelativePath(this.Root, Path).Replace('\\', '/');
         if (Relative.Split('/').Any(Part => Part.Equals(".git", StringComparison.OrdinalIgnoreCase) || Part.Equals(".svn", StringComparison.OrdinalIgnoreCase))) return VersionStatus.None;
+        if (!this.Covers(Path)) return new(VersionState.Unknown, this.Provider);
         if (this.Error is not null) return new(VersionState.Unknown, this.Provider, Error: this.Error);
         if (this.States.TryGetValue(Relative, out var Status)) return Status;
         for (var Parent = Relative; Parent.Contains('/');)
@@ -393,7 +535,7 @@ public sealed class VersionSnapshot
             Parent = Parent[..Parent.LastIndexOf('/')];
             if (this.Inherited.TryGetValue(Parent, out Status)) return Status;
         }
-        return VersionStatus.None;
+        return this.IsComplete ? VersionStatus.None : new(VersionState.Unknown, this.Provider);
     }
 
     internal void Set(string Relative, VersionState State)

@@ -17,6 +17,8 @@ public partial class ExplorerTab
     private Task PanelTreeSyncTask = Task.CompletedTask;
     private bool PanelTreeSyncRequested;
     private int PanelFocusVersion;
+    private int CollapseFocusVersion;
+    private bool RestoringCollapseFocus;
     private string NavigationTreeKey = "folder-tree";
     private string? NavigatingTreeKey;
     private readonly List<string> HistoryTreeKeys = [];
@@ -103,7 +105,7 @@ public partial class ExplorerTab
         if (this.IsRecycleBin) return;
         if (E.NewValue is true) this.CancelSidebarFolderClick();
         var FocusVersion = ++this.PanelFocusVersion;
-        if (this.RestoringTabFocus) { this.PanelTreeSyncRequested = false; return; }
+        if (this.RestoringTabFocus || this.RestoringCollapseFocus) { this.PanelTreeSyncRequested = false; return; }
         // OLE dragging can temporarily move focus away from the file list. Keep
         // its pending reveal until the pointer gesture has actually finished.
         if (E.NewValue is not true && this.PanelTreeSyncDeferred) return;
@@ -196,8 +198,10 @@ public partial class ExplorerTab
     private void FolderTreeContextOpened(object Sender, RoutedEventArgs E)
     {
         if (Sender is not ContextMenu Menu) return;
-        if (Menu.DataContext is not FolderNode { IsPlaceholder: false }) { Menu.IsOpen = false; return; }
+        if (TreeMenuFolder(Menu.DataContext) is not { IsPlaceholder: false }) { Menu.IsOpen = false; return; }
         UpdateMenuHeaders(Menu);
+        foreach (var Item in Menu.Items.OfType<MenuItem>())
+            if (Item.Tag is "NewFolder") Item.IsEnabled = !this.WindowClosed && !this.OperationBusy && !this.Loading;
     }
 
     private async void ExpandAllSubfoldersClick(object Sender, RoutedEventArgs E)
@@ -244,10 +248,23 @@ public partial class ExplorerTab
         this.CollapseTreeBranches([Root]);
     }
 
-    private void CollapseTreeBranches(IEnumerable<FolderNode> Roots)
+    private void SuppressCollapseFocusSync()
     {
+        // Closing a popup and hiding the selected row can restore focus to the
+        // file list. Do not let that restoration immediately reopen this branch.
+        var FocusGuard = ++this.CollapseFocusVersion;
+        this.RestoringCollapseFocus = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            if (FocusGuard == this.CollapseFocusVersion) this.RestoringCollapseFocus = false;
+        }));
         ++this.PanelFocusVersion;
         this.PanelTreeSyncRequested = false;
+    }
+
+    private void CollapseTreeBranches(IEnumerable<FolderNode> Roots)
+    {
+        this.SuppressCollapseFocusSync();
         var WasSyncing = this.SyncingTree;
         this.SyncingTree = true;
         try

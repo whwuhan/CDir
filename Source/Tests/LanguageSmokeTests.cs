@@ -24,7 +24,10 @@ public partial class ExplorerTab
         var InitialDirection = this.SortDirection;
         var InitialColumnDirections = this.FileGrid.Columns.Select(Column => Column.SortDirection).ToArray();
         var FixtureId = Guid.NewGuid().ToString("N");
-        var Fixture = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CDirLanguageUI" + FixtureId));
+        // The desktop host's owned Temp prefix is already long. Native Shell
+        // creation can truncate a name when this fixture exceeds MAX_PATH.
+        var FixtureName = "Lang-" + FixtureId[..8];
+        var Fixture = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetTempPath(), FixtureName));
         var BrowserPath = System.IO.Path.Combine(Fixture, "LanguagePreview");
         var Marker = System.IO.Path.Combine(Fixture, ".CDirLanguageOwner");
         System.IO.Directory.CreateDirectory(BrowserPath);
@@ -38,6 +41,7 @@ public partial class ExplorerTab
 
         try
         {
+            await this.RunStartupSmokeChecksAsync(Passed);
             var DefaultProperties = System.Text.Json.JsonSerializer.SerializeToElement(DefaultSettings.Current)
                 .EnumerateObject().ToDictionary(Property => Property.Name, Property => Property.Value.GetRawText());
             var FreshProperties = System.Text.Json.JsonSerializer.SerializeToElement(new AppSettings())
@@ -206,12 +210,12 @@ public partial class ExplorerTab
                 this.SelectPath(AlphaPath);
 
                 var CreatedName = "Folder-" + Code;
-                await this.AcceptSmokeNameDialogAsync(this.NewFolderAsync, LanguageService.Text("NewFolder"), CreatedName);
+                await this.AcceptSmokeInlineRenameAsync(this.NewFolderAsync, CreatedName);
                 Check(System.IO.Directory.Exists(System.IO.Path.Combine(BrowserPath, CreatedName)),
                     Code + " localized name dialog confirms creation");
                 this.SelectPath(AlphaPath);
                 var CancelledName = "cancelled-" + Code + ".txt";
-                await this.AcceptSmokeNameDialogAsync(this.RenameAsync, LanguageService.Text("Rename"), CancelledName, ConfirmDialog: false);
+                await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, CancelledName, Confirm: false);
                 Check(System.IO.File.Exists(AlphaPath) && !System.IO.File.Exists(System.IO.Path.Combine(BrowserPath, CancelledName)),
                     Code + " localized name dialog cancellation preserves file");
 
@@ -314,7 +318,7 @@ public partial class ExplorerTab
             {
                 var TempRoot = System.IO.Path.GetFullPath(System.IO.Path.GetTempPath()).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
                 if (!Fixture.StartsWith(TempRoot, StringComparison.OrdinalIgnoreCase)
-                    || System.IO.Path.GetFileName(Fixture) != "CDirLanguageUI" + FixtureId
+                    || System.IO.Path.GetFileName(Fixture) != FixtureName
                     || !System.IO.File.Exists(Marker) || System.IO.File.ReadAllText(Marker) != FixtureId
                     || (System.IO.File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)
                     throw new InvalidOperationException("Refusing cleanup outside the owned language smoke fixture.");

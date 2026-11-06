@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -16,7 +16,7 @@ public partial class ExplorerTab
     {
         var InitialPath = this.CurrentPath;
         var FixtureId = Guid.NewGuid().ToString("N");
-        var Fixture = Path.Combine(Path.GetTempPath(), "CDirShellMenu-" + FixtureId);
+        var Fixture = Path.Combine(Path.GetTempPath(), "Menu-" + FixtureId[..8]);
         var Folder = Directory.CreateDirectory(Path.Combine(Fixture, "Folder 中文 With Spaces")).FullName;
         var FilePath = Path.Combine(Folder, "Document 中文.txt");
         var SecondFile = Path.Combine(Folder, "Second.txt");
@@ -116,6 +116,7 @@ public partial class ExplorerTab
                 var Created = Directory.GetDirectories(Folder).Where(Path => !Existing.Contains(Path)).ToArray();
                 Check(Created.Length == 1 && SamePath(Path.GetDirectoryName(Created[0])!, Folder),
                     "The native New Folder command creates a folder inside the current directory");
+                this.CancelInlineRename();
                 await this.RefreshAsync();
                 Check(this.Entries.Any(Entry => SamePath(Entry.FullPath, Created[0])) && SamePath(this.CurrentPath, Folder),
                     "The new folder appears in the main panel without changing the current location");
@@ -124,9 +125,9 @@ public partial class ExplorerTab
             using (var Menu = new ShellContextMenu(Source.Handle, Folder, [FilePath]))
             {
                 var Rename = Flatten(Menu.ReadEntries()).Single(Entry => string.Equals(Menu.DescribeCommand(Entry.Id), "rename", StringComparison.OrdinalIgnoreCase));
-                await this.AcceptSmokeNameDialogAsync(() => this.ExecuteShellCommandAsync(Menu, Rename.Id), LanguageService.Text("Rename"), "Cancelled.txt", ConfirmDialog: false);
+                await this.AcceptSmokeInlineRenameAsync(() => this.ExecuteShellCommandAsync(Menu, Rename.Id), "Cancelled.txt", Confirm: false);
                 Check(File.Exists(FilePath) && !File.Exists(Path.Combine(Folder, "Cancelled.txt")), "The native Rename item cancels without modifying the original file");
-                await this.AcceptSmokeNameDialogAsync(() => this.ExecuteShellCommandAsync(Menu, Rename.Id), LanguageService.Text("Rename"), "Renamed 中文.txt");
+                await this.AcceptSmokeInlineRenameAsync(() => this.ExecuteShellCommandAsync(Menu, Rename.Id), "Renamed 中文.txt");
                 var Renamed = Path.Combine(Folder, "Renamed 中文.txt");
                 Check(!File.Exists(FilePath) && File.ReadAllText(Renamed) == "unchanged", "The native Rename item dispatches correctly for Unicode filenames");
                 File.Move(Renamed, FilePath);

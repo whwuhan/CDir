@@ -24,6 +24,9 @@ internal sealed class EmbeddedTerminalSession : TerminalSession, IDisposable
     private IntPtr ConsoleHandle;
     private volatile bool Closing;
     private volatile bool Exited;
+    private DispatcherTimer? ResizeTimer;
+    private (ushort Columns, ushort Rows) PendingSize;
+    private (ushort Columns, ushort Rows) ConsoleSize = (100, 20);
     internal int ProcessId { get; }
     internal bool HasExited => this.Exited;
     internal string InitialDirectory { get; }
@@ -155,24 +158,47 @@ internal sealed class EmbeddedTerminalSession : TerminalSession, IDisposable
         if (!this.Closing && !this.Exited && !Data.IsEmpty) this.Input.Writer.TryWrite(Data.ToArray());
     }
 
+    internal event EventHandler? ViewportResized;
+
     public override void Resize(ushort Columns, ushort Rows, bool PushScrollback = false)
     {
         if (this.Closing) return;
         Columns = Math.Clamp(Columns, (ushort)10, (ushort)1000);
         Rows = Math.Clamp(Rows, (ushort)3, (ushort)500);
+        this.PendingSize = (Columns, Rows);
+        this.ResizeTimer?.Stop();
+        if (this.Buffer.Columns == Columns && this.Buffer.Rows == Rows && (this.Exited || this.ConsoleSize == this.PendingSize)) return;
+        // Font changes call Resize synchronously for every wheel notch. Coalesce
+        // decoder and ConPTY resizing together so PSReadLine receives one final
+        // grid, rather than repeatedly reflowing and redrawing its path prompt.
+        this.ResizeTimer ??= new DispatcherTimer(DispatcherPriority.Background, this.Dispatcher)
+            { Interval = TimeSpan.FromMilliseconds(150) };
+        this.ResizeTimer.Tick -= this.ApplyPendingResize;
+        this.ResizeTimer.Tick += this.ApplyPendingResize;
+        this.ResizeTimer.Start();
+    }
+
+    private void ApplyPendingResize(object? Sender, EventArgs E)
+    {
+        this.ResizeTimer?.Stop();
+        if (this.Closing) return;
+        var (Columns, Rows) = this.PendingSize;
         base.Resize(Columns, Rows, false);
         if (!this.Exited)
         {
             var Result = ResizePseudoConsole(this.ConsoleHandle, new(Columns, Rows));
             // An exit racing a layout change must not surface as an application error.
             if (Result < 0 && WaitForSingleObject(this.Process, 0) != 0) Marshal.ThrowExceptionForHR(Result);
+            this.ConsoleSize = (Columns, Rows);
         }
+        this.ViewportResized?.Invoke(this, EventArgs.Empty);
     }
 
     public new void Dispose()
     {
         if (this.Closing) return;
         this.Closing = true;
+        this.ResizeTimer?.Stop();
         this.Input.Writer.TryComplete();
         this.Job.Dispose(); // Only this terminal's process tree belongs to this job.
         var Console = this.ConsoleHandle;

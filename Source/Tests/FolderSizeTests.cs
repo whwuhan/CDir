@@ -50,7 +50,10 @@ internal sealed partial class RegressionRunner
             for (var Index = 0; Index < 2048; Index++) File.WriteAllBytes(Path.Combine(Folder, Index + ".bin"), new byte[7]);
             var Reports = new List<FolderSizeResult>();
             var Result = FolderSizeService.MeasureAsync(Folder, default, Progress => { Reports.Add(Progress); return Task.CompletedTask; }).GetAwaiter().GetResult();
-            Check(Result is { Bytes: 14336, Complete: true } && Reports.Count > 0 && Reports.All(Report => !Report.Complete && Report.Bytes < 14336), "Large trees must expose incomplete progress followed by an exact total.");
+            // A scheduled partial report can coincide with the final chunk: all
+            // bytes have been counted, but enumeration has not returned yet.
+            Check(Result is { Bytes: 14336, Complete: true } && Reports.Count > 0 && Reports.All(Report => !Report.Complete && Report.Bytes <= 14336)
+                && Reports.Any(Report => Report.Bytes < 14336), "Large trees must expose bounded incomplete progress followed by an exact total.");
             using var Cancel = new CancellationTokenSource();
             Throws<OperationCanceledException>(() => FolderSizeService.MeasureAsync(Folder, Cancel.Token, _ => { Cancel.Cancel(); return Task.CompletedTask; }).GetAwaiter().GetResult());
             Check(FolderSizeService.MeasureAsync(this.MakeDirectory("size-after-cancel"), default).GetAwaiter().GetResult() is { Bytes: 0 }, "Cancellation must release the global scan gate.");

@@ -2,6 +2,10 @@
 
 测试代码统一放在 `Source/Tests`：`Program.cs`、各后台测试文件由独立的 `CDirTests.csproj` 编译；各 `*SmokeTests.cs` 是 `CDir.UI.ExplorerTab` 的部分类，由主项目编译，通过 `--smoke-test` 入口运行。构建、测试和打包脚本统一位于 `Source/Scripts`。
 
+测试进程不注册为用户实例，`-Published` 即使使用日常 CDir 的同一路径，也不会被用户窗口计为另一个实例或暂停其自动保存。测试不得发现或克隆用户窗口；配置存储拒绝访问自有测试范围以外的路径及文件链接。修改测试隔离或持久化时，组合运行 `-UIGroup lifecycle -ScriptGroup release -PublishConfiguration`；发布脚本检查覆盖实时工作区、多标签及未保存类别的保留、旧配置备份、无效快照和不匹配进程路径的拒绝。
+
+发布直接使用 `Source/Scripts/Build.ps1 -Publish`。脚本先核实正在运行实例的完整程序路径，通过现有工作区管道备份所有实时快照及磁盘配置；成功后才停止实例，按最近活跃窗口恢复配置，再构建和打包。无法捕获完整快照时，不得强制结束实例。每个实例的备份保留在 `Build/PublicationWorkspaces`；发布成功后仅恢复原先运行的程序，不为测试启动日常窗口。
+
 内嵌终端使用 `Source/Scripts/Test.ps1 -UIGroup terminal` 验证；与快捷键同时修改时合并选择 `-UIGroup terminal,shortcuts`。终端组只在自有目录内运行真实 PowerShell/ConPTY，覆盖首次工作目录、Unicode/ANSI、隐藏后继续执行、恢复原会话、缩放、语言切换、退出重启及大量输出时的进程清理，不发送全局按键或移动桌面指针。终端渲染依赖固定版本的 VirtualTerminal.WPF，其许可证随发布包保存在 `ThirdParty/VirtualTerminal.LICENSE.txt`。
 
 终端组还在 PowerShell 已输出提示符后显式创建无障碍接口，检查文本模式和提示符读取，并覆盖 File 菜单打开与关闭后的焦点恢复。首次打开、隐藏恢复和重启后的输入检查通过终端控件的 WPF 文本/按键路由发送文字、退格和回车，以验证控件到真实 Shell 的完整输入路径。CDir 使用本地无障碍接口适配，初始化时只读取快照，注册完成后才发送文本变化通知，避免上游接口构造时 `provider` 为空打断焦点和菜单操作。
@@ -45,7 +49,7 @@
 
 界面检查默认不执行；通过 `-UIGroup` 显式选择后，直接在当前 Windows 桌面运行，使用软件渲染。独立桌面的创建、启动选项和校验均已删除；测试窗口、菜单和对话框可能出现在当前桌面，主窗口保持 `ShowActivated=false`、不在任务栏显示，不主动激活。`-UIGroup` 单独使用时只运行界面组，不附带默认后台组。界面组包括 `tabs`、`navigation`、`sidebar`、`address`、`operations`、`columns`、`fonts`、`search`、`language`、`shell-icons`、`version-control`、`all`；应用默认的烟测组为轻量 `navigation`，仍要求启动器标记，直接裸启动会在创建窗口前被拒绝。完整界面回归必须明确选择 `-UIGroup all`。
 
-测试不依赖第三方测试框架。产生的文件仅写入带随机 ID 和所有权标记的专用测试目录，结束后清理。不会打开文件、启动终端或把文件放入回收站。测试入口的超时和取消只终止自己建立的进程树，不关闭用户正常使用的 CDir 或 IDE。
+测试不依赖第三方测试框架。产生的文件仅写入带随机 ID 和所有权标记的专用测试目录，结束后清理。不会打开用户文件或把文件放入回收站。operations 中的工作目录回归仅隐藏运行本次自有目录内生成的无害 .bat/.cmd 脚本，核对相对路径读取结果后等待其退出；不会激活控制台，也不会运行用户脚本。测试入口的超时和取消只终止自己建立的进程树，不关闭用户正常使用的 CDir 或 IDE。
 
 界面报告、截图和启动/分组进度日志保存在 `Artifacts/TestRuns/<本次ID>/`。启动慢或超时时，先查看对应的 `*.png.progress.log` 和 `*.error.txt`，定位到窗口构造、初始导航或具体测试组，再只重跑相关组；失败时保留本次临时数据便于诊断。
 
@@ -78,3 +82,8 @@
 多标签与后台删除专项：`Source/Scripts/Test.ps1 -UIGroup tabs`。覆盖整页布局、独立导航/搜索/侧栏/选择/状态、独立终端、切换/关闭与资源释放、标准标签快捷键，以及原生 Delete 菜单在 STA 工作线程运行时导航、搜索和标签切换保持可用。删除测试使用精确限定的自有文件和文件夹，不修改用户回收站；取消与失败同样检查恢复。
 
 发布版本规则使用 `Source/Scripts/Test.ps1 -ScriptGroup release` 验证；与标题显示一起验证时合并 `-UIGroup fonts -PublishConfiguration`。大版本仅由用户指定；致命修复使用 `-FatalBugFix`，用户明确要求大功能提升中版本时使用 `-FeatureRelease`，测试与发布须使用相同选项。小版本仅在源码或配置变动后的成功发布中递增，同一源码重复发布或打包不递增；两种中版本选项同时选择也只加一次，失败和测试不消耗版本号。
+
+外部文件管理器拖入主面板使用 transfer 界面组：通过不允许读取 CDir 私有格式的数据对象验证混合文件/目录在空白区及文件夹行的 DragEnter、DragOver 和 Drop 路由，按偏好设置复制或移动，兼容 FileNameW 转换，并验证同目录复制生成系统命名副本、拒绝同目录移动及纯文本。使用真实命中测试选择空白区，保持鼠标和全局键盘不动。
+
+回收站拖放在 transfer 组创建短路径的自有输入，使用原生删除回调获取仅该测试项目的标识，再按确切路径绑定回收站命名空间，验证真实复制/移动、原名、嵌套内容、复制保留来源、移动移除来源、CIDA 相对/绝对标识、错误数据拦截和取消结果。仅操作创建前验证所有权的测试文件夹；不枚举用户回收站，不写入系统撤销历史，不执行全局撤销。复制用例结束后由 Windows 按已捕获标识清理自有回收站项目；短路径根带运行所有权标记，结束后验证并删除。sidebar 组验证 CDir 回收站视图可拖出原生 Shell 标识。
+Windows 自带回收站回归必须通过其 IShellFolder.GetUIObjectOf 获取原生 COM IDataObject，并使用 GetAttributesOf 返回的真实 Move-only 能力进行 DragEnter/DragOver/Drop 协商；不得用自行构造的 Copy|Move 掩码替代来源能力。覆盖文件、嵌套文件夹、混合批次、复制选项的两种状态、真实移动及 COM SetData 的完成回执、取消保留来源，以及普通/混合非回收站标识不得在复制模式被降级为移动。旧的纯 CIDA 用例仅验证序列化协议，不代表 Windows 资源管理器的拖出协商。

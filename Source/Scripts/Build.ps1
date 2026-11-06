@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'QuietTools.ps1')
 . (Join-Path $PSScriptRoot 'ReleaseVersion.ps1')
+. (Join-Path $PSScriptRoot 'PublicationWorkspace.ps1')
 $SourceRoot = Split-Path -Path $PSScriptRoot -Parent
 $ProjectRoot = Split-Path -Path $SourceRoot -Parent
 $ProjectFile = Join-Path $SourceRoot 'CDir.csproj'
@@ -33,7 +34,13 @@ if ($Publish -or $Package) {
     $ReleasePlan = Get-ReleasePlan -SourceRoot $SourceRoot -MajorVersion $MajorVersion -FatalBugFix:$FatalBugFix -FeatureRelease:$FeatureRelease
     $VersionArguments = @(('-p:Version=' + $ReleasePlan.Version), '-p:IncludeSourceRevisionInInformationalVersion=false')
     $PublishDirectory = Join-Path $ProjectRoot 'Publish\CDirWinX64'
-    Write-Host ('Publishing and packaging v' + $ReleasePlan.Version + ' with background I/O scheduling. No tests or application windows will start.')
+    $Executable = Join-Path $PublishDirectory 'CDir.exe'
+    $BackupDirectory = Join-Path $ProjectRoot ('Build/PublicationWorkspaces/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
+    $UserSession = Suspend-PublicationInstances -Executable $Executable -BackupDirectory $BackupDirectory
+    if ($null -ne $UserSession) {
+        $UserSession | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $ProjectRoot 'Build/PublicationWorkspaceSession.json') -Encoding utf8
+    }
+    Write-Host ('Publishing and packaging v' + $ReleasePlan.Version + ' with background I/O scheduling. No tests will start; a previously running user window will reopen after success.')
     # Rebuild BAML and its generated connection IDs together. Incremental WPF
     # caches can otherwise pair new resources with stale code when publishing.
     Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent -Arguments @(
@@ -52,6 +59,12 @@ if ($Publish -or $Package) {
         -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'Package.ps1'))
     # Commit only after compilation, publication and ZIP creation have all succeeded.
     Complete-ReleaseVersion -Plan $ReleasePlan
+    if ($null -ne $UserSession) {
+        $Reopened = Start-Process -FilePath $Executable -WorkingDirectory $PublishDirectory -PassThru
+        $UserSession | Add-Member -NotePropertyName ReopenedAt -NotePropertyValue ([DateTimeOffset]::Now.ToString('O'))
+        $UserSession | Add-Member -NotePropertyName ReopenedProcessId -NotePropertyValue $Reopened.Id
+        $UserSession | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $ProjectRoot 'Build/PublicationWorkspaceSession.json') -Encoding utf8
+    }
     Write-Host "Published: $(Join-Path $PublishDirectory 'CDir.exe')"
     Write-Host ('Release version: v' + $ReleasePlan.Version)
     } finally { $ReleaseLock.Dispose() }

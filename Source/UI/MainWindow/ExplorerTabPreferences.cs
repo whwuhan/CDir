@@ -1,11 +1,37 @@
 using System.Windows;
 using CDir.Localization;
 using CDir.Models;
+using CDir.Services;
 
 namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    public static readonly DependencyProperty ShowBookmarkPathsProperty = DependencyProperty.Register(
+        nameof(ShowBookmarkPaths), typeof(bool), typeof(ExplorerTab), new PropertyMetadata(false));
+    public bool ShowBookmarkPaths { get => (bool)GetValue(ShowBookmarkPathsProperty); private set => SetValue(ShowBookmarkPathsProperty, value); }
+
+    public static readonly DependencyProperty ShowSidebarDriveUsageProperty = DependencyProperty.Register(
+        nameof(ShowSidebarDriveUsage), typeof(bool), typeof(ExplorerTab), new PropertyMetadata(false));
+    public bool ShowSidebarDriveUsage { get => (bool)GetValue(ShowSidebarDriveUsageProperty); private set => SetValue(ShowSidebarDriveUsageProperty, value); }
+
+    private void ChangeShowSidebarDriveUsage(bool Show)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.ShowSidebarDriveUsage = Show;
+        this.ShowSidebarDriveUsage = Show;
+        if (Show) this.QueueSidebarDriveUsageRefresh();
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
+    private void ChangeShowBookmarkPaths(bool Show)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.ShowBookmarkPaths = Show;
+        this.ShowBookmarkPaths = Show;
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
     private async Task RestoreDefaultPreferencesAsync()
     {
         if (this.WindowClosed) return;
@@ -16,6 +42,12 @@ public partial class ExplorerTab
         this.Settings.Use12HourClock = Defaults.Use12HourClock;
         this.Settings.ExitOnClose = Defaults.ExitOnClose;
         this.Settings.CopyOnDrop = Defaults.CopyOnDrop;
+        this.Settings.CalculateFolderSizes = Defaults.CalculateFolderSizes;
+        this.Settings.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
+        this.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
+        this.Settings.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
+        this.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
+        this.UpdateHiddenItemsMenu();
         this.Settings.FontSizes = null;
         this.Settings.Shortcuts = null;
         this.Settings.TerminalFontSize = Defaults.TerminalFontSize;
@@ -45,6 +77,7 @@ public partial class ExplorerTab
     {
         if (this.WindowClosed || this.Settings.ShowHidden == ShowHidden) return;
         this.Settings.ShowHidden = ShowHidden;
+        this.UpdateHiddenItemsMenu();
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
         await this.RefreshAsync(true);
     }
@@ -69,5 +102,33 @@ public partial class ExplorerTab
         if (this.WindowClosed) return;
         this.Settings.CopyOnDrop = CopyOnDrop;
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
+    private void ChangeCalculateFolderSizes(bool Calculate)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.CalculateFolderSizes = Calculate;
+        this.QueueFolderSizes();
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
+    private bool ReadStartOnLogin()
+    {
+        try { return StartupService.IsEnabled(); }
+        catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
+        {
+            this.ShowNotice(LanguageService.Text("StartOnLoginError", FriendlyError(Error)), true);
+            return false;
+        }
+    }
+
+    private bool ChangeStartOnLogin(bool Enabled)
+    {
+        try { StartupService.SetEnabled(Enabled); return true; }
+        catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
+        {
+            this.ShowNotice(LanguageService.Text("StartOnLoginError", FriendlyError(Error)), true);
+            return false;
+        }
     }
 }

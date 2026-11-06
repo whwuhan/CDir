@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="VersionControlTests.cs" />
+    <Compile Include="HistoryBackupTests.cs" />
     <Compile Include="SearchTests.cs" />
     <Compile Include="EnglishTextCaseTests.cs" />
     <Compile Include="FolderSizeTests.cs" />

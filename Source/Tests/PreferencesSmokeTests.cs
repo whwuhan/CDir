@@ -12,7 +12,8 @@ public partial class ExplorerTab
 {
     private async Task RunPreferencesSmokeChecksAsync(List<string> Passed, string? LanguageCode = null, bool? ShowHidden = null,
         bool? Use12HourClock = null, IReadOnlyDictionary<string, bool>? VisibleColumns = null, IReadOnlyDictionary<string, double>? FontSizes = null,
-        bool RestoreDefaults = false, Func<PreferencesWindow, Task>? InspectShortcuts = null, bool? ExitOnClose = null, bool? CopyOnDrop = null)
+        bool RestoreDefaults = false, Func<PreferencesWindow, Task>? InspectShortcuts = null, bool? ExitOnClose = null, bool? CopyOnDrop = null,
+        bool? CalculateFolderSizes = null)
     {
         void Check(bool Condition, string Name)
         {
@@ -53,7 +54,7 @@ public partial class ExplorerTab
         Timeout.Tick += (_, _) =>
         {
             Timeout.Stop();
-            Failure = new TimeoutException("Timed out waiting for the Preferences window.");
+            Failure = new TimeoutException("Timed out waiting for the Preferences window. Last check: " + Passed.LastOrDefault());
             FindDialog()?.Close();
         };
 
@@ -61,11 +62,19 @@ public partial class ExplorerTab
         // activity from dismissing this popup while its layout is inspected.
         var MenuStaysOpen = this.HostWindow.FileMenu.StaysOpen;
         this.HostWindow.FileMenu.StaysOpen = true;
-        this.HostWindow.FileMenuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
         // Fixture file changes can briefly refresh the browser and disable settings.
         var ReadyTimer = System.Diagnostics.Stopwatch.StartNew();
-        while (!this.HostWindow.PreferencesMenuItem.IsEnabled && ReadyTimer.Elapsed < TimeSpan.FromSeconds(8)) await Task.Delay(20);
+        while ((!this.HostWindow.PreferencesMenuItem.IsEnabled || this.Loading || this.OperationBusy)
+            && ReadyTimer.Elapsed < TimeSpan.FromSeconds(8)) await Task.Delay(20);
+        this.HostWindow.FileMenuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+        if (!this.HostWindow.FileMenu.IsOpen)
+        {
+            // A previously shown owned fixture can finish its popup-close dispatch
+            // during the first layout. Reopen once after that dispatch has drained.
+            this.HostWindow.FileMenuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+        }
         Check(this.HostWindow.FileMenu.IsOpen && this.HostWindow.PreferencesMenuItem.IsVisible && this.HostWindow.PreferencesMenuItem.IsEnabled
             && this.HostWindow.PreferencesMenuItem.Header?.ToString() == LanguageService.Text("Preferences"),
             $"File dropdown exposes the localized Preferences action (open={this.HostWindow.FileMenu.IsOpen}, visible={this.HostWindow.PreferencesMenuItem.IsVisible}, enabled={this.HostWindow.PreferencesMenuItem.IsEnabled}, header={this.HostWindow.PreferencesMenuItem.Header}, loading={this.Loading})");
@@ -140,7 +149,46 @@ public partial class ExplorerTab
                     Dialog.CopyOnDropCheck.IsChecked = CopyOnDrop.Value;
                     Check(this.Settings.CopyOnDrop == CopyOnDrop.Value, "The drag-copy checkbox updates the transfer mode immediately");
                 }
+                Check(Dialog.CalculateFolderSizesCheck.IsVisible && Dialog.CalculateFolderSizesCheck.IsEnabled
+                    && Dialog.CalculateFolderSizesCheck.IsChecked == this.Settings.CalculateFolderSizes
+                    && Dialog.CalculateFolderSizesCheck.Content?.ToString() == LanguageService.Text("CalculateFolderSizes")
+                    && Dialog.CalculateFolderSizesCheck.ToolTip?.ToString() == LanguageService.Text("CalculateFolderSizesTooltip"),
+                    "General exposes the localized background folder-size checkbox with its saved value");
+                if (CalculateFolderSizes.HasValue)
+                {
+                    Dialog.CalculateFolderSizesCheck.IsChecked = CalculateFolderSizes.Value;
+                    Check(this.Settings.CalculateFolderSizes == CalculateFolderSizes.Value,
+                        "The folder-size checkbox applies immediately");
+                }
+                Check(!Dialog.ShowBookmarkPathsCheck.IsVisible && !Dialog.ShowSidebarDriveUsageCheck.IsVisible,
+                    "Folder paths and drive usage are absent from General");
+                Dialog.Categories.SelectedItem = Dialog.UICategory;
+                Dialog.UpdateLayout();
+                Check(Dialog.ShowSidebarDriveUsageCheck.IsVisible && Dialog.ShowSidebarDriveUsageCheck.IsEnabled
+                    && Dialog.ShowSidebarDriveUsageCheck.IsChecked == this.Settings.ShowSidebarDriveUsage
+                    && Dialog.ShowSidebarDriveUsageCheck.Content?.ToString() == LanguageService.Text("ShowSidebarDriveUsage"),
+                    "UI exposes the localized drive usage choice with its saved value");
+                var InitialUsage = this.Settings.ShowSidebarDriveUsage;
+                Dialog.ShowSidebarDriveUsageCheck.IsChecked = !InitialUsage;
+                Check(this.Settings.ShowSidebarDriveUsage == !InitialUsage && this.ShowSidebarDriveUsage == !InitialUsage
+                    && this.CaptureSaveSettings().ShowSidebarDriveUsage == !InitialUsage,
+                    "The drive usage checkbox updates the sidebar and persisted preference immediately");
+                Dialog.ShowSidebarDriveUsageCheck.IsChecked = InitialUsage;
+                Check(Dialog.ShowBookmarkPathsCheck.IsVisible && Dialog.ShowBookmarkPathsCheck.IsEnabled
+                    && Dialog.ShowBookmarkPathsCheck.IsChecked == this.Settings.ShowBookmarkPaths
+                    && Dialog.ShowBookmarkPathsCheck.Content?.ToString() == LanguageService.Text("ShowBookmarkPaths"),
+                    "UI exposes the saved folder-path checkbox");
+                var InitialPaths = this.Settings.ShowBookmarkPaths;
+                Dialog.ShowBookmarkPathsCheck.IsChecked = !InitialPaths;
+                Check(this.Settings.ShowBookmarkPaths == !InitialPaths && this.ShowBookmarkPaths == !InitialPaths
+                    && this.CaptureSaveSettings().ShowBookmarkPaths == !InitialPaths,
+                    "The bookmark-path checkbox updates the sidebar and saved settings immediately");
+                Dialog.ShowBookmarkPathsCheck.IsChecked = InitialPaths;
                 Dialog.Categories.SelectedItem = Dialog.TerminalThemeCategory;
+                Check(Dialog.StartOnLoginCheck.IsChecked == this.ReadStartOnLogin()
+                    && Dialog.StartOnLoginCheck.Content?.ToString() == LanguageService.Text("StartOnLogin")
+                    && Dialog.StartOnLoginCheck.ToolTip?.ToString() == LanguageService.Text("StartOnLoginTooltip"),
+                    "General shows the saved Windows startup choice with localized text");
                 Dialog.UpdateLayout();
                 Check(Dialog.TerminalThemePanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
                     && Equals(Dialog.TerminalFontSizePicker.SelectedItem, this.GetTerminalFontSize())
@@ -233,6 +281,12 @@ public partial class ExplorerTab
                     && Dialog.ExitOnCloseCheck.ToolTip?.ToString() == LanguageService.Text("ExitOnCloseTooltip")
                     && Dialog.CopyOnDropCheck.Content?.ToString() == LanguageService.Text("CopyOnDrop")
                     && Dialog.CopyOnDropCheck.ToolTip?.ToString() == LanguageService.Text("CopyOnDropTooltip")
+                    && Dialog.CalculateFolderSizesCheck.Content?.ToString() == LanguageService.Text("CalculateFolderSizes")
+                    && Dialog.CalculateFolderSizesCheck.ToolTip?.ToString() == LanguageService.Text("CalculateFolderSizesTooltip")
+                    && Dialog.ShowBookmarkPathsCheck.Content?.ToString() == LanguageService.Text("ShowBookmarkPaths")
+                    && Dialog.ShowBookmarkPathsCheck.ToolTip?.ToString() == LanguageService.Text("ShowBookmarkPathsTooltip")
+                    && Dialog.StartOnLoginCheck.Content?.ToString() == LanguageService.Text("StartOnLogin")
+                    && Dialog.StartOnLoginCheck.ToolTip?.ToString() == LanguageService.Text("StartOnLoginTooltip")
                     && Dialog.TimeFormatLabel.Content?.ToString() == LanguageService.Text("TimeFormat")
                     && Dialog.TimeFormatPicker.Items.Cast<ComboBoxItem>().Select(Item => Item.Content?.ToString())
                         .SequenceEqual(new[] { LanguageService.Text("Clock24Hour"), LanguageService.Text("Clock12Hour") })
@@ -260,7 +314,11 @@ public partial class ExplorerTab
                     Dialog.TimeFormatPicker.SelectedIndex = 1;
                     Dialog.ShowHiddenCheck.IsChecked = true;
                     Dialog.ExitOnCloseCheck.IsChecked = true;
-                    Dialog.CopyOnDropCheck.IsChecked = true;
+                    Dialog.CopyOnDropCheck.IsChecked = false;
+                    Dialog.CalculateFolderSizesCheck.IsChecked = true;
+                    Dialog.ShowBookmarkPathsCheck.IsChecked = true;
+                    Dialog.ShowSidebarDriveUsageCheck.IsChecked = true;
+                    Dialog.StartOnLoginCheck.IsChecked = true;
                     while (!Dialog.ShowHiddenCheck.IsEnabled && Failure is null) await Task.Delay(20);
                     Check(Dialog.ShowHiddenCheck.IsEnabled && this.Settings.ShowHidden, "Reset fixture enables hidden items through Preferences");
                     Dialog.Categories.SelectedItem = Dialog.UICategory;
@@ -280,7 +338,11 @@ public partial class ExplorerTab
                             && Dialog.TimeFormatPicker.SelectedIndex == 0 && !this.Settings.Use12HourClock
                             && Dialog.ShowHiddenCheck.IsChecked == false && !this.Settings.ShowHidden
                             && Dialog.ExitOnCloseCheck.IsChecked == false && !this.Settings.ExitOnClose
-                            && Dialog.CopyOnDropCheck.IsChecked == false && !this.Settings.CopyOnDrop
+                            && Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop
+                            && Dialog.CalculateFolderSizesCheck.IsChecked == false && !this.Settings.CalculateFolderSizes
+                            && Dialog.ShowBookmarkPathsCheck.IsChecked == false && !this.Settings.ShowBookmarkPaths && !this.ShowBookmarkPaths
+                            && Dialog.ShowSidebarDriveUsageCheck.IsChecked == false && !this.Settings.ShowSidebarDriveUsage && !this.ShowSidebarDriveUsage
+                            && Dialog.StartOnLoginCheck.IsChecked == false && !this.ReadStartOnLogin()
                             && Dialog.GridLinesCheck.IsChecked == true && this.Settings.ShowGridLines
                             && this.Settings.TerminalFontSize == Models.DefaultSettings.Current.TerminalFontSize
                             && this.Settings.TerminalBackgroundColor == Models.DefaultSettings.Current.TerminalBackgroundColor

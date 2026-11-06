@@ -90,8 +90,14 @@ public partial class ExplorerTab
             {
                 var Result = new StringBuilder();
                 lock (Session.Buffer.SyncRoot)
-                    foreach (var Cell in Session.Buffer.GetRow(((TerminalDecoder)Session.Decoder).CursorPosition.Y))
-                        if (!Cell.Style.Continuation) Result.Append(Cell.Character.ToString());
+                    // The prompt plus pasted command can wrap when the scrollbar reserves a column.
+                    for (var Y = 0; Y <= ((TerminalDecoder)Session.Decoder).CursorPosition.Y; Y++)
+                    {
+                        var Row = new StringBuilder();
+                        foreach (var Cell in Session.Buffer.GetRow(Y))
+                            if (!Cell.Style.Continuation) Row.Append(Cell.Character.ToString());
+                        Result.Append(Row.ToString().TrimEnd());
+                    }
                 return Result.ToString().TrimEnd();
             }
             foreach (var Route in new[] { "keyboard", "native editor", "terminal menu" })

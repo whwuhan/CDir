@@ -101,6 +101,7 @@ internal sealed partial class RegressionRunner
 
     private void RunFileSystemChecks()
     {
+        this.RunHistoryBackupChecks();
         this.RunFolderSizeChecks();
         this.Test("Normalize quoted Unicode path", () =>
         {
@@ -225,20 +226,21 @@ internal sealed partial class RegressionRunner
             Check(System.IO.File.ReadAllText(System.IO.Path.Combine(Destination, System.IO.Path.GetFileName(Source))) == "copy me", "Copied file should have identical contents.");
             Check(System.IO.File.Exists(Source), "Copy must preserve source.");
         });
-        this.Test("Preserve hidden/read-only attributes and NTFS metadata streams", () =>
+        this.Test("Preserve hidden read-only non-indexed attributes and NTFS metadata streams", () =>
         {
             var Source = this.MakeFile("metadata-source\\download.txt", "download content");
             var Destination = this.MakeDirectory("metadata-target");
             var Target = System.IO.Path.Combine(Destination, "download.txt");
             const string Zone = "[ZoneTransfer]\r\nZoneId=3\r\n";
             System.IO.File.WriteAllText(Source + ":Zone.Identifier", Zone);
-            System.IO.File.SetAttributes(Source, System.IO.File.GetAttributes(Source) | FileAttributes.Hidden | FileAttributes.ReadOnly);
+            System.IO.File.SetAttributes(Source, System.IO.File.GetAttributes(Source) | FileAttributes.Hidden | FileAttributes.ReadOnly | FileAttributes.NotContentIndexed);
             try
             {
                 this.Service.CopyItems(new[] { Source }, Destination, false);
                 var Attributes = System.IO.File.GetAttributes(Target);
                 Check((Attributes & FileAttributes.Hidden) != 0, "Copy should preserve hidden attribute.");
                 Check((Attributes & FileAttributes.ReadOnly) != 0, "Copy should preserve read-only attribute.");
+                Check((Attributes & FileAttributes.NotContentIndexed) != 0, "Copy should preserve indexing preferences so deletion backups remain verifiable.");
                 Check(System.IO.File.ReadAllText(Target + ":Zone.Identifier") == Zone, "Copy should preserve NTFS streams, including download-origin metadata.");
                 Check(System.IO.File.GetLastWriteTimeUtc(Source) == System.IO.File.GetLastWriteTimeUtc(Target), "Copy should preserve last-write timestamp.");
             }

@@ -242,21 +242,51 @@ public partial class ExplorerTab
             Check(HasChildBridge(RootGuides(FirstRoot)) && HasChildBridge(RootGuides(LastRoot)),
                 "Bookmark roots bridge to their independent child trees, including a final expanded root");
             TreeViewItem BookmarkLeaf(FavoriteLocation Folder) => (TreeViewItem)FindVisualChild<TreeView>(BookmarkRoots.ItemContainerGenerator.ContainerFromItem(Folder))!.ItemContainerGenerator.ContainerFromIndex(0);
+            bool RootBridgeAligned(FavoriteLocation Folder, double Scale)
+            {
+                var Guide = RootGuides(Folder);
+                var Child = Guides(BookmarkLeaf(Folder));
+                var ChildX = Child.TranslatePoint(new Point(Math.Floor(Child.ActualWidth / 2) + .5, 0), Guide).X;
+                var Bitmap = new RenderTargetBitmap((int)Math.Ceiling((ChildX + 6) * Scale),
+                    (int)Math.Ceiling(Guide.HeaderHeight * Scale), 96 * Scale, 96 * Scale, PixelFormats.Pbgra32);
+                Bitmap.Render(Guide);
+                var Pixels = new byte[Bitmap.PixelWidth * Bitmap.PixelHeight * 4];
+                Bitmap.CopyPixels(Pixels, Bitmap.PixelWidth * 4, 0);
+                var FoundChild = false;
+                var FoundOuter = false;
+                var OuterX = Math.Floor(Guide.ActualWidth / 2) + .5;
+                for (var Y = 0; Y < Bitmap.PixelHeight; Y++)
+                    for (var X = 0; X < Bitmap.PixelWidth; X++)
+                        if (Pixels[(Y * Bitmap.PixelWidth + X) * 4 + 3] > 0)
+                        {
+                            if (Y + .5 < Guide.HeaderHeight / 2 * Scale - 1) return false;
+                            var AtChild = Math.Abs(X + .5 - ChildX * Scale) <= 1.3;
+                            var AtOuter = Math.Abs(X + .5 - OuterX * Scale) <= 1.3;
+                            if (!AtChild && !AtOuter) return false;
+                            FoundChild |= AtChild;
+                            FoundOuter |= AtOuter;
+                        }
+                return FoundChild && FoundOuter;
+            }
+            foreach (var Scale in new[] { 1d, 1.25, 1.5 })
+                Check(RootBridgeAligned(FirstRoot, Scale) && RootBridgeAligned(LastRoot, Scale),
+                    "Bookmark roots retain outer and aligned child guides below the folder center, with no title-to-folder line at scale " + Scale);
             Check(EndsAtVisibleFolder(RootGuides(FirstRoot), BookmarkLeaf(FirstRoot))
                 && HasClosingLine(RootGuides(FirstRoot), BookmarkLeaf(FirstRoot))
                 && EndsAtVisibleFolder(RootGuides(LastRoot), BookmarkLeaf(LastRoot))
                 && HasClosingLine(RootGuides(LastRoot), BookmarkLeaf(LastRoot)),
-                "Each expanded Quick Access root closes its outer guide at its own final visible child");
+                "Every expanded bookmark root retains its full outer guide and closing connection at the last visible descendant");
             Screenshot("TreeGuidesBookmarkRoots");
             LastRoot.Node.IsExpanded = false;
             await Settle();
             Check(LastGuideInkRow(RootGuides(LastRoot)) == -1,
-                "Collapsing a Quick Access root clears its outer guide");
+                "Collapsing a Quick Access root clears the subtree guide without leaving a title-to-folder stub");
             BookmarkRoots.Items.Remove(LastRoot);
             await Settle();
-            Check(EndsAtVisibleFolder(RootGuides(FirstRoot), BookmarkLeaf(FirstRoot), 1.5)
+            Check(RootBridgeAligned(FirstRoot, 1.5)
+                && EndsAtVisibleFolder(RootGuides(FirstRoot), BookmarkLeaf(FirstRoot), 1.5)
                 && HasClosingLine(RootGuides(FirstRoot), BookmarkLeaf(FirstRoot), 1.5),
-                "Removing a Quick Access root preserves the remaining subtree's closing guide at 150-percent scale");
+                "Removing a bookmark preserves the remaining root's complete subtree guide and clear title gap at 150-percent scale");
         }
         finally { Panel.Children.Remove(Host); }
     }

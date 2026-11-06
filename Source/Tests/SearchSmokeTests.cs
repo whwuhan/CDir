@@ -351,7 +351,7 @@ public partial class ExplorerTab
                 "Recursive results follow the chosen modification-date clock format");
             await Query("needle /file");
             this.SelectPath(DeepFile);
-            await this.AcceptSmokeNameDialogAsync(this.RenameAsync, LanguageService.Text("Rename"), "needle-renamed.txt");
+            await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, "needle-renamed.txt");
             await this.WaitForSearchSmokeAsync();
             var Renamed = Path.Combine(Deep, "needle-renamed.txt");
             Check(File.Exists(Renamed) && !File.Exists(DeepFile)

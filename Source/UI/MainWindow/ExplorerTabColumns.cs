@@ -24,6 +24,23 @@ public partial class ExplorerTab
             Item.Click += this.ColumnVisibilityMenuClick;
             Menu.Items.Add(Item);
         }
+        Menu.Items.Add(new Separator());
+        var HiddenItems = new MenuItem { Tag = "ShowHidden", IsCheckable = true, IsChecked = this.Settings.ShowHidden,
+            StaysOpenOnClick = true, Style = (Style)this.FindResource("ColumnToggleMenuItem") };
+        HiddenItems.SetResourceReference(HeaderedItemsControl.HeaderProperty, "TextHiddenItems");
+        HiddenItems.SetResourceReference(ToolTipProperty, "TextHiddenItemsTooltip");
+        HiddenItems.Click += async (_, E) =>
+        {
+            E.Handled = true;
+            HiddenItems.IsEnabled = false;
+            try
+            {
+                await this.ChangeShowHiddenAsync(!this.Settings.ShowHidden);
+                await this.HostWindow.SynchronizePreferencesAsync(this);
+            }
+            finally { HiddenItems.IsEnabled = true; this.UpdateHiddenItemsMenu(); }
+        };
+        Menu.Items.Add(HiddenItems);
         this.ColumnMenuButton.ContextMenu = Menu;
         Menu.IsOpen = true;
     }
@@ -36,8 +53,15 @@ public partial class ExplorerTab
         if (this.ChangeColumnVisibility(Key, Column.Visibility != Visibility.Visible))
             await this.HostWindow.SynchronizePreferencesAsync(this);
         if (this.ColumnMenuButton.ContextMenu is { } Menu)
-            foreach (var Item in Menu.Items.OfType<MenuItem>())
+            foreach (var Item in Menu.Items.OfType<MenuItem>().Where(Item => Item.Tag is string Key && ColumnKeys.Contains(Key)))
                 Item.IsChecked = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == (string)Item.Tag).Visibility == Visibility.Visible;
+    }
+
+    private void UpdateHiddenItemsMenu()
+    {
+        if (this.ColumnMenuButton.ContextMenu is { } Menu)
+            foreach (var Item in Menu.Items.OfType<MenuItem>().Where(Item => Equals(Item.Tag, "ShowHidden")))
+                Item.IsChecked = this.Settings.ShowHidden;
     }
 
     private static readonly string[] ColumnKeys = [nameof(FileEntry.Name), nameof(FileEntry.Modified), nameof(FileEntry.TypeName), nameof(FileEntry.Size), nameof(FileEntry.FullPath)];

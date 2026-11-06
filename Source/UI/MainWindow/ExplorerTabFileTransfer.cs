@@ -13,22 +13,27 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
-    private sealed record FileTransferPlan(string[] Paths, string Destination, bool Copy)
+    private sealed record FileTransferPlan(string[] Paths, string Destination, bool Copy, byte[][]? ShellItemIds = null)
     {
         internal DragDropEffects Effect => this.Copy ? DragDropEffects.Copy : DragDropEffects.Move;
     }
     private bool SidebarFileTransferFeedback;
+    private bool ReplaceTransferConflictsInSmoke;
 
     private static bool HasFileDrop(IDataObject Data)
     {
-        try { return Data.GetDataPresent(DataFormats.FileDrop, false); }
+        // Some file managers expose FileNameW/FileName with FileDrop conversion.
+        try { return Data.GetDataPresent(DataFormats.FileDrop, true); }
         catch (COMException) { return false; }
     }
 
     private static DataObject CreateFileTransferData(IEnumerable<FileEntry> Entries)
     {
         var Data = new DataObject();
-        Data.SetData(DataFormats.FileDrop, Entries.Select(Entry => Entry.FullPath).ToArray());
+        var Selection = Entries.ToArray();
+        if (Selection.Length > 0 && Selection.All(Entry => Entry.ShellId is not null))
+            Data.SetData(ShellDropData.Format, new MemoryStream(ShellDropData.Create(Selection.Select(Entry => Entry.ShellId!).ToArray())));
+        else Data.SetData(DataFormats.FileDrop, Selection.Select(Entry => Entry.FullPath).ToArray());
         return Data;
     }
 
@@ -58,32 +63,77 @@ public partial class ExplorerTab
     {
         if (this.WindowClosed || this.OperationBusy || this.Loading || ShellLocations.IsRecycleBin(Destination) || string.IsNullOrWhiteSpace(Destination)) return null;
         var Effect = this.Settings.CopyOnDrop ? DragDropEffects.Copy : DragDropEffects.Move;
-        if ((Allowed & Effect) == 0) return null;
         try
         {
-            if (!HasFileDrop(Data) || Data.GetData(DataFormats.FileDrop, false) is not string[] { Length: > 0 } Incoming
+            // Recycle Bin data must retain its Shell identity even if it also
+            // advertises an internal $R backing path in CF_HDROP.
+            if (ShellDropData.Read(Data) is { Length: > 0 } Ids)
+            {
+                var Copy = this.Settings.CopyOnDrop;
+                if ((Allowed & Effect) == 0)
+                {
+                    // Explorer's Recycle Bin advertises Move only. Moving out
+                    // restores the item at the destination; never request an
+                    // unsupported Copy effect or return Copy to that source.
+                    if (!Copy || (Allowed & DragDropEffects.Move) == 0 || !ShellDropData.IsFromRecycleBin(Ids)) return null;
+                    Copy = false;
+                }
+                return new([], Path.TrimEndingDirectorySeparator(Path.GetFullPath(Destination)), Copy, Ids);
+            }
+            if ((Allowed & Effect) == 0) return null;
+            if (!HasFileDrop(Data) || Data.GetData(DataFormats.FileDrop, true) is not string[] { Length: > 0 } Incoming
                 || Incoming.Any(Source => !Path.IsPathFullyQualified(Source))) return null;
             var Paths = Incoming.Select(Source => Path.TrimEndingDirectorySeparator(Path.GetFullPath(Source)))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             var Target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Destination));
             foreach (var Source in Paths)
             {
-                if (SamePath(Source, Target) || SamePath(Path.GetDirectoryName(Source) ?? Source, Target)
+                if (SamePath(Source, Target) || !this.Settings.CopyOnDrop && SamePath(Path.GetDirectoryName(Source) ?? Source, Target)
                     || Target.StartsWith(Source.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
             }
             return new(Paths, Target, this.Settings.CopyOnDrop);
         }
-        catch (Exception Error) when (Error is ArgumentException or NotSupportedException or IOException or COMException) { return null; }
+        catch (Exception Error) when (Error is ArgumentException or NotSupportedException or IOException or InvalidDataException or ObjectDisposedException or COMException) { return null; }
     }
 
     private async Task<bool> ExecuteFileTransferAsync(FileTransferPlan Plan)
     {
         this.EndMarqueeSelection();
         this.ClearFileTransferFeedback();
-        return await this.RunOperationAsync(LanguageService.Text(Plan.Copy ? "CopyingFiles" : "MovingFiles"),
-            () => this.Files.CopyItems(Plan.Paths, Plan.Destination, Move: !Plan.Copy), LanguageService.Text(Plan.Copy ? "CopyComplete" : "MoveComplete"));
+        return await this.TransferFilesAsync(Plan.Paths, Plan.Destination, Move: !Plan.Copy, Plan.ShellItemIds);
     }
 
+    private sealed record ShellTransferRequest(IntPtr Owner, string[] Paths, string Destination, bool Move,
+        FileOperationHistory? History, bool Quiet, bool ReplaceConflicts, CancellationToken Cancellation, byte[][]? ShellItemIds = null);
+    private Action<ShellTransferRequest> TransferShellItems = Request => ShellContextMenu.Transfer(Request.Owner,
+        Request.Paths, Request.Destination, Request.Move, Request.History, Request.Quiet, Request.ReplaceConflicts, Request.Cancellation, ShellItemIds: Request.ShellItemIds);
+    private CancellationToken TransferCancellation;
+
+    private async Task<bool> TransferFilesAsync(string[] Paths, string Destination, bool Move, byte[][]? ShellItemIds = null)
+    {
+        if (this.OperationBusy) return false;
+        var Request = new ShellTransferRequest(new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle,
+            Paths, Destination, Move, this.Files.OperationHistory, AppMain.SmokeTest,
+            AppMain.SmokeTest && this.ReplaceTransferConflictsInSmoke, this.TransferCancellation, ShellItemIds);
+        // Windows owns all counting and progress UI, including its Cancel button.
+        // No queued WPF progress callback can resurrect an already finished operation.
+        this.TransferProgressPanel.Visibility = Visibility.Collapsed;
+        this.TransferProgressText.Text = "";
+        try
+        {
+            return await this.RunOperationAsync(LanguageService.Text(Move ? "MovingFiles" : "CopyingFiles"),
+                () => this.TransferShellItems(Request), LanguageService.Text(Move ? "MoveComplete" : "CopyComplete"), RequiresSta: true);
+        }
+        finally
+        {
+            this.TransferProgressPanel.Visibility = Visibility.Collapsed;
+            this.TransferProgressText.Text = "";
+            this.LoadingBar.IsIndeterminate = true;
+            this.LoadingBar.Width = 96;
+            this.LoadingBar.Height = 2;
+            this.UpdateActions();
+        }
+    }
     private void ClearFileTransferFeedback()
     {
         this.FileDropTargetHighlight.Visibility = Visibility.Collapsed;
@@ -143,9 +193,12 @@ public partial class ExplorerTab
 
     private void FileTransferDragLeave(object Sender, DragEventArgs E)
     {
-        var Surface = (FrameworkElement)Sender;
-        if (!new Rect(Surface.RenderSize).Contains(E.GetPosition(Surface))) this.ClearFileTransferFeedback();
+        // OLE also sends DragLeave when a drag is cancelled while the pointer
+        // remains inside the target. Coordinates alone cannot distinguish it.
+        this.ClearFileTransferFeedback();
     }
+
+    internal void DismissFileDragFeedback() { this.ClearFileTransferFeedback(); this.ClearSidebarDropFeedback(); }
 
     private void FileTransferDrop(object Sender, DragEventArgs E)
     {
@@ -170,7 +223,21 @@ public partial class ExplorerTab
                 _ = FinishFrame();
                 if (!Completion.IsCompleted) Dispatcher.PushFrame(Frame);
             }
-            if (Completion.GetAwaiter().GetResult()) E.Effects = Plan.Effect;
+            if (Completion.GetAwaiter().GetResult())
+            {
+                E.Effects = Plan.Effect;
+                if (Plan.ShellItemIds is not null)
+                {
+                    // IFileOperation already performed the move. Tell the
+                    // Explorer source not to delete its original a second time.
+                    try
+                    {
+                        ShellDropData.ReportCompleted(E.Data, Plan.Copy);
+                    }
+                    catch (Exception Error) when (Error is COMException or NotSupportedException or InvalidOperationException or System.ComponentModel.Win32Exception)
+                    { /* Completed filesystem changes remain successful if a source declines optional feedback. */ }
+                }
+            }
         }
         catch (Exception Error) { this.ShowNotice(LanguageService.Text("OperationIncomplete", FriendlyError(Error)), true); }
     }

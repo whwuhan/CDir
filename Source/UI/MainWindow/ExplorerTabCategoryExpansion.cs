@@ -15,6 +15,7 @@ public partial class ExplorerTab
     private Expander? CategorySection(DependencyObject? Source)
     {
         var Section = Source as Expander ?? FindAncestor<Expander>(Source);
+        if (ReferenceEquals(Section, this.StickySidebarSection)) return this.StickySectionTarget;
         return Section is not null && (ReferenceEquals(Section, this.FavoritesSection) || ReferenceEquals(Section, this.DirectoryTreeSection)
             || Section.DataContext is SidebarCategory Category && this.CustomCategories.Contains(Category)) ? Section : null;
     }

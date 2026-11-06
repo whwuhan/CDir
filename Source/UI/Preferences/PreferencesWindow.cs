@@ -18,6 +18,10 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal CheckBox ShowHiddenCheck { get; }
     internal CheckBox ExitOnCloseCheck { get; }
     internal CheckBox CopyOnDropCheck { get; }
+    internal CheckBox CalculateFolderSizesCheck { get; }
+    internal CheckBox ShowBookmarkPathsCheck { get; }
+    internal CheckBox ShowSidebarDriveUsageCheck { get; }
+    internal CheckBox StartOnLoginCheck { get; }
     internal ComboBox TimeFormatPicker { get; }
     internal Label TimeFormatLabel { get; }
     internal ListBox Categories { get; }
@@ -37,7 +41,11 @@ internal sealed partial class PreferencesWindow : DialogWindow
         IReadOnlyDictionary<string, string> Shortcuts, Func<string, string, bool> OnShortcutChanged,
         double TerminalFontSize, string TerminalBackgroundColor, Func<double, bool> OnTerminalFontSizeChanged,
         Func<string, bool> OnTerminalBackgroundChanged, string? TerminalForegroundColor, Func<string?, bool> OnTerminalForegroundChanged,
-        bool ExitOnClose, Action<bool> OnExitOnCloseChanged, bool CopyOnDrop, Action<bool> OnCopyOnDropChanged)
+        bool ExitOnClose, Action<bool> OnExitOnCloseChanged, bool CopyOnDrop, Action<bool> OnCopyOnDropChanged,
+        bool CalculateFolderSizes, Action<bool> OnCalculateFolderSizesChanged,
+        bool ShowBookmarkPaths, Action<bool> OnShowBookmarkPathsChanged,
+        bool ShowSidebarDriveUsage, Action<bool> OnShowSidebarDriveUsageChanged,
+        bool StartOnLogin, Func<bool, bool> OnStartOnLoginChanged)
     {
         var UpdatingPreferences = false;
         this.RestoreDefaultsButton = new Button
@@ -194,6 +202,64 @@ internal sealed partial class PreferencesWindow : DialogWindow
         Grid.SetRow(this.CopyOnDropCheck, 4);
         Grid.SetColumnSpan(this.CopyOnDropCheck, 2);
         Panel.Children.Add(this.CopyOnDropCheck);
+        Panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        this.CalculateFolderSizesCheck = new CheckBox
+        {
+            Name = "CalculateFolderSizesCheck", IsChecked = CalculateFolderSizes,
+            Margin = new Thickness(0, 16, 0, 0), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.CalculateFolderSizesCheck.SetResourceReference(ContentControl.ContentProperty, "TextCalculateFolderSizes");
+        this.CalculateFolderSizesCheck.SetResourceReference(AutomationProperties.NameProperty, "TextCalculateFolderSizes");
+        this.CalculateFolderSizesCheck.SetResourceReference(ToolTipProperty, "TextCalculateFolderSizesTooltip");
+        this.CalculateFolderSizesCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnCalculateFolderSizesChanged(true); };
+        this.CalculateFolderSizesCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnCalculateFolderSizesChanged(false); };
+        Grid.SetRow(this.CalculateFolderSizesCheck, 5);
+        Grid.SetColumnSpan(this.CalculateFolderSizesCheck, 2);
+        Panel.Children.Add(this.CalculateFolderSizesCheck);
+        Panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        this.StartOnLoginCheck = new CheckBox
+        {
+            Name = "StartOnLoginCheck", IsChecked = StartOnLogin,
+            Margin = new Thickness(0, 16, 0, 0), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.StartOnLoginCheck.SetResourceReference(ContentControl.ContentProperty, "TextStartOnLogin");
+        this.StartOnLoginCheck.SetResourceReference(AutomationProperties.NameProperty, "TextStartOnLogin");
+        this.StartOnLoginCheck.SetResourceReference(ToolTipProperty, "TextStartOnLoginTooltip");
+        void StartupChanged(object Sender, RoutedEventArgs E)
+        {
+            if (UpdatingPreferences) return;
+            var Enabled = this.StartOnLoginCheck.IsChecked == true;
+            if (OnStartOnLoginChanged(Enabled)) return;
+            UpdatingPreferences = true;
+            try { this.StartOnLoginCheck.IsChecked = !Enabled; }
+            finally { UpdatingPreferences = false; }
+        }
+        this.StartOnLoginCheck.Checked += StartupChanged;
+        this.StartOnLoginCheck.Unchecked += StartupChanged;
+        Grid.SetRow(this.StartOnLoginCheck, 6);
+        Grid.SetColumnSpan(this.StartOnLoginCheck, 2);
+        Panel.Children.Add(this.StartOnLoginCheck);
+        Panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        this.ShowBookmarkPathsCheck = new CheckBox
+        {
+            Name = "ShowBookmarkPathsCheck", IsChecked = ShowBookmarkPaths,
+            Margin = new Thickness(0, 16, 0, 0), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.ShowBookmarkPathsCheck.SetResourceReference(ContentControl.ContentProperty, "TextShowBookmarkPaths");
+        this.ShowBookmarkPathsCheck.SetResourceReference(AutomationProperties.NameProperty, "TextShowBookmarkPaths");
+        this.ShowBookmarkPathsCheck.SetResourceReference(ToolTipProperty, "TextShowBookmarkPathsTooltip");
+        this.ShowBookmarkPathsCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnShowBookmarkPathsChanged(true); };
+        this.ShowBookmarkPathsCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnShowBookmarkPathsChanged(false); };
+        this.ShowSidebarDriveUsageCheck = new CheckBox
+        {
+            Name = "ShowSidebarDriveUsageCheck", IsChecked = ShowSidebarDriveUsage,
+            Margin = new Thickness(0, 0, 0, 12), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.ShowSidebarDriveUsageCheck.SetResourceReference(ContentControl.ContentProperty, "TextShowSidebarDriveUsage");
+        this.ShowSidebarDriveUsageCheck.SetResourceReference(AutomationProperties.NameProperty, "TextShowSidebarDriveUsage");
+        this.ShowSidebarDriveUsageCheck.SetResourceReference(ToolTipProperty, "TextShowSidebarDriveUsageTooltip");
+        this.ShowSidebarDriveUsageCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnShowSidebarDriveUsageChanged(true); };
+        this.ShowSidebarDriveUsageCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnShowSidebarDriveUsageChanged(false); };
         this.GeneralPanel = Panel;
         var UI = new StackPanel { Visibility = Visibility.Collapsed };
         var UIHeading = new TextBlock { FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16) };
@@ -246,6 +312,9 @@ internal sealed partial class PreferencesWindow : DialogWindow
         UI.Children.Add(FontGrid);
         this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 24);
         UI.Children.Add(this.GridLinesCheck);
+        this.ShowBookmarkPathsCheck.Margin = new Thickness(0, 0, 0, 12);
+        UI.Children.Add(this.ShowBookmarkPathsCheck);
+        UI.Children.Add(this.ShowSidebarDriveUsageCheck);
         var ColumnsHeading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
         ColumnsHeading.SetResourceReference(TextBlock.TextProperty, "TextVisibleColumns");
         UI.Children.Add(ColumnsHeading);
@@ -354,6 +423,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
             Layout.IsEnabled = false;
             try
             {
+                if (!OnStartOnLoginChanged(false)) return;
                 await OnRestoreDefaults();
                 var Defaults = DefaultSettings.Current;
                 this.LanguagePicker.SelectedValue = Defaults.Language;
@@ -362,6 +432,10 @@ internal sealed partial class PreferencesWindow : DialogWindow
                 this.ShowHiddenCheck.IsChecked = Defaults.ShowHidden;
                 this.ExitOnCloseCheck.IsChecked = Defaults.ExitOnClose;
                 this.CopyOnDropCheck.IsChecked = Defaults.CopyOnDrop;
+                this.CalculateFolderSizesCheck.IsChecked = Defaults.CalculateFolderSizes;
+                this.ShowBookmarkPathsCheck.IsChecked = Defaults.ShowBookmarkPaths;
+                this.ShowSidebarDriveUsageCheck.IsChecked = Defaults.ShowSidebarDriveUsage;
+                this.StartOnLoginCheck.IsChecked = false;
                 this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
                 foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;
                 this.TerminalFontSizePicker.SelectedItem = Defaults.TerminalFontSize;

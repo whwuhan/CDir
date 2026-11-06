@@ -1,4 +1,4 @@
-<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
+﻿<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
   <UserControl.Resources>
     <ResourceDictionary>
     <ResourceDictionary.MergedDictionaries>
@@ -21,6 +21,30 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <controls:DriveColumnGroupConverter x:Key="DriveColumnGroup" />
+    <controls:TreeIndentConverter x:Key="TreeIndent" />
+    <Style x:Key="SidebarFolderPath" TargetType="TextBlock">
+      <Setter Property="Text" Value="{Binding FullPath}" />
+      <Setter Property="Margin" Value="12,0,4,0" /><Setter Property="Opacity" Value="0.75" />
+      <Setter Property="FontSize" Value="{DynamicResource UIFontSidebar}" />
+      <Setter Property="VerticalAlignment" Value="Center" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="ToolTip" Value="{Binding FullPath}" />
+      <Setter Property="ToolTipService.InitialShowDelay" Value="0" /><Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
+      <Setter Property="Visibility" Value="Collapsed" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+        <DataTrigger Binding="{Binding IsPlaceholder}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <DataTemplate x:Key="BookmarkFolderContent">
+      <Grid ClipToBounds="True" controls:SidebarPathColumns.IsEnabled="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="20" /><ColumnDefinition Width="*" /><ColumnDefinition x:Name="PathColumn" Width="0" /></Grid.ColumnDefinitions>
+        <controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="True" OpenFolder="{Binding IsExpanded}" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType=Button}}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock x:Name="BookmarkPath" Grid.Column="2" Style="{StaticResource SidebarFolderPath}"
+                   FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType=Button}}" />
+      </Grid>
+
+    </DataTemplate>
     <Style x:Key="DriveUsageMeter" TargetType="ProgressBar">
       <Setter Property="Height" Value="9" /><Setter Property="Minimum" Value="0" /><Setter Property="Maximum" Value="100" />
       <Setter Property="Background" Value="{StaticResource SurfaceInner}" /><Setter Property="BorderBrush" Value="{StaticResource NeutralIndicator}" /><Setter Property="BorderThickness" Value="1" />
@@ -62,6 +86,8 @@
     </Style>
     <Style x:Key="SidebarFolderHeader" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Cursor" Value="Arrow" />
+      <Setter Property="ToolTipService.InitialShowDelay" Value="0" />
+      <Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
         <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="0" Padding="{TemplateBinding Padding}">
           <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
@@ -124,12 +150,11 @@
                 </Button>
               </StackPanel>
               </Grid>
-              <ContentPresenter x:Name="SectionContent" ContentSource="Content" Margin="0,4,0,0"
-                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+              <controls:AnimatedDisclosure IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                <ContentPresenter x:Name="SectionContent" ContentSource="Content" Margin="0,4,0,0"
+                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+              </controls:AnimatedDisclosure>
             </DockPanel>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsExpanded" Value="False"><Setter TargetName="SectionContent" Property="Visibility" Value="Collapsed" /></Trigger>
-            </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -157,8 +182,23 @@
       <MenuItem Tag="ExpandCategoryFolders" Header="{DynamicResource TextExpandCategoryFolders}" Click="ExpandCategoryFoldersClick" />
       <MenuItem Tag="CollapseCategoryFolders" Header="{DynamicResource TextCollapseCategoryFolders}" Click="CollapseCategoryFoldersClick" />
     </ContextMenu>
+    <Style x:Key="RenameLabel" TargetType="TextBlock">
+      <Style.Triggers><DataTrigger Binding="{Binding IsRenaming}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers>
+    </Style>
+    <Style x:Key="RenameEditor" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+      <Setter Property="Visibility" Value="Collapsed" /><Setter Property="Padding" Value="2,0" />
+      <Setter Property="MinWidth" Value="100" /><Setter Property="VerticalAlignment" Value="Center" />
+      <Style.Triggers><DataTrigger Binding="{Binding IsRenaming}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+    </Style>
     <HierarchicalDataTemplate x:Key="SidebarFolderNodeTemplate" ItemsSource="{Binding Children}">
-      <StackPanel Orientation="Horizontal" ToolTip="{Binding FullPath}"><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="True" OpenFolder="{Binding IsExpanded}" HideWhenEmpty="True" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" /><TextBlock Text="{Binding Name}" FontSize="{DynamicResource UIFontSidebar}" VerticalAlignment="Center" /></StackPanel>
+      <Grid ToolTip="{Binding FullPath}" ToolTipService.InitialShowDelay="0" ToolTipService.BetweenShowDelay="0" controls:SidebarPathColumns.IsEnabled="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="20" /><ColumnDefinition Width="*" /><ColumnDefinition x:Name="ChildPathColumn" Width="0" /></Grid.ColumnDefinitions>
+        <controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="True" OpenFolder="{Binding IsExpanded}" HideWhenEmpty="True" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" Style="{StaticResource RenameLabel}" FontSize="{DynamicResource UIFontSidebar}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBox Grid.Column="1" Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontSidebar}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" />
+        <TextBlock x:Name="TreeFolderPath" Grid.Column="2" Style="{StaticResource SidebarFolderPath}" />
+      </Grid>
+
     </HierarchicalDataTemplate>
     <Style x:Key="SidebarFolderChildren" TargetType="TreeView">
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -166,15 +206,16 @@
       <Setter Property="ItemsSource" Value="{Binding Node.Children}" />
       <Setter Property="ItemTemplate" Value="{StaticResource SidebarFolderNodeTemplate}" />
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Margin" Value="19,0,0,0" /><Setter Property="Visibility" Value="Collapsed" />
+      <Setter Property="Margin" Value="19,0,0,0" />
       <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" /><Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
       <EventSetter Event="SelectedItemChanged" Handler="SidebarChildTreeSelectedItemChanged" />
       <EventSetter Event="PreviewMouseWheel" Handler="FolderTreeMouseWheel" />
-      <Style.Triggers><DataTrigger Binding="{Binding Node.IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
     </Style>
     <ContextMenu x:Key="FolderTreeContextMenu" DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" Opened="FolderTreeContextOpened">
       <MenuItem Tag="ExpandAllSubfolders" Header="{DynamicResource TextExpandAllSubfolders}" Click="ExpandAllSubfoldersClick" />
       <MenuItem Tag="CollapseAllSubfolders" Header="{DynamicResource TextCollapseAllSubfolders}" Click="CollapseAllSubfoldersClick" />
+      <Separator />
+      <MenuItem Tag="NewFolder" Header="{DynamicResource TextNewFolder}" Click="NewTreeFolderClick" />
     </ContextMenu>
     <Style TargetType="TreeViewItem">
       <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -186,10 +227,12 @@
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{StaticResource Ink}" />
+      <Setter Property="ToolTip" Value="{Binding FullPath}" />
+      <Setter Property="ToolTipService.InitialShowDelay" Value="0" /><Setter Property="ToolTipService.BetweenShowDelay" Value="0" />
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="TreeViewItem">
           <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition x:Name="TreeHeaderColumn" Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
             <controls:TreeBranchLines x:Name="BranchLines" Grid.RowSpan="2" HeaderHeight="{Binding ActualHeight, ElementName=PART_Header}" IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}" ChildCount="{Binding Items.Count, RelativeSource={RelativeSource TemplatedParent}}" IsHitTestVisible="False" />
             <ToggleButton x:Name="Expander" Style="{StaticResource DirectoryTreeExpander}" VerticalAlignment="Center"
@@ -199,10 +242,15 @@
               <ContentPresenter x:Name="HeaderHost" ContentSource="Header" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="Center" RecognizesAccessKey="True" />
             </Border>
-            <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" />
+            <controls:AnimatedDisclosure x:Name="ItemsReveal" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                         IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+              <ItemsPresenter x:Name="ItemsHost" />
+            </controls:AnimatedDisclosure>
           </Grid>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsExpanded" Value="False"><Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" /></Trigger>
+            <DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+              <Setter TargetName="TreeHeaderColumn" Property="Width" Value="*" /><Setter TargetName="PART_Header" Property="Grid.ColumnSpan" Value="2" />
+            </DataTrigger>
             <Trigger Property="HasItems" Value="False"><Setter TargetName="Expander" Property="Visibility" Value="Hidden" /></Trigger>
             <Trigger SourceName="PART_Header" Property="IsMouseOver" Value="True"><Setter TargetName="PART_Header" Property="Background" Value="{StaticResource SidebarHover}" /><Setter Property="Foreground" Value="{StaticResource Ink}" /></Trigger>
             <Trigger Property="IsSelected" Value="True"><Setter TargetName="PART_Header" Property="Background" Value="{StaticResource TreeSelected}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
@@ -235,7 +283,7 @@
     </Style>
     <Style TargetType="DataGridColumnHeader">
       <Setter Property="Background" Value="{StaticResource SurfaceMiddle}" /><Setter Property="Foreground" Value="{StaticResource Muted}" /><Setter Property="FontWeight" Value="Normal" />
-      <Setter Property="Padding" Value="8,3" /><Setter Property="BorderThickness" Value="0,0,0,1" /><Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="Padding" Value="8,3" /><Setter Property="BorderThickness" Value="0,0,1,1" /><Setter Property="BorderBrush" Value="{StaticResource Line}" />
       <Setter Property="FontSize" Value="{DynamicResource UIFontHeaders}" /><Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="DataGridColumnHeader">
@@ -260,14 +308,12 @@
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value></Setter>
-      <Style.Triggers><DataTrigger Binding="{Binding IsVisible, ElementName=FileGridLines}" Value="True"><Setter Property="BorderThickness" Value="0,0,1,1" /></DataTrigger></Style.Triggers>
     </Style>
     <Style TargetType="DataGridRow">
-      <Setter Property="MinHeight" Value="{DynamicResource UIFileRowHeight}" /><Setter Property="Background" Value="{StaticResource SurfaceInner}" /><Setter Property="BorderBrush" Value="{StaticResource GridLine}" /><Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="MinHeight" Value="{DynamicResource UIFileRowHeight}" /><Setter Property="Background" Value="{StaticResource SurfaceInner}" /><Setter Property="BorderBrush" Value="{StaticResource GridLine}" /><Setter Property="BorderThickness" Value="0" />
       <Setter Property="Foreground" Value="{StaticResource Ink}" />
       <Style.Triggers>
         <DataTrigger Binding="{Binding IsCut}" Value="True"><Setter Property="Opacity" Value="0.45" /></DataTrigger>
-        <DataTrigger Binding="{Binding IsVisible, ElementName=FileGridLines}" Value="True"><Setter Property="BorderThickness" Value="0" /></DataTrigger>
         <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource SurfaceHover}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
         <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{StaticResource SurfaceSelected}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
       </Style.Triggers>
@@ -316,10 +362,10 @@
             <Button x:Name="UpButton" Style="{StaticResource CompactNavigationButton}" Content="&#xE74A;" ToolTip="{DynamicResource TextUpTooltip}" AutomationProperties.Name="{DynamicResource TextUp}" Click="UpClick" IsEnabled="False" />
             <Button Style="{StaticResource CompactNavigationButton}" Content="&#xE72C;" ToolTip="{DynamicResource TextRefreshTooltip}" AutomationProperties.Name="{DynamicResource TextRefresh}" Click="RefreshClick" />
           </StackPanel>
-          <Border x:Name="AddressBar" Grid.Column="1" Height="{DynamicResource UINavigationControlHeight}" VerticalAlignment="Center" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="0" PreviewMouseLeftButtonDown="AddressDisplayMouseDown">
+          <Border x:Name="AddressBar" Grid.Column="1" Height="{DynamicResource UINavigationControlHeight}" VerticalAlignment="Center" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="0" PreviewMouseLeftButtonDown="AddressDisplayMouseDown" PreviewMouseMove="AddressFolderDragMouseMove" PreviewMouseLeftButtonUp="AddressFolderDragMouseUp">
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="28" /><ColumnDefinition Width="*" /><ColumnDefinition Width="26" /><ColumnDefinition Width="26" /></Grid.ColumnDefinitions>
-              <controls:ShellIcon x:Name="AddressIcon" IsDirectory="True" Width="16" Height="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+              <controls:ShellIcon x:Name="AddressIcon" IsDirectory="True" Width="16" Height="16" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip="{DynamicResource TextAddressDrag}" />
               <Grid x:Name="AddressDisplay" Grid.Column="1" Background="Transparent" ToolTip="{DynamicResource TextAddressEdit}" AllowDrop="True"
                     PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -381,7 +427,7 @@
             </ContextMenu>
           </Border.ContextMenu>
           <Grid ClipToBounds="True">
-            <ScrollViewer x:Name="SidebarScroll" Margin="12,16,10,12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="SidebarScrollChanged">
+            <ScrollViewer x:Name="SidebarScroll" Margin="12,16,10,12" ClipToBounds="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="SidebarScrollChanged">
               <ItemsControl x:Name="SidebarSectionsList">
                 <ItemsControl.Resources>
                   <DataTemplate DataType="{x:Type models:SidebarCategory}">
@@ -411,21 +457,22 @@
                                 <DataTrigger Binding="{Binding Node.Children.Count}" Value="0"><Setter Property="Visibility" Value="Hidden" /></DataTrigger>
                               </Style.Triggers></Style></ToggleButton.Style>
                             </ToggleButton>
-                            <Button x:Name="CategoryFolderHeader" Style="{StaticResource SidebarFolderHeader}" Grid.Column="1" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="0" Click="CategoryFolderClick" ToolTip="{Binding FullPath}">
+                            <Button x:Name="CategoryFolderHeader" Style="{StaticResource SidebarFolderHeader}" Grid.Column="1" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="0" FontSize="{DynamicResource UIFontSidebar}" Click="CategoryFolderClick" ToolTip="{Binding FullPath}">
                               <Button.ContextMenu>
-                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" Opened="SidebarContextOpened">
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" Opened="FolderTreeContextOpened">
                                   <MenuItem Tag="ExpandAllSubfolders" Header="{DynamicResource TextExpandAllSubfolders}" Click="ExpandAllSubfoldersClick" />
                                   <MenuItem Tag="CollapseAllSubfolders" Header="{DynamicResource TextCollapseAllSubfolders}" Click="CollapseAllSubfoldersClick" />
+                                  <Separator />
+                                  <MenuItem Tag="NewFolder" Header="{DynamicResource TextNewFolder}" Click="NewTreeFolderClick" />
                                   <Separator />
                                   <MenuItem Tag="RemoveFromCategory" Header="{DynamicResource TextRemoveFromCategory}" Click="RemoveCategoryFolderClick" />
                                 </ContextMenu>
                               </Button.ContextMenu>
-                              <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="20" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding Node.VersionStatus}" IsDirectory="True" OpenFolder="{Binding Node.IsExpanded}" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="{DynamicResource UIFontSidebar}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                              </Grid>
+                              <ContentPresenter Content="{Binding Node}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
                             </Button>
-                            <TreeView Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource SidebarFolderChildren}" /></Grid>
+                            <controls:AnimatedDisclosure Grid.Row="1" Grid.ColumnSpan="2" IsExpanded="{Binding Node.IsExpanded}">
+                              <TreeView Style="{StaticResource SidebarFolderChildren}" />
+                            </controls:AnimatedDisclosure></Grid>
                           </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
                       </StackPanel>
@@ -438,12 +485,14 @@
                 <ItemsControl.ItemTemplate><DataTemplate>
                   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                  <controls:TreeBranchLines Grid.RowSpan="2" HeaderHeight="{Binding ActualHeight, ElementName=FavoriteFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
+                  <controls:TreeBranchLines Grid.RowSpan="2" IsBookmarkRoot="True" HeaderHeight="{Binding ActualHeight, ElementName=FavoriteFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
                   <ToggleButton Style="{StaticResource DirectoryTreeExpander}" IsChecked="{Binding Node.IsExpanded, Mode=TwoWay}" Click="SidebarFolderToggleClick" />
-                  <Button x:Name="FavoriteFolderHeader" Style="{StaticResource SidebarFolderHeader}" Grid.Column="1" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="0" Click="FavoriteClick" Tag="{Binding FullPath}" ToolTip="{Binding FullPath}">
-                    <StackPanel Orientation="Horizontal"><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding Node.VersionStatus}" IsDirectory="True" OpenFolder="{Binding Node.IsExpanded}" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" /><TextBlock Text="{Binding Name}" FontSize="{DynamicResource UISidebarFavoriteFontSize}" /></StackPanel>
+                  <Button x:Name="FavoriteFolderHeader" Style="{StaticResource SidebarFolderHeader}" Grid.Column="1" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="0" FontSize="{DynamicResource UISidebarFavoriteFontSize}" Click="FavoriteClick" Tag="{Binding FullPath}" ToolTip="{Binding FullPath}">
+                    <ContentPresenter Content="{Binding Node}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
                   </Button>
-                  <TreeView Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource SidebarFolderChildren}" /></Grid>
+                  <controls:AnimatedDisclosure Grid.Row="1" Grid.ColumnSpan="2" IsExpanded="{Binding Node.IsExpanded}">
+                    <TreeView Style="{StaticResource SidebarFolderChildren}" />
+                  </controls:AnimatedDisclosure></Grid>
                 </DataTemplate></ItemsControl.ItemTemplate>
               </ItemsControl>
               <Button x:Name="RecycleBinButton" Style="{StaticResource SidebarFolderHeader}" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="19,0,0,0"
@@ -456,20 +505,35 @@
               </StackPanel>
             </Expander>
             <Expander x:Name="DirectoryTreeSection" Margin="0,6,0,0" Style="{StaticResource SidebarSection}" Header="{DynamicResource TextDirectoryTree}" ContextMenu="{StaticResource BuiltInCategoryContextMenu}">
-              <TreeView x:Name="FolderTree" Grid.IsSharedSizeScope="True" Background="Transparent" BorderThickness="0" FocusVisualStyle="{x:Null}" SelectedItemChanged="FolderTreeSelectedItemChanged" PreviewMouseWheel="FolderTreeMouseWheel" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+              <TreeView x:Name="FolderTree" Grid.IsSharedSizeScope="True" Background="Transparent" BorderThickness="0" FocusVisualStyle="{x:Null}" SelectedItemChanged="FolderTreeSelectedItemChanged" PreviewMouseWheel="FolderTreeMouseWheel" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <TreeView.Style><Style TargetType="TreeView">
+                  <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+                  <Style.Triggers><DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" /></DataTrigger></Style.Triggers>
+                </Style></TreeView.Style>
                 <TreeView.ItemTemplate><HierarchicalDataTemplate DataType="{x:Type models:FolderNode}" ItemsSource="{Binding Children}">
-                  <Grid ToolTip="{Binding FullPath}">
+                  <Grid ToolTip="{Binding FullPath}" ToolTipService.InitialShowDelay="0" ToolTipService.BetweenShowDelay="0" controls:SidebarPathColumns.NameColumn="0" controls:SidebarPathColumns.IsEnabled="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}">
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="Auto" SharedSizeGroup="{Binding IsDrive, Converter={StaticResource DriveColumnGroup}, ConverterParameter=DriveNames}" />
+                      <ColumnDefinition x:Name="ComputerNameColumn" Width="Auto" SharedSizeGroup="{Binding IsDrive, Converter={StaticResource DriveColumnGroup}, ConverterParameter=DriveNames}" />
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <DockPanel VerticalAlignment="Center" Margin="0,0,4,0">
                       <controls:ShellIcon DockPanel.Dock="Left" Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="True" IsDrive="{Binding IsDrive}" OpenFolder="{Binding IsExpanded}" HideWhenEmpty="True" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
-                      <TextBlock x:Name="SidebarDriveName" Text="{Binding Name}" FontSize="{DynamicResource UIFontSidebar}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBlock DockPanel.Dock="Left" x:Name="SidebarDriveName" Text="{Binding Name}" Style="{StaticResource RenameLabel}" FontSize="{DynamicResource UIFontSidebar}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBox DockPanel.Dock="Left" Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontSidebar}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" />
                     </DockPanel>
-                    <Grid x:Name="SidebarDriveUsage" Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" ToolTip="{Binding DriveUsageTooltip}">
-                      <Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed" />
-                        <Style.Triggers><DataTrigger Binding="{Binding IsDrive}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                    <TextBlock x:Name="TreeFolderPath" Grid.Column="1">
+                      <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource SidebarFolderPath}"><Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDrive}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                      </Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
+                    <Grid x:Name="SidebarDriveUsage" Grid.Column="1" ClipToBounds="True" VerticalAlignment="Center" ToolTip="{Binding DriveUsageTooltip}">
+                      <Grid.Style><Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed" /><Setter Property="Margin" Value="16,0,0,0" />
+                        <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
+                          <Condition Binding="{Binding IsDrive}" Value="True" />
+                          <Condition Binding="{Binding ShowSidebarDriveUsage, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True" />
+                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible" /></MultiDataTrigger>
+                          <DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="Margin" Value="12,0,4,0" /></DataTrigger>
+                        </Style.Triggers>
                       </Style></Grid.Style>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" SharedSizeGroup="DriveCapacities" />
@@ -495,6 +559,50 @@
             </Expander>
               </ItemsControl>
             </ScrollViewer>
+            <StackPanel x:Name="StickySidebar" VerticalAlignment="Top" Margin="12,16,10,0" Visibility="Collapsed" ClipToBounds="True"
+                        Background="{StaticResource SurfaceMiddle}" PreviewMouseWheel="StickySidebarMouseWheel">
+              <Expander x:Name="StickySidebarSection" Style="{StaticResource SidebarSection}" />
+              <StackPanel x:Name="StickyFolderRows" ClipToBounds="True">
+              <Grid x:Name="StickyRootRow" Loaded="StickyRowLoaded" Visibility="{Binding Visibility, ElementName=StickySidebarRoot}">
+              <controls:TreeBranchLines IsPinned="True" PinnedDepth="0" IsHitTestVisible="False"
+                  Visibility="{Binding Visibility, ElementName=StickySidebarRoot}"
+                  IsExpanded="{Binding DataContext.IsExpanded, ElementName=StickySidebarRoot}"
+                  ChildCount="{Binding DataContext.Children.Count, ElementName=StickySidebarRoot}" />
+              <Button x:Name="StickySidebarRoot" Style="{StaticResource SidebarFolderHeader}" Visibility="Collapsed"
+                      HorizontalContentAlignment="Stretch" FontSize="{DynamicResource UIFontSidebar}" Padding="3,2" Margin="0" Click="StickySidebarRootClick"
+                      ContextMenu="{StaticResource FolderTreeContextMenu}" ToolTip="{Binding FullPath}">
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
+              </Button>
+              <ToggleButton DataContext="{Binding DataContext, ElementName=StickySidebarRoot}" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                            HorizontalAlignment="Left" VerticalAlignment="Center" ClickMode="Press" Click="StickyFolderToggleClick">
+                <ToggleButton.Style><Style TargetType="ToggleButton" BasedOn="{StaticResource DirectoryTreeExpander}"><Style.Triggers>
+                  <DataTrigger Binding="{Binding Children.Count}" Value="0"><Setter Property="Visibility" Value="Hidden" /></DataTrigger>
+                </Style.Triggers></Style></ToggleButton.Style>
+              </ToggleButton>
+              </Grid>
+              <ScrollViewer x:Name="StickyAncestorScroll" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="StickySidebarAncestors" AlternationCount="2147483647">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Grid Loaded="StickyRowLoaded">
+                    <controls:TreeBranchLines IsPinned="True" IsHitTestVisible="False" IsExpanded="{Binding IsExpanded}" ChildCount="{Binding Children.Count}"
+                        PinnedDepth="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}, Converter={StaticResource TreeIndent}, ConverterParameter=Depth}" />
+                    <Button Style="{StaticResource SidebarFolderHeader}" HorizontalContentAlignment="Stretch" FontSize="{DynamicResource UIFontSidebar}" Padding="3,2"
+                            Margin="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource AncestorType=ContentPresenter}, Converter={StaticResource TreeIndent}}"
+                            Click="StickySidebarRootClick" ContextMenu="{StaticResource FolderTreeContextMenu}" ToolTip="{Binding FullPath}">
+                      <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
+                    </Button>
+                    <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                  ClickMode="Press" Click="StickyFolderToggleClick">
+                      <ToggleButton.Style><Style TargetType="ToggleButton" BasedOn="{StaticResource DirectoryTreeExpander}"><Style.Triggers>
+                        <DataTrigger Binding="{Binding Children.Count}" Value="0"><Setter Property="Visibility" Value="Hidden" /></DataTrigger>
+                      </Style.Triggers></Style></ToggleButton.Style>
+                    </ToggleButton>
+                    </Grid>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+              </StackPanel>
+            </StackPanel>
             <Border x:Name="SidebarDropMarker" Height="2" Background="{StaticResource FocusOutline}" VerticalAlignment="Top" Margin="12,0,10,0" IsHitTestVisible="False" Visibility="Collapsed" />
             <Border x:Name="SidebarCategoryDropHighlight" Background="#600078D4" BorderBrush="{StaticResource FocusOutline}" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False" Visibility="Collapsed" />
           </Grid>
@@ -533,14 +641,14 @@
           <RowDefinition x:Name="TerminalSplitterRow" Height="0" />
           <RowDefinition x:Name="TerminalRow" Height="0" />
         </Grid.RowDefinitions>
-        <Grid x:Name="MainPanelContent" AllowDrop="True" PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
+        <Grid x:Name="MainPanelContent" Background="Transparent" AllowDrop="True" PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
           <Grid>
-            <DataGrid x:Name="FileGrid" ContextMenuOpening="FileContextOpening" FontSize="{DynamicResource UIFontFileList}" RowHeight="{DynamicResource UIFileRowHeight}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True" ColumnReordered="FileGridColumnReordered" CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalGridLinesBrush="{StaticResource Line}" EnableRowVirtualization="True" EnableColumnVirtualization="True" ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" MouseDoubleClick="FileGridMouseDoubleClick" SelectionChanged="FileGridSelectionChanged" Sorting="FileGridSorting" PreviewMouseRightButtonDown="FileGridRightClick" PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
+            <DataGrid x:Name="FileGrid" UseLayoutRounding="True" SnapsToDevicePixels="True" ContextMenuOpening="FileContextOpening" FontSize="{DynamicResource UIFontFileList}" RowHeight="{DynamicResource UIFileRowHeight}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True" ColumnReordered="FileGridColumnReordered" CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalGridLinesBrush="{StaticResource Line}" EnableRowVirtualization="True" EnableColumnVirtualization="True" ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" MouseDoubleClick="FileGridMouseDoubleClick" SelectionChanged="FileGridSelectionChanged" Sorting="FileGridSorting" PreviewMouseRightButtonDown="FileGridRightClick" PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
                       IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" PreviewKeyDown="FileGridPreviewKeyDown" LostMouseCapture="FileGridLostMouseCapture">
               <DataGrid.ContextMenu><ContextMenu /></DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTemplateColumn Header="{DynamicResource TextNameColumn}" Width="*" MinWidth="230" SortMemberPath="Name" SortDirection="Ascending">
-                  <DataGridTemplateColumn.CellTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullPath}" /></Grid></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                  <DataGridTemplateColumn.CellTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Name}" Style="{StaticResource RenameLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullPath}" /><TextBox Grid.Column="1" Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontFileList}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" /></Grid></DataTemplate></DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="{DynamicResource TextModifiedColumn}" Binding="{Binding DisplayModified}" Width="200" SortMemberPath="Modified" ElementStyle="{StaticResource FileMetadataText}" />
                 <DataGridTextColumn Header="{DynamicResource TextTypeColumn}" Binding="{Binding TypeName}" Width="120" SortMemberPath="TypeName" ElementStyle="{StaticResource FileMetadataText}" />
@@ -591,12 +699,19 @@
               </StackPanel>
             </Grid>
             <Border x:Name="TerminalInfoBar" DockPanel.Dock="Bottom" Background="{Binding Background, ElementName=TerminalPanel}" MinHeight="24" Padding="12,3">
-              <StackPanel Orientation="Horizontal">
+              <WrapPanel Orientation="Horizontal">
                 <TextBlock x:Name="TerminalFontStatusText" FontSize="11" Foreground="#E5E7EB" Margin="0,0,24,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="TerminalBackgroundStatusText" FontSize="11" Foreground="#E5E7EB" VerticalAlignment="Center" />
-              </StackPanel>
+                <TextBlock x:Name="TerminalFontHint" FontSize="11" Foreground="#E5E7EB" Margin="16,0,0,0" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </WrapPanel>
             </Border>
-            <Border x:Name="TerminalHost" ClipToBounds="True" />
+            <Grid ClipToBounds="True">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="12" /></Grid.ColumnDefinitions>
+              <Border x:Name="TerminalHost" ClipToBounds="True" />
+              <ScrollBar x:Name="TerminalScrollBar" Grid.Column="1" Orientation="Vertical" Minimum="0" SmallChange="1"
+                         Margin="0,4,0,6" IsEnabled="False" ValueChanged="TerminalScrollValueChanged"
+                         AutomationProperties.Name="{DynamicResource TextTerminal}" />
+            </Grid>
           </DockPanel>
         </Border>
         </Grid>
@@ -634,7 +749,12 @@
           <Button x:Name="TerminalToggleButton" DockPanel.Dock="Right" Content="{DynamicResource TextTerminal}" FontSize="{DynamicResource UIFontStatusBar}"
                   Padding="12,2" Margin="16,3,0,3" Click="ToggleTerminalClick" ToolTip="{DynamicResource TextTerminalToggleTooltip}"
                   AutomationProperties.Name="{DynamicResource TextTerminal}" />
-          <ProgressBar x:Name="LoadingBar" DockPanel.Dock="Right" Width="96" Height="2" Margin="16,0,0,0" VerticalAlignment="Center" BorderThickness="0" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceOuter}" IsIndeterminate="True" Visibility="Collapsed" />
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="TransferProgressPanel" Orientation="Horizontal" Visibility="Collapsed">
+              <TextBlock x:Name="TransferProgressText" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="{DynamicResource UIFontStatusBar}" />
+            </StackPanel>
+          <ProgressBar x:Name="LoadingBar" Width="96" Height="2" Margin="16,0,0,0" VerticalAlignment="Center" BorderThickness="0" Foreground="{StaticResource Accent}" Background="{StaticResource SurfaceOuter}" IsIndeterminate="True" Visibility="Collapsed" />
+          </StackPanel>
           <StackPanel x:Name="DriveUsagePanel" DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0" Visibility="Collapsed">
             <TextBlock x:Name="DriveUsageText" Foreground="{StaticResource Ink}" FontSize="{DynamicResource UIFontStatusBar}" VerticalAlignment="Center" MaxWidth="420" TextTrimming="CharacterEllipsis" />
             <ProgressBar x:Name="DriveUsageBar" Width="64" Height="10" Minimum="0" Maximum="100" Margin="10,0,0,0" VerticalAlignment="Center"

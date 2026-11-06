@@ -45,6 +45,7 @@ public partial class ExplorerTab
     internal void SetTabSelected(bool Selected)
     {
         if (this.IsTabSelected == Selected) return;
+        if (!Selected) this.CancelInlineRename();
         if (!Selected) this.EndMarqueeSelection();
         if (!Selected) this.CancelSidebarFolderClick();
         if (!Selected) this.ClearFileTransferFeedback();
@@ -97,6 +98,12 @@ public partial class ExplorerTab
         this.Settings.Use12HourClock = Shared.Use12HourClock;
         this.Settings.ExitOnClose = Shared.ExitOnClose;
         this.Settings.CopyOnDrop = Shared.CopyOnDrop;
+        this.Settings.CalculateFolderSizes = Shared.CalculateFolderSizes;
+        this.Settings.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
+        this.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
+        this.Settings.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
+        this.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
+        this.UpdateHiddenItemsMenu();
         this.Settings.FontSizes = Shared.FontSizes;
         this.Settings.Shortcuts = Shared.Shortcuts;
         this.Settings.TerminalFontSize = Shared.TerminalFontSize;

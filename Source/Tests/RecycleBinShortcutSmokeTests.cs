@@ -127,6 +127,22 @@ public partial class ExplorerTab
             Check(this.FileGrid.IsVisible && this.RecycleBinLoaded && this.Entries.Count == 2
                 && this.Entries.All(Item => Item.ShellId is { Length: > 2 }) && this.Entries.Any(Item => Item.IsDirectory),
                 "The common grid displays real owned Shell file and folder entries with their native identities");
+            var PreviousSelection = this.SelectedEntries();
+            var DragFolder = this.Entries.First(Item => Item.IsDirectory);
+            this.FileGrid.SelectedItems.Clear();
+            this.FileGrid.SelectedItems.Add(DragFolder);
+            var DragRow = (DataGridRow)this.FileGrid.ItemContainerGenerator.ContainerFromItem(DragFolder);
+            this.PrepareMainPanelFolderDrag(DragRow, new Point(), ModifierKeys.None, 1);
+            Check(this.MainPanelDragCandidate == DragFolder && this.CreateMainPanelFolderDrag() is null,
+                "Recycle Bin folders can start a file transfer without becoming category shortcuts");
+            var ShellDrag = CreateFileTransferData([DragFolder]);
+            Check(!HasFileDrop(ShellDrag) && ShellDropData.Read(ShellDrag) is { Length: 1 } DragIds
+                && DragIds[0].SequenceEqual(DragFolder.ShellId!),
+                "Dragging from CDir's Recycle Bin exports the original Shell identity rather than a backing file path");
+            this.MainPanelDragCandidate = null;
+            this.MainPanelDeferredSelection = null;
+            this.FileGrid.SelectedItems.Clear();
+            foreach (var Selected in PreviousSelection) this.FileGrid.SelectedItems.Add(Selected);
             var Original = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.OriginalLocation));
             var Deleted = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.DateDeleted));
             Check(Original.Visibility == Visibility.Visible && Deleted.Visibility == Visibility.Visible

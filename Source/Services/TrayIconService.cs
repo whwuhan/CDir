@@ -42,6 +42,7 @@ internal sealed class TrayIconService : IDisposable
         Open.SetResourceReference(HeaderedItemsControl.HeaderProperty, "TextTrayRestore");
         Open.Click += (_, _) => this.Restore();
         var Quit = new MenuItem();
+        Quit.SetResourceReference(FrameworkElement.StyleProperty, "ExitMenuItem");
         Quit.SetResourceReference(HeaderedItemsControl.HeaderProperty, "TextTrayExit");
         Quit.Click += (_, _) => { this.Menu.IsOpen = false; this.Exit(); };
         this.Menu.SetResourceReference(Control.FontSizeProperty, "UIFontMenus");

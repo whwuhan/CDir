@@ -48,6 +48,27 @@ internal sealed partial class RegressionRunner
             State(Query(), "Child/Tracked.txt", VersionState.Clean);
             Check(Cached.NativeCommandCount > Commands, "Removing a parent watcher must invalidate cached descendants.");
         });
+        this.Test("Cached discovery avoids filesystem probes and detects newly nested repositories", () =>
+        {
+            var Path = NewGit("DiscoveryCache");
+            var Child = System.IO.Path.Combine(Path, "Child");
+            var Cached = new VersionControlService(DiscoveryBoundary: this.Root, CacheResults: true);
+            Cached.ReadAsync([Child]).GetAwaiter().GetResult();
+            var Probes = Cached.DiscoveryProbeCount;
+            Cached.ReadAsync([Path, Child]).GetAwaiter().GetResult();
+            Check(Cached.DiscoveryProbeCount == Probes, "Unchanged known directories must reuse repository discovery.");
+            File.AppendAllText(System.IO.Path.Combine(Child, "Tracked.txt"), "change");
+            Cached.Invalidate(System.IO.Path.Combine(Child, "Tracked.txt"));
+            Cached.ReadAsync([Child]).GetAwaiter().GetResult();
+            Check(Cached.DiscoveryProbeCount == Probes, "Content edits do not invalidate repository identity.");
+            NewGit("DiscoveryCache/Child");
+            Cached.Invalidate(System.IO.Path.Combine(Child, ".git"));
+            var Nested = Cached.ReadAsync([Child]).GetAwaiter().GetResult().Single();
+            EqualPath(Child, Nested.Root);
+            Directory.Move(System.IO.Path.Combine(Child, ".git"), System.IO.Path.Combine(this.Root, "DetachedMetadata"));
+            Cached.Invalidate(System.IO.Path.Combine(Child, ".git"));
+            EqualPath(Path, Cached.ReadAsync([Child]).GetAwaiter().GetResult().Single().Root);
+        });
         this.Test("Git clean files and timestamp-only changes do not show dirty badges", () =>
         {
             var Path = NewGit("GitClean");
@@ -58,6 +79,30 @@ internal sealed partial class RegressionRunner
             State(Snapshot, ".git/index", VersionState.None);
             var TimedOut = new VersionControlService(Timeout: TimeSpan.Zero).ReadAsync([Path]).GetAwaiter().GetResult().Single();
             State(TimedOut, "Clean.txt", VersionState.Unknown);
+        });
+        this.Test("Completed repository badges publish without waiting for a blocked unrelated repository", () =>
+        {
+            var Slow = NewGit("GitSlowSidebar");
+            var Fast = NewGit("GitFastMain");
+            var Cached = new VersionControlService(DiscoveryBoundary: this.Root, CacheResults: true);
+            using var Release = new ManualResetEventSlim();
+            var Ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Cached.RepositoryLocated += Path =>
+            {
+                if (string.Equals(Path, Slow, StringComparison.OrdinalIgnoreCase) && !Release.Wait(TimeSpan.FromSeconds(15)))
+                    throw new InvalidOperationException("Blocked repository fixture timed out");
+            };
+            var ReadTask = Cached.ReadAsync([Slow, Fast], SnapshotReady: Snapshot =>
+            {
+                if (Snapshot.Root == Fast && Snapshot.IsComplete) Ready.TrySetResult();
+                return Task.CompletedTask;
+            });
+            try
+            {
+                Check(Ready.Task.Wait(TimeSpan.FromSeconds(10)) && !ReadTask.IsCompleted,
+                    "The current repository must publish verified badges while another query remains blocked.");
+            }
+            finally { Release.Set(); ReadTask.GetAwaiter().GetResult(); }
         });
         this.Test("Git modifications affect only the changed file and its ancestor directories and revert clears them", () =>
         {
@@ -184,7 +229,7 @@ internal sealed partial class RegressionRunner
             File.SetLastWriteTimeUtc(System.IO.Path.Combine(Path, "Clean.txt"), DateTime.UtcNow.AddMinutes(1));
             var Snapshot = Read(Path); State(Snapshot, "Clean.txt", VersionState.Clean); State(Snapshot, "Child", VersionState.Clean); State(Snapshot, ".", VersionState.Clean);
         });
-        this.Test("SVN visible-directory queries omit deep content and combine cached scopes without losing changes", () =>
+        this.Test("SVN visible-directory inventories merge recursive changes without enumerating clean descendants", () =>
         {
             var Path = NewSvn("SvnVisible");
             var Child = System.IO.Path.Combine(Path, "Child");
@@ -193,19 +238,53 @@ internal sealed partial class RegressionRunner
             var Cached = new VersionControlService(DiscoveryBoundary: this.Root, CacheResults: true);
             VersionSnapshot Query(params string[] Paths) => Cached.ReadAsync(Paths, ShallowSvn: true).GetAwaiter().GetResult().Single();
             var Snapshot = Query(Path);
-            State(Snapshot, "Clean.txt", VersionState.Clean); State(Snapshot, "Child/Tracked.txt", VersionState.None);
+            State(Snapshot, "Clean.txt", VersionState.Clean); State(Snapshot, "Child/Tracked.txt", VersionState.Modified);
+            State(Snapshot, "Child", VersionState.Modified); State(Snapshot, ".", VersionState.Modified);
             var Commands = Cached.NativeCommandCount;
             Snapshot = Query(Path, Child);
             State(Snapshot, "Child/Tracked.txt", VersionState.Modified); State(Snapshot, "Child", VersionState.Modified); State(Snapshot, ".", VersionState.Modified);
-            Check(Cached.NativeCommandCount == Commands + 2, "Only the newly visible scope should require SVN info/status commands.");
+            Check(Cached.NativeCommandCount == Commands + 1, "The newly visible scope needs one status command and reuses verified SVN root metadata.");
             Snapshot = Query(Child, Path);
+            Check(ReferenceEquals(Snapshot, Query(Path, Child)), "Unchanged SVN views must reuse the merged snapshot without rebuilding file dictionaries.");
             State(Snapshot, "Child", VersionState.Modified); State(Snapshot, "Clean.txt", VersionState.Clean);
-            Check(Cached.NativeCommandCount == Commands + 2, "Changing scope order must reuse raw snapshots without overwriting aggregates.");
+            Check(Cached.NativeCommandCount == Commands + 1, "Changing scope order must reuse raw snapshots without overwriting aggregates.");
             Svn(Path, "revert", "-R", ".");
             Cached.Invalidate(Changed.Replace('\\', '/'));
             Snapshot = Query(Path, Child);
             State(Snapshot, "Child/Tracked.txt", VersionState.Clean); State(Snapshot, ".", VersionState.Clean);
             State(Snapshot, ".svn/wc.db", VersionState.None);
+        });
+        this.Test("SVN batches visible inventories and publishes file badges before recursive directory summaries", () =>
+        {
+            var Path = NewSvn("SvnBatched");
+            var Scopes = new List<string> { Path };
+            for (var Index = 0; Index < 12; Index++)
+            {
+                var Child = Directory.CreateDirectory(System.IO.Path.Combine(Path, "Visible" + Index)).FullName;
+                File.WriteAllText(System.IO.Path.Combine(Child, "Clean.txt"), "clean\n");
+                Scopes.Add(Child);
+            }
+            Svn(Path, "add", ".", "--force");
+            Svn(Path, "commit", "-qm", "Visible directories");
+            File.AppendAllText(System.IO.Path.Combine(Path, "Child", "Tracked.txt"), "changed\n");
+            var Cached = new VersionControlService(DiscoveryBoundary: this.Root, CacheResults: true);
+            var Updates = new List<VersionSnapshot>();
+            var Final = Cached.ReadAsync(Scopes, ShallowSvn: true, SnapshotReady: Snapshot =>
+            {
+                Updates.Add(Snapshot);
+                return Task.CompletedTask;
+            }).GetAwaiter().GetResult().Single();
+            Check(Cached.NativeCommandCount == 3, "Thirteen visible directories must need one root check, one inventory command and one recursive changes command.");
+            Check(Updates.Count == 3, "SVN publishes checking placeholders and visible inventory before the complete recursive result.");
+            State(Updates[0], "Clean.txt", VersionState.Unknown);
+            State(Updates[1], "Clean.txt", VersionState.Clean);
+            State(Updates[0], "Child", VersionState.Unknown);
+            State(Final, "Child", VersionState.Modified);
+            State(Final, "Visible0", VersionState.Clean);
+            State(Final, "Visible0/Clean.txt", VersionState.Clean);
+            var Count = Cached.NativeCommandCount;
+            Cached.ReadAsync(Scopes.AsEnumerable().Reverse(), ShallowSvn: true).GetAwaiter().GetResult();
+            Check(Cached.NativeCommandCount == Count, "Reordering visible rows must not launch additional SVN commands.");
         });
         this.Test("Automatic discovery separates nested Git SVN and ordinary directories", () =>
         {
@@ -223,6 +302,24 @@ internal sealed partial class RegressionRunner
             Svn(this.Root, "checkout", "-q", Svn(SvnPath, "info", "--show-item", "url", ".").Trim(), InnerSvn);
             Snapshots = Service.ReadAsync([OuterGit, InnerSvn], ShallowSvn: true).GetAwaiter().GetResult();
             Check(Snapshots.Count == 2 && Snapshots.Single(Snapshot => Snapshot.Root == InnerSvn).Provider == "SVN", "Nested SVN must override its Git ancestor.");
+        });
+        this.Test("SVN current-folder summaries certify only their recursive scope before the wider working copy", () =>
+        {
+            var Path = NewSvn("SvnPriority");
+            var Current = System.IO.Path.Combine(Path, "Child");
+            File.AppendAllText(System.IO.Path.Combine(Current, "Tracked.txt"), "current change\n");
+            File.AppendAllText(System.IO.Path.Combine(Path, "Clean.txt"), "outside current folder\n");
+            var Cached = new VersionControlService(DiscoveryBoundary: this.Root, CacheResults: true);
+            var Scoped = Cached.ReadAsync([Current], ShallowSvn: true, PriorityDirectory: Current).GetAwaiter().GetResult().Single();
+            State(Scoped, "Child", VersionState.Modified);
+            State(Scoped, "Child/Tracked.txt", VersionState.Modified);
+            State(Scoped, ".", VersionState.Unknown);
+            Check(Scoped.Covers(Current) && !Scoped.Covers(Path), "Fast folder summaries must not certify unopened parts of the working copy.");
+            var Count = Cached.NativeCommandCount;
+            var Full = Cached.ReadAsync([Current, Path], ShallowSvn: true).GetAwaiter().GetResult().Single();
+            State(Full, "Clean.txt", VersionState.Modified);
+            State(Full, ".", VersionState.Modified);
+            Check(Cached.NativeCommandCount == Count + 2, "The wider pass reuses verified metadata and performs one extra inventory and one wider recursive query.");
         });
         this.Test("Tool discovery supports custom installation directories and matches the requested executable", () =>
         {

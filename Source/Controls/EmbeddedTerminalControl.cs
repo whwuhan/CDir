@@ -11,16 +11,10 @@ namespace CDir.Controls;
 /// <summary>Keeps accessibility initialization from interrupting terminal focus and input.</summary>
 internal sealed partial class EmbeddedTerminalControl : TerminalControl
 {
-    internal Func<int, ModifierKeys, bool>? FontWheel { get; set; }
-
     protected override void OnPreviewMouseWheel(MouseWheelEventArgs E)
     {
-        if (!E.Handled && this.FontWheel?.Invoke(E.Delta, Keyboard.Modifiers) == true)
-        {
-            E.Handled = true;
-            return;
-        }
         base.OnPreviewMouseWheel(E);
+        this.UpdateScrollState();
     }
 
     internal EmbeddedTerminalControl()
@@ -30,6 +24,7 @@ internal sealed partial class EmbeddedTerminalControl : TerminalControl
         this.CursorRenderer = new EmbeddedTerminalCursorRenderer(this);
         ScreenUpdated += (_, _) =>
         {
+            this.UpdateScrollState();
             this.PositionInputEditor();
             if (UIElementAutomationPeer.FromElement(this) is EmbeddedTerminalAutomationPeer Peer) Peer.UpdateText();
         };
@@ -70,6 +65,7 @@ internal sealed partial class EmbeddedTerminalControl : TerminalControl
 
     protected override void OnRender(System.Windows.Media.DrawingContext Context)
     {
+        this.UpdateScrollState();
         base.OnRender(Context);
         this.PositionInputEditor();
     }

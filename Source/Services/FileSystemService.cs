@@ -353,10 +353,14 @@ public sealed class FileSystemService
         }
     }
 
-    public void OpenPath(string Path)
+    internal Action<ProcessStartInfo> StartFileProcess = Info => { using var Child = System.Diagnostics.Process.Start(Info); };
+
+    public void OpenPath(string Path, string? WorkingDirectory = null)
     {
         var Normalized = this.NormalizePath(Path);
-        System.Diagnostics.Process.Start(new ProcessStartInfo(Normalized) { UseShellExecute = true });
+        var Directory = WorkingDirectory is null ? System.IO.Path.GetDirectoryName(Normalized)!
+            : this.NormalizePath(WorkingDirectory);
+        this.StartFileProcess(new ProcessStartInfo(Normalized) { UseShellExecute = true, WorkingDirectory = Directory });
     }
 
     public void OpenTerminal(string Directory)
@@ -431,8 +435,9 @@ public sealed class FileSystemService
     private static void CopyFile(string Source, string Destination, CancellationToken Ct)
     {
         Ct.ThrowIfCancellationRequested();
-        RejectLink(Source, System.IO.File.GetAttributes(Source));
-        // Windows preserves NTFS alternate streams (including Mark of the Web) and file attributes.
+        var Attributes = System.IO.File.GetAttributes(Source);
+        RejectLink(Source, Attributes);
+        // CopyFileEx preserves alternate streams, but can drop NotContentIndexed.
         CopyProgressRoutine Progress = (_, _, _, _, _, _, _, _, _) => Ct.IsCancellationRequested ? 1u : 0u;
         if (!CopyFileEx(ToWin32Path(Source), ToWin32Path(Destination), Progress, IntPtr.Zero, IntPtr.Zero, 0x00000001))
         {
@@ -441,6 +446,9 @@ public sealed class FileSystemService
             var NativeException = new Win32Exception(Error);
             throw new IOException(LanguageService.Text("ServiceCopyFailed", System.IO.Path.GetFileName(Source), NativeException.Message), NativeException);
         }
+        const FileAttributes PortableAttributes = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReadOnly
+            | FileAttributes.Archive | FileAttributes.NotContentIndexed;
+        System.IO.File.SetAttributes(Destination, Attributes & PortableAttributes);
     }
 
     private static void CopyDirectoryMetadata(string Source, string Destination)
@@ -519,7 +527,7 @@ public sealed class FileSystemService
         catch (DirectoryNotFoundException) { }
     }
 
-    private static string FindCopyTarget(string Directory, string Name, bool IsDirectory, HashSet<string> Reserved, CancellationToken Ct)
+    internal static string FindCopyTarget(string Directory, string Name, bool IsDirectory, HashSet<string> Reserved, CancellationToken Ct)
     {
         var Extension = IsDirectory ? "" : System.IO.Path.GetExtension(Name);
         if (Extension.Length == Name.Length) Extension = "";
@@ -534,7 +542,7 @@ public sealed class FileSystemService
         }
     }
 
-    private static void ValidateName(string Name)
+    internal static void ValidateName(string Name)
     {
         if (string.IsNullOrWhiteSpace(Name) || Name is "." or ".." || Name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0
             || Name.EndsWith(' ') || Name.EndsWith('.'))

@@ -56,25 +56,60 @@ public partial class MainWindow : Window
         return Read;
     }
 
-    public MainWindow() : this(null) { }
+    public MainWindow() : this(null, RestoreWorkspace: true) { }
 
-    internal MainWindow(string? LayoutSettingsFile)
+    internal MainWindow(string? LayoutSettingsFile, bool RestoreWorkspace = false, CDir.Models.WorkspaceState? InitialWorkspace = null)
     {
-        var Initial = new ExplorerTab(this, LayoutSettingsFile, RunStartupChecks: LayoutSettingsFile is null);
+        this.TrackInstances = LayoutSettingsFile is null && !AppMain.SmokeTest && AppMain.ScreenshotPath is null;
+        var Workspace = this.InitializeWorkspace(LayoutSettingsFile, RestoreWorkspace, InitialWorkspace);
+        var Initial = new ExplorerTab(this, LayoutSettingsFile, InitialPath: Workspace?.Tabs[0].Settings.LastPath,
+            InitialSettings: Workspace?.Tabs[0].Settings, RunStartupChecks: LayoutSettingsFile is null);
         InitializeComponent();
         var Version = typeof(MainWindow).Assembly.GetName().Version!;
         this.TitleVersion.Text = $"v{Version.Major}.{Version.Minor}.{Version.Build}";
         MinWidth = Math.Min(MinWidth, SystemParameters.WorkArea.Width);
         MinHeight = Math.Min(MinHeight, SystemParameters.WorkArea.Height);
         var Settings = Initial.PageSettings;
-        this.Width = Math.Clamp(double.IsFinite(Settings.Width) ? Settings.Width : 1280, MinWidth, SystemParameters.WorkArea.Width);
-        this.Height = Math.Clamp(double.IsFinite(Settings.Height) ? Settings.Height : 820, MinHeight, SystemParameters.WorkArea.Height);
-        if (Settings.Maximized) WindowState = WindowState.Maximized;
-        StateChanged += (_, _) => this.UpdateCaption();
-        Deactivated += (_, _) => this.ActiveTab?.DismissSearchTips();
+        var SavedWidth = Workspace?.Width ?? Settings.Width;
+        var SavedHeight = Workspace?.Height ?? Settings.Height;
+        this.Width = Math.Clamp(double.IsFinite(SavedWidth) ? SavedWidth : 1280, MinWidth, SystemParameters.WorkArea.Width);
+        this.Height = Math.Clamp(double.IsFinite(SavedHeight) ? SavedHeight : 820, MinHeight, SystemParameters.WorkArea.Height);
+        if (Workspace is not null && double.IsFinite(Workspace.Left) && double.IsFinite(Workspace.Top))
+        {
+            this.WindowStartupLocation = WindowStartupLocation.Manual;
+            this.Left = Math.Clamp(Workspace.Left, SystemParameters.VirtualScreenLeft - this.Width + 64,
+                SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 64);
+            this.Top = Math.Clamp(Workspace.Top, SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 32);
+        }
+        if (Workspace?.Maximized ?? Settings.Maximized) WindowState = WindowState.Maximized;
+        this.LastWorkspaceMaximized = this.WindowState == WindowState.Maximized;
+        StateChanged += (_, _) =>
+        {
+            if (this.WindowState != WindowState.Minimized) this.LastWorkspaceMaximized = this.WindowState == WindowState.Maximized;
+            this.UpdateCaption();
+        };
+        Activated += (_, _) => this.LastActivatedUtc = DateTimeOffset.UtcNow;
+        Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); };
         this.AttachTab(Initial);
         Initial.RefreshShellResources();
         this.UpdateCaption();
+        if (this.TrackInstances)
+        {
+            this.InstanceService = new InstanceWorkspaceService(async () => await this.Dispatcher.InvokeAsync(() =>
+            {
+                this.MultiInstanceDetected = true;
+                return this.CaptureWorkspace();
+            }));
+            this.InstanceService.Start(RegisterUserInstance: true);
+        }
+        if (this.WorkspacePath is not null) Loaded += async (_, _) =>
+        {
+            this.WorkspaceRestored = this.RestoreWorkspaceAsync(Workspace);
+            try { await this.WorkspaceRestored; }
+            catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException)
+            { this.ActiveTab?.ShowRecoveryError(); }
+        };
         SourceInitialized += (_, _) =>
         {
             if (System.Windows.PresentationSource.FromVisual(this) is System.Windows.Interop.HwndSource Source)
@@ -84,6 +119,10 @@ public partial class MainWindow : Window
         };
         Closed += (_, _) =>
         {
+            this.PersistWorkspaceNow();
+            this.WorkspaceClosed = true;
+            this.InstanceService?.Dispose();
+            this.WorkspaceTimer?.Stop();
             this.TrayIcon?.Dispose();
             this.WorkAreaBounds?.Dispose();
             foreach (var Page in this.Tabs) Page.DisposePage();
@@ -93,7 +132,10 @@ public partial class MainWindow : Window
     private void UpdateCaption()
     {
         this.MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
-        BorderThickness = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
+        // WindowWorkArea already fits the native window to the monitor's work area.
+        // A Window border here exposes the template's dark frame when maximized.
+        BorderThickness = new Thickness(0);
+        this.WindowFrame.BorderThickness = WindowState == WindowState.Maximized ? new Thickness(0) : new Thickness(1);
     }
 
     private void AttachTab(ExplorerTab Page)
@@ -102,6 +144,7 @@ public partial class MainWindow : Window
         Page.Opacity = 0;
         Page.IsHitTestVisible = false;
         this.Tabs.Add(Page);
+        Page.PropertyChanged += (_, _) => this.PersistWorkspaceNow();
         this.TabPages.Children.Add(Page);
         this.Headers.Add(new TabHeader(Page));
         this.SelectTab(Page);
@@ -135,6 +178,7 @@ public partial class MainWindow : Window
             this.NewTabButton.BringIntoView();
         }
         Page.RestoreTabFocus();
+        this.PersistWorkspaceNow();
     }
 
     internal void TabReady(ExplorerTab Page)
@@ -163,8 +207,8 @@ public partial class MainWindow : Window
     {
         if (!this.Tabs.Contains(Page)) return false;
         if (Page.IsOperationBusy) { Page.ShowBusyCloseNotice(); return false; }
-        // Explicitly closing the final tab still closes its workspace.
-        if (this.Tabs.Count == 1) { this.RequestExit(); return true; }
+        // The final tab follows the same saved close behavior as the caption button.
+        if (this.Tabs.Count == 1) { this.Close(); return true; }
         var Index = this.Tabs.IndexOf(Page);
         var WasActive = ReferenceEquals(Page, this.ActiveTab);
         Page.DisposePage();
@@ -173,6 +217,7 @@ public partial class MainWindow : Window
         this.Headers.Remove(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page)));
         if (ReferenceEquals(Page, this.PresentedTab)) this.PresentedTab = null;
         if (WasActive) this.SelectTab(this.Tabs[Math.Min(Index, this.Tabs.Count - 1)]);
+        this.PersistWorkspaceNow();
         return true;
     }
 
@@ -266,6 +311,7 @@ public partial class MainWindow : Window
     private async void WindowPreviewKeyDown(object Sender, KeyEventArgs E)
     {
         if (this.ActiveTab is null) return;
+        if (this.ActiveTab.HandleInlineRenameKey(E)) return;
         var Key = E.Key == System.Windows.Input.Key.System ? E.SystemKey : E.Key;
         if (Key == System.Windows.Input.Key.A && E.KeyboardDevice.Modifiers == ModifierKeys.Control)
         {
@@ -302,6 +348,12 @@ public partial class MainWindow : Window
         return Task.CompletedTask;
     }
 
+    private void WindowPreviewMouseWheel(object Sender, MouseWheelEventArgs E)
+    {
+        if (!E.Handled && this.ActiveTab is { } Page
+            && Page.TerminalThemeMouseWheel(E.Delta, Keyboard.Modifiers, Page.IsMouseOverTerminal)) E.Handled = true;
+    }
+
     private async void WindowInputPreviewMouseDown(object Sender, MouseButtonEventArgs E)
     {
         if (E.ChangedButton is MouseButton.XButton1 or MouseButton.XButton2)
@@ -310,12 +362,14 @@ public partial class MainWindow : Window
             if (this.ActiveTab is { } Tab) await Tab.NavigateBrowseHistoryAsync(E.ChangedButton == MouseButton.XButton2);
             return;
         }
+        this.ActiveTab?.AddressEditPreviewMouseDown(E);
         // Tab-strip gestures must preserve the workspace selection when leaving a tab.
         if (E.OriginalSource is Visual Source && (ReferenceEquals(Source, this.TabBar) || Source.IsDescendantOf(this.TabBar))) return;
         this.ActiveTab?.HandleWindowMouseDown(Sender, E);
     }
-    private IntPtr BrowserAppCommand(IntPtr Window, int Message, IntPtr WParam, IntPtr LParam, ref bool Handled)
+    internal IntPtr BrowserAppCommand(IntPtr Window, int Message, IntPtr WParam, IntPtr LParam, ref bool Handled)
     {
+        this.ActiveTab?.AddressWindowMouseMessage(Window, Message, WParam, LParam, ref Handled);
         if (Message != 0x319) return IntPtr.Zero; // WM_APPCOMMAND from mouse or keyboard drivers.
         var Command = (LParam.ToInt64() >> 16) & 0xfff;
         if (Command is not (1 or 2)) return IntPtr.Zero;
@@ -410,6 +464,8 @@ public partial class MainWindow : Window
             Busy.ShowBusyCloseNotice();
             return;
         }
+        if (!this.ChooseExitPersistence()) { E.Cancel = true; return; }
         this.ActiveTab?.PersistPageSettings();
+        this.PersistWorkspaceNow();
     }
 }

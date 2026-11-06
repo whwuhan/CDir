@@ -38,6 +38,9 @@ public partial class ExplorerTab
         {
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             this.UpdateLayout();
+            // UpdateLayout can invalidate a newly expanded guide's drawing.
+            // Let the subsequent render finish before inspecting retained lines.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
         }
         async Task WaitForNavigation(string Expected)
         {
@@ -142,10 +145,27 @@ public partial class ExplorerTab
                 "Double-clicking a category root lazily expands its own tree without changing My Computer or another category");
             var RootLines = FindVisualChild<CDir.Controls.TreeBranchLines>(Container)!;
             var LastRootLines = FindVisualChild<CDir.Controls.TreeBranchLines>(List.ItemContainerGenerator.ContainerFromIndex(1))!;
-            Check(RootLines.IsBookmarkRoot && VisualTreeHelper.GetDrawing(RootLines)!.Bounds.Height > Button.ActualHeight
-                && LastRootLines.IsBookmarkRoot && !VisualTreeHelper.GetDrawing(LastRootLines)!.Bounds.IsEmpty
-                && VisualTreeHelper.GetDrawing(LastRootLines)!.Bounds.Bottom <= LastRootLines.ActualHeight + 1,
-                "Category folders retain indentation guides within each visible subtree");
+            var CachedGuideOwner = typeof(CDir.Controls.TreeBranchLines).GetField("Owner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(RootLines) as ItemsControl;
+            AppMain.RecordSmokeProgress($"Root guide owner: loaded={RootLines.IsLoaded}, template={RootLines.TemplatedParent?.GetType().Name}, owner={ItemsControl.ItemsControlFromItemContainer(RootLines.TemplatedParent)?.GetType().Name}, cached={CachedGuideOwner?.GetType().Name}, index={CachedGuideOwner?.ItemContainerGenerator.IndexFromContainer(RootLines.TemplatedParent)}");
+            RootLines.InvalidateVisual();
+            this.UpdateLayout();
+            await Settle();
+            // Render this owned visual explicitly: an inactive test window can
+            // be occluded by the user's window and have no retained drawing yet.
+            if (Container is FrameworkElement { ActualWidth: > 0, ActualHeight: > 0 } RenderedRoot)
+            {
+                var GuideBitmap = new RenderTargetBitmap((int)Math.Ceiling(RenderedRoot.ActualWidth),
+                    (int)Math.Ceiling(RenderedRoot.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                GuideBitmap.Render(RenderedRoot);
+            }
+            Check(RootLines.IsBookmarkRoot && !RootLines.HasIncomingGuide
+                && VisualTreeHelper.GetDrawing(RootLines) is { } RootDrawing
+                && RootDrawing.Bounds.Top >= Button.ActualHeight / 2 - 1
+                && RootDrawing.Bounds.Bottom > Button.ActualHeight
+                && LastRootLines.IsBookmarkRoot && !LastRootLines.IsExpanded
+                && (VisualTreeHelper.GetDrawing(LastRootLines) is not { } LastDrawing || LastDrawing.Bounds.IsEmpty),
+                "Category roots retain their expanded subtree guide, with no incoming line from the category title and no collapsed-root stub"
+                + $" (root={RootLines.IsBookmarkRoot}, incoming={RootLines.HasIncomingGuide}, expanded={RootLines.IsExpanded}, header={RootLines.HeaderHeight}, button={Button.ActualHeight}, size={RootLines.RenderSize}, visible={RootLines.IsVisible}, children={RootLines.ChildCount}, childColumn={RootLines.ChildGuideColumn}, bounds={VisualTreeHelper.GetDrawing(RootLines)?.Bounds}, lastExpanded={LastRootLines.IsExpanded}, lastBounds={VisualTreeHelper.GetDrawing(LastRootLines)?.Bounds})");
             DoubleClickHeader(Button);
             await this.SidebarClickTask;
             await Settle();
@@ -196,7 +216,7 @@ public partial class ExplorerTab
             Menu.IsOpen = true;
             await Settle();
             Check(Menu.IsOpen && Menu.Items.OfType<MenuItem>().Select(Item => Item.Tag?.ToString())
-                .SequenceEqual(new[] { "ExpandAllSubfolders", "CollapseAllSubfolders", "RemoveFromCategory" }),
+                .SequenceEqual(new[] { "ExpandAllSubfolders", "CollapseAllSubfolders", "NewFolder", "RemoveFromCategory" }),
                 "Category roots expose the same recursive folder commands as My Computer together with shortcut removal");
             Invoke(Menu, "CollapseAllSubfolders");
             Check(!Root.IsExpanded && !Child.IsExpanded && Section.IsExpanded && SamePath(this.CurrentPath, Alpha),

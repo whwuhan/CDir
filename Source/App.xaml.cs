@@ -12,6 +12,7 @@ namespace CDir;
 
 public partial class AppMain : Application
 {
+    internal static CDir.Models.WorkspaceState? StartupWorkspace { get; private set; }
     public static string? StartupPath { get; private set; }
     public static string? ScreenshotPath { get; private set; }
     public static bool SmokeTest { get; private set; }
@@ -32,9 +33,11 @@ public partial class AppMain : Application
             TaskbarService.InitializeIdentity();
             base.OnStartup(E);
             var GroupSpecified = false;
+            int? CloneFrom = null;
             for (var I = 0; I < E.Args.Length; I++)
             {
                 if (E.Args[I] == "--screenshot" && I + 1 < E.Args.Length) ScreenshotPath = System.IO.Path.GetFullPath(E.Args[++I]);
+                else if (E.Args[I] == "--clone-from" && I + 1 < E.Args.Length) CloneFrom = int.Parse(E.Args[++I]);
                 else if (E.Args[I] == "--smoke-test") SmokeTest = true;
                 else if (E.Args[I] == "--smoke-group")
                 {
@@ -47,10 +50,21 @@ public partial class AppMain : Application
             if (GroupSpecified && !SmokeTest) throw new ArgumentException("--smoke-group requires --smoke-test");
             if (SmokeGroup is not ("transfer" or "selection" or "lifecycle" or "tabs" or "navigation" or "sidebar" or "address" or "operations" or "columns" or "fonts" or "search" or "language" or "shortcuts" or "shell-icons" or "version-control" or "terminal" or "all"))
                 throw new ArgumentException("Unknown smoke group: " + SmokeGroup);
+            if (!SmokeTest && ScreenshotPath is null && StartupPath is null)
+            {
+                var Peers = InstanceWorkspaceService.Peers();
+                foreach (var Peer in CloneFrom is { } Id && Peers.Contains(Id) ? new[] { Id } : Peers)
+                {
+                    var Live = InstanceWorkspaceService.ReadAsync(Peer).GetAwaiter().GetResult();
+                    if (Live is { Version: 1, Tabs.Count: > 0 } && (StartupWorkspace is null || Live.LastActivatedUtc > StartupWorkspace.LastActivatedUtc))
+                        StartupWorkspace = Live;
+                }
+            }
             if (SmokeTest)
             {
                 RecordSmokeProgress("Preparing owned test scope");
                 PrepareSmokeScope();
+                Exit += (_, _) => StartupService.CleanupSmokeRegistration();
             }
         }
         catch (Exception Error) when (Error is ArgumentException or IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
@@ -66,10 +80,18 @@ public partial class AppMain : Application
                 if (ScreenshotPath is not null) System.IO.File.WriteAllText(ScreenshotPath + ".error.txt", Args.Exception.ToString());
                 Shutdown(1);
             }
-            else MessageBox.Show(Args.Exception.Message, LanguageService.Text("AppErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            else
+            {
+                foreach (var Window in this.Windows.OfType<MainWindow>().ToArray()) Window.PersistWorkspaceNow();
+                MessageBox.Show(Args.Exception.Message, LanguageService.Text("AppErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
             Args.Handled = true;
         };
         RecordSmokeProgress("Constructing main window");
+        SessionEnding += (_, _) =>
+        {
+            foreach (var Window in this.Windows.OfType<MainWindow>().ToArray()) Window.PersistWorkspaceNow();
+        };
         WindowAppearance.Initialize();
         ScrollInteraction.Initialize();
         this.MainWindow = new MainWindow();
@@ -91,6 +113,8 @@ public partial class AppMain : Application
 
     private static void EnterSmokeBackgroundMode()
     {
+        // Keep current-desktop software captures working when its session disconnects.
+        AppContext.SetSwitch("Switch.System.Windows.Media.ShouldRenderEvenWhenNoDisplayDevicesAreAvailable", true);
         // QuietRunner already enforces very-low I/O and idle CPU priority. Entering
         // PROCESS_MODE_BACKGROUND_BEGIN again aggressively trims WPF's working set.
         using var Process = System.Diagnostics.Process.GetCurrentProcess();

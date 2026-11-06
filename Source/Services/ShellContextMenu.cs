@@ -8,7 +8,7 @@ using System.Windows.Interop;
 namespace CDir.Services;
 
 /// <summary>Hosts the complete Windows Shell menu without application menu entries.</summary>
-internal sealed class ShellContextMenu : IDisposable
+internal sealed partial class ShellContextMenu : IDisposable
 {
     internal sealed record MenuEntry(uint Id, string Text, bool Enabled, bool HasIcon, bool IsSeparator, IReadOnlyList<MenuEntry> Children);
     private readonly int ThreadId = Environment.CurrentManagedThreadId;
@@ -139,9 +139,17 @@ internal sealed class ShellContextMenu : IDisposable
         return true;
     }
 
-    internal static void Rename(IntPtr Owner, string[] Paths, string NewName)
+    internal static void Rename(IntPtr Owner, string[] Paths, string NewName, bool SuppressPrompts = false)
     {
         if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA) throw new InvalidOperationException("Shell operations require an STA thread.");
+        FileSystemService.ValidateName(NewName);
+        foreach (var PathValue in Paths)
+        {
+            var Target = Path.Combine(Path.GetDirectoryName(PathValue)!, NewName);
+            if (Paths.Length == 1 && !string.Equals(PathValue, Target, StringComparison.OrdinalIgnoreCase)
+                && (File.Exists(Target) || Directory.Exists(Target)))
+                throw new IOException(CDir.Localization.LanguageService.Text("ServiceTargetConflict", NewName));
+        }
         var Ids = new List<IntPtr>();
         object? Items = null;
         IFileOperation? Operation = null;
@@ -155,11 +163,11 @@ internal sealed class ShellContextMenu : IDisposable
             Marshal.ThrowExceptionForHR(SHCreateShellItemArrayFromIDLists((uint)Ids.Count, Ids.ToArray(), out Items));
             Operation = (IFileOperation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("3AD05575-8857-4850-9277-11B85BDB8E09"), true)!)!;
             Marshal.ThrowExceptionForHR(Operation.SetOwnerWindow(Owner));
-            Marshal.ThrowExceptionForHR(Operation.SetOperationFlags(0x40u | (Paths.Length > 1 ? 0x8u : 0u)));
+            Marshal.ThrowExceptionForHR(Operation.SetOperationFlags(TransferOperationFlags(SuppressPrompts, Paths.Length > 1, !AppMain.SmokeTest)));
             Marshal.ThrowExceptionForHR(Operation.RenameItems(Items, NewName));
-            Marshal.ThrowExceptionForHR(Operation.PerformOperations());
+            var Result = Operation.PerformOperations();
             Marshal.ThrowExceptionForHR(Operation.GetAnyOperationsAborted(out var Aborted));
-            if (Aborted) throw new OperationCanceledException();
+            CompleteShellOperation(Result, Aborted);
         }
         finally
         {
@@ -169,7 +177,9 @@ internal sealed class ShellContextMenu : IDisposable
         }
     }
 
-    internal static uint DeleteOperationFlags(bool Permanently) => Permanently ? 0u : 0x40u | 0x00080000u | 0x4000u;
+    internal static uint DeleteOperationFlags(bool Permanently, bool SuppressPrompts = false) =>
+        (SuppressPrompts ? 0x4u | 0x10u | 0x400u | 0x00100000u : Permanently ? 0u : 0x20000000u | 0x40u | 0x4000u)
+        | (Permanently ? 0u : 0x00080000u);
 
     internal static void Delete(string[] Paths, bool Permanently)
     {
@@ -190,11 +200,11 @@ internal sealed class ShellContextMenu : IDisposable
             Operation = (IFileOperation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("3AD05575-8857-4850-9277-11B85BDB8E09"), true)!)!;
             // Shell progress and confirmation UI belongs to this worker, never the browsing window.
             Marshal.ThrowExceptionForHR(Operation.SetOwnerWindow(IntPtr.Zero));
-            Marshal.ThrowExceptionForHR(Operation.SetOperationFlags(DeleteOperationFlags(Permanently)));
+            Marshal.ThrowExceptionForHR(Operation.SetOperationFlags(DeleteOperationFlags(Permanently, AppMain.SmokeTest)));
             Marshal.ThrowExceptionForHR(Operation.DeleteItems(Items));
-            Marshal.ThrowExceptionForHR(Operation.PerformOperations());
+            var Result = Operation.PerformOperations();
             Marshal.ThrowExceptionForHR(Operation.GetAnyOperationsAborted(out var Aborted));
-            if (Aborted) throw new OperationCanceledException();
+            CompleteShellOperation(Result, Aborted);
         }
         finally
         {
@@ -261,8 +271,8 @@ internal sealed class ShellContextMenu : IDisposable
     [ComImport, Guid("947AAB5F-0A5C-4C13-B4D6-4BF7836FC9F8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IFileOperation
     {
-        void Advise();
-        void Unadvise();
+        [PreserveSig] int Advise(IShellFileOperationProgressSink Sink, out uint Cookie);
+        [PreserveSig] int Unadvise(uint Cookie);
         [PreserveSig] int SetOperationFlags(uint Flags);
         void SetProgressMessage();
         void SetProgressDialog();
@@ -272,13 +282,14 @@ internal sealed class ShellContextMenu : IDisposable
         void ApplyPropertiesToItems();
         void RenameItem();
         [PreserveSig] int RenameItems([MarshalAs(UnmanagedType.IUnknown)] object Items, [MarshalAs(UnmanagedType.LPWStr)] string Name);
-        void MoveItem();
+        [PreserveSig] int MoveItem(IShellItem Item, IShellItem Destination, [MarshalAs(UnmanagedType.LPWStr)] string? Name, IShellFileOperationProgressSink? Sink);
         void MoveItems();
-        void CopyItem();
+        [PreserveSig] int CopyItem(IShellItem Item, IShellItem Destination, [MarshalAs(UnmanagedType.LPWStr)] string? Name, IShellFileOperationProgressSink? Sink);
         void CopyItems();
-        void DeleteItem();
+        [PreserveSig] int DeleteItem(IShellItem Item, IShellFileOperationProgressSink? Sink);
         [PreserveSig] int DeleteItems([MarshalAs(UnmanagedType.IUnknown)] object Items);
-        void NewItem();
+        [PreserveSig] int NewItem(IShellItem Folder, uint Attributes, [MarshalAs(UnmanagedType.LPWStr)] string Name,
+            [MarshalAs(UnmanagedType.LPWStr)] string? Template, IShellFileOperationProgressSink? Sink);
         [PreserveSig] int PerformOperations();
         [PreserveSig] int GetAnyOperationsAborted([MarshalAs(UnmanagedType.Bool)] out bool Aborted);
     }
@@ -288,17 +299,20 @@ internal sealed class ShellContextMenu : IDisposable
     private interface IShellItem
     {
         [PreserveSig] int BindToHandler(IntPtr Context, ref Guid Handler, ref Guid Id, [MarshalAs(UnmanagedType.Interface)] out object Result);
+        [PreserveSig] int GetParent(out IShellItem Parent);
+        [PreserveSig] int GetDisplayName(uint Name, out IntPtr Value);
     }
     [ComImport, Guid("000214E6-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IShellFolder
     {
-        void ParseDisplayName();
+        [PreserveSig] int ParseDisplayName(IntPtr Owner, IntPtr Context, [MarshalAs(UnmanagedType.LPWStr)] string Name,
+            out uint Eaten, out IntPtr Child, ref uint Attributes);
         void EnumObjects();
         void BindToObject();
         void BindToStorage();
         void CompareIDs();
         void CreateViewObject();
-        void GetAttributesOf();
+        [PreserveSig] int GetAttributesOf(uint Count, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] IntPtr[] Children, ref uint Attributes);
         [PreserveSig] int GetUIObjectOf(IntPtr Owner, uint Count, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] IntPtr[] Children,
             ref Guid Id, IntPtr Reserved, [MarshalAs(UnmanagedType.Interface)] out object Result);
     }

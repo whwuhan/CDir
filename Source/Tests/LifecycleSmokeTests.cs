@@ -16,6 +16,9 @@ public partial class ExplorerTab
 {
     private async Task RunLifecycleSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
+        await this.RunInstanceWorkspaceSmokeChecksAsync(Passed);
+        await this.RunExitConflictSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
             if (!Condition) throw new InvalidOperationException("Lifecycle UI check failed: " + Name);
@@ -91,6 +94,27 @@ public partial class ExplorerTab
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Probe.UpdateLayout();
             var WorkArea = WindowWorkArea.ReadWorkArea(new System.Windows.Interop.WindowInteropHelper(Probe).Handle);
+            Check(Probe.BorderThickness == new Thickness(0) && Probe.WindowFrame.BorderThickness == new Thickness(0)
+                && Probe.WindowFrame.TranslatePoint(new Point(), Probe) == new Point()
+                && Math.Abs(Probe.WindowFrame.ActualWidth - Probe.ActualWidth) <= 1
+                && Math.Abs(Probe.WindowFrame.ActualHeight - Probe.ActualHeight) <= 1,
+                "Maximizing fills the window with the application frame without a dark border gutter");
+            var MaximizedImage = new RenderTargetBitmap((int)Math.Ceiling(Probe.ActualWidth), (int)Math.Ceiling(Probe.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            MaximizedImage.Render(Probe);
+            foreach (var Edge in new[] { new Point(0, 0), new Point(MaximizedImage.PixelWidth - 1, 0),
+                new Point(0, MaximizedImage.PixelHeight - 1), new Point(MaximizedImage.PixelWidth - 1, MaximizedImage.PixelHeight - 1) })
+            {
+                var Pixel = new byte[4];
+                MaximizedImage.CopyPixels(new Int32Rect((int)Edge.X, (int)Edge.Y, 1, 1), Pixel, 4, 0);
+                Check(Pixel[3] == 255 && Pixel.Take(3).Any(Channel => Channel > 32),
+                    "The maximized window corner is opaque and has no black frame: " + Edge);
+            }
+            if (AppMain.ScreenshotPath is { } MaxOutput)
+            {
+                var Encoder = new PngBitmapEncoder(); Encoder.Frames.Add(BitmapFrame.Create(MaximizedImage));
+                using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(MaxOutput)!, "MaximizedWindow.png"));
+                Encoder.Save(Stream);
+            }
             var StatusBottom = Page.StatusBarPanel.PointToScreen(new Point(Page.StatusBarPanel.ActualWidth, Page.StatusBarPanel.ActualHeight));
             var StatusTop = Page.StatusBarPanel.PointToScreen(new Point());
             Check(!WorkArea.IsEmpty && StatusTop.Y >= WorkArea.Top && StatusBottom.Y <= WorkArea.Bottom + 1
@@ -106,6 +130,8 @@ public partial class ExplorerTab
             Check(Probe.IsVisible && Probe.WindowState == WindowState.Maximized && Tray.IsVisible && ReferenceEquals(Tray, Probe.TrayIcon),
                 $"Repeated tray cycles reuse one icon and preserve maximized state (visible={Probe.IsVisible}, state={Probe.WindowState}, icon={Tray.IsVisible})");
             Probe.WindowState = WindowState.Normal;
+            Check(Probe.BorderThickness == new Thickness(0) && Probe.WindowFrame.BorderThickness == new Thickness(1),
+                "Restoring the window reinstates only its thin application border");
             Probe.WindowState = WindowState.Minimized;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             TrayMessage(Tray, 0x203);
@@ -189,6 +215,28 @@ public partial class ExplorerTab
             Probe.ExitMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Check(Page.WindowClosed && !Probe.IsVisible && !FileTray.IsVisible && this.HostWindow.IsVisible,
                 "File Exit closes the window and disposes its workspace instead of hiding to the tray");
+            Probe = null;
+            await Open();
+            Page = Probe!.ActiveTab!;
+            var LastTabTray = Probe.TrayIcon!;
+            Page.ChangeExitOnClose(false);
+            Page.OperationBusy = true;
+            await Probe.ExecuteTabCommandAsync("CloseTab");
+            Check(Probe.IsVisible && !Page.WindowClosed && Probe.Tabs.Count == 1,
+                "Closing the final tab still protects an active file operation");
+            Page.OperationBusy = false;
+            var LastTabPath = Page.CurrentPath;
+            await Probe.ExecuteTabCommandAsync("CloseTab");
+            Check(!Probe.IsVisible && !Page.WindowClosed && Probe.Tabs.Count == 1
+                && ReferenceEquals(Probe.ActiveTab, Page) && LastTabTray.IsVisible,
+                "Ctrl+W on the final tab hides to the tray without disposing the workspace when exit-on-close is unchecked");
+            TrayMessage(LastTabTray, 0x203);
+            Check(Probe.IsVisible && ReferenceEquals(Probe.ActiveTab, Page) && Page.CurrentPath == LastTabPath,
+                "Restoring after closing the final tab retains the same tab and directory");
+            Page.ChangeExitOnClose(true);
+            await Probe.ExecuteTabCommandAsync("CloseTab");
+            Check(Page.WindowClosed && !LastTabTray.IsVisible && this.HostWindow.IsVisible,
+                "Ctrl+W on the final tab closes the workspace and removes its tray icon when exit-on-close is checked");
             Probe = null;
         }
         finally

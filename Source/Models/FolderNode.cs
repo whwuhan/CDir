@@ -8,6 +8,12 @@ namespace CDir.Models;
 
 public sealed class FolderNode : INotifyPropertyChanged
 {
+    private bool CurrentIsRenaming;
+    public bool IsRenaming
+    {
+        get => this.CurrentIsRenaming;
+        set { if (this.CurrentIsRenaming == value) return; this.CurrentIsRenaming = value; this.Changed(); }
+    }
     private VersionStatus CurrentVersionStatus = VersionStatus.None;
     public VersionStatus VersionStatus
     {

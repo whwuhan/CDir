@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
 using System.Windows;
@@ -13,7 +13,7 @@ public partial class ExplorerTab
 {
     private async Task RunOperationRefreshSmokeChecksAsync(List<string> Passed)
     {
-        var Fixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "Refresh-" + Guid.NewGuid().ToString("N"))).FullName;
+        var Fixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "Refresh-" + Guid.NewGuid().ToString("N")[..8])).FullName;
         var Work = Directory.CreateDirectory(Path.Combine(Fixture, "Work")).FullName;
         var Destination = Directory.CreateDirectory(Path.Combine(Fixture, "Destination")).FullName;
         var Keep = Directory.CreateDirectory(Path.Combine(Work, "Keep", "Child")).Parent!.FullName;
@@ -25,6 +25,7 @@ public partial class ExplorerTab
         var InitialPath = this.CurrentPath;
         var InitialHistory = HistoryInstance;
         var InitialFileHistory = this.Files.OperationHistory;
+        var InitialReplay = this.ReplayShellOperation;
         var History = new FileOperationHistory(Path.Combine(Fixture, "Journal"));
         var ResetCount = 0;
         var CollapseCount = 0;
@@ -40,6 +41,7 @@ public partial class ExplorerTab
         {
             HistoryInstance = History;
             this.Files.OperationHistory = History;
+            this.ReplayShellOperation = (_, _, Redo) => History.Replay(Redo);
             await this.NavigateAsync(Work, RecordHistory: false);
             var Current = this.AllVersionNodes().Single(Node => SamePath(Node.FullPath, Work));
             var KeepNode = Current.Children.Single(Node => SamePath(Node.FullPath, Keep));
@@ -107,6 +109,7 @@ public partial class ExplorerTab
         {
             foreach (var Collection in Subscriptions) Collection.CollectionChanged -= Changed;
             this.Files.OperationHistory = InitialFileHistory;
+            this.ReplayShellOperation = InitialReplay;
             HistoryInstance = InitialHistory;
             await this.NavigateAsync(InitialPath, RecordHistory: false);
             if (!AppMain.IsInsideSmokeScope(Fixture) || (File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)

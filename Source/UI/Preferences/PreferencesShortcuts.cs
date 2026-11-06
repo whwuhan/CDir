@@ -117,8 +117,9 @@ internal sealed partial class PreferencesWindow
 
     internal bool RecordShortcutWheel(string Id, int Delta, ModifierKeys Modifiers)
     {
-        if (Delta == 0 || !KeyboardShortcut.All.Any(Item => Item.Id == Id && Item.TerminalOnly)
-            || !this.ShortcutEditors[Id].IsFocused || (Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0) return false;
+        if (Delta == 0 || !KeyboardShortcut.All.Any(Item => Item.Id == Id && !Item.IsFixed && Item.DefaultGesture.Contains("Wheel", StringComparison.Ordinal))
+            || !this.ShortcutEditors.TryGetValue(Id, out var Editor) || !Editor.IsFocused
+            || (Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0) return false;
         this.SetShortcut(Id, KeyboardShortcut.FormatWheel(Delta, Modifiers));
         return true;
     }
@@ -129,7 +130,7 @@ internal sealed partial class PreferencesWindow
         if (Gesture.Length > 0)
         {
             var Definition = KeyboardShortcut.All.Single(Item => Item.Id == Id);
-            if (!KeyboardShortcut.TryNormalize(Gesture, Definition.TerminalOnly, out Gesture)) { this.ShowShortcutError(LanguageService.Text("ShortcutInvalid")); return false; }
+            if (!KeyboardShortcut.TryNormalize(Gesture, Definition.DefaultGesture.Contains("Wheel", StringComparison.Ordinal), out Gesture)) { this.ShowShortcutError(LanguageService.Text("ShortcutInvalid")); return false; }
             var Conflict = KeyboardShortcut.All.FirstOrDefault(Item => Item.Id != Id && this.PreferenceShortcuts[Item.Id] == Gesture);
             if (Conflict is not null) { this.ShowShortcutError(LanguageService.Text("ShortcutConflict", LanguageService.Text(Conflict.ResourceKey))); return false; }
         }

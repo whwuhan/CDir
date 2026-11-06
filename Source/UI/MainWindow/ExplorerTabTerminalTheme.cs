@@ -37,6 +37,9 @@ public partial class ExplorerTab
         if (this.TerminalFontStatusText is null) return;
         this.TerminalFontStatusText.Text = LanguageService.Text("TerminalFontStatus", this.GetTerminalFontSize());
         this.TerminalBackgroundStatusText.Text = LanguageService.Text("TerminalBackgroundStatus", this.GetTerminalBackgroundColor());
+        this.TerminalFontHint.Text = LanguageService.Text("TerminalFontHint",
+            this.ShortcutBindings["TerminalFontIncrease"] is { Length: > 0 } Increase ? Increase : "—",
+            this.ShortcutBindings["TerminalFontDecrease"] is { Length: > 0 } Decrease ? Decrease : "—");
     }
 
     private void ApplyTerminalTheme()
@@ -61,6 +64,7 @@ public partial class ExplorerTab
         this.TerminalHeader.Resources["TerminalHeaderForeground"] = ChromeBrush;
         this.TerminalFontStatusText.Foreground = ChromeBrush;
         this.TerminalBackgroundStatusText.Foreground = ChromeBrush;
+        this.TerminalFontHint.Foreground = ChromeBrush;
         this.TerminalHeader.Resources["TerminalHeaderHoverBackground"] = this.FindResource("SurfaceHover");
     }
 
@@ -91,9 +95,10 @@ public partial class ExplorerTab
         return true;
     }
 
-    private bool HandleTerminalFontGesture(string Gesture, int Steps = 1)
+    private bool HandleTerminalFontGesture(string Gesture, int Steps = 1, bool RequireFocus = true)
     {
-        if (this.TerminalSurface is not { IsVisible: true } Surface || (!Surface.IsFocused && !Surface.IsKeyboardFocusWithin)) return false;
+        if (this.TerminalSurface is not { IsVisible: true } Surface
+            || RequireFocus && !Surface.IsFocused && !Surface.IsKeyboardFocusWithin) return false;
         var Shortcut = KeyboardShortcut.All.FirstOrDefault(Item => Item.TerminalOnly && this.ShortcutBindings[Item.Id] == Gesture);
         if (Shortcut is null) return false;
         var Delta = Shortcut.Id.Contains("Increase", StringComparison.Ordinal) ? 1 : -1;
@@ -103,6 +108,8 @@ public partial class ExplorerTab
         return true;
     }
 
-    private bool TerminalThemeMouseWheel(int Delta, ModifierKeys Modifiers) => Delta != 0
-        && this.HandleTerminalFontGesture(KeyboardShortcut.FormatWheel(Delta, Modifiers), Math.Max(1, Math.Abs(Delta / 120)));
+    internal bool IsMouseOverTerminal => this.TerminalPanel.IsVisible && this.TerminalPanel.IsMouseOver;
+
+    internal bool TerminalThemeMouseWheel(int Delta, ModifierKeys Modifiers, bool PointerInside) => PointerInside && Delta != 0
+        && this.HandleTerminalFontGesture(KeyboardShortcut.FormatWheel(Delta, Modifiers), Math.Max(1, Math.Abs(Delta / 120)), RequireFocus: false);
 }

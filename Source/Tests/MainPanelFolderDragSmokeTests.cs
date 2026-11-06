@@ -116,8 +116,8 @@ public partial class ExplorerTab
             this.CompleteMainPanelFileDrag();
             await this.PanelTreeSyncTask;
             await Settle();
-            Check(this.DirectoryTreeSection.IsExpanded && !this.PanelTreeSyncRequested && !this.MainPanelFileDragActive,
-                "Completing a category drop resumes the tree reveal after the drag has ended");
+            Check(!this.DirectoryTreeSection.IsExpanded && !this.PanelTreeSyncRequested && !this.MainPanelFileDragActive,
+                "Completing a category shortcut drop preserves the collapsed source tree");
             Work.Folders.Clear();
 
             await HoldFolderPress();
@@ -154,7 +154,7 @@ public partial class ExplorerTab
                 && this.CreateMainPanelFolderDrag() is null, "Files cannot initiate an add-to-category drag");
             Select(Folders[0], File);
             this.PrepareMainPanelFolderDrag(Row(Folders[0]), new Point(), ModifierKeys.None, 1);
-            Check(this.CreateMainPanelFolderDrag() is null, "Mixed file and folder selections cannot be dragged into a category");
+            Check(this.CreateMainPanelFolderDrag() is null, "Mixed selections use standard file-drop data instead of a folder-only payload");
             Select(Folders[0]);
             this.PrepareMainPanelFolderDrag(Row(Folders[1]), new Point(), ModifierKeys.None, 1);
             Check(this.CreateMainPanelFolderDrag() is null, "An unselected drag candidate waits for ordinary row selection");
@@ -170,8 +170,8 @@ public partial class ExplorerTab
             this.ActiveMainPanelFolderDrag = Payload;
             var Forged = DragData(new MainPanelFolderDragPayload(this, Payload.Folders));
             Check(this.DraggedMainPanelFolders(Forged) is null
-                && this.UpdateSidebarDragFeedback(new DataObject(DataFormats.FileDrop, Paths), HeaderPoint(Work)) == DragDropEffects.None,
-                "Forged and external file-drop data cannot impersonate a main-panel folder drag");
+                && this.UpdateSidebarDragFeedback(new DataObject(DataFormats.FileDrop, Paths), HeaderPoint(Work)) == DragDropEffects.Link,
+                "Untrusted internal payloads are rejected while standard external folder drops can add shortcuts");
             foreach (var Point in new[] { HeaderPoint(this.FavoritesSection), HeaderPoint(this.DirectoryTreeSection), new Point(-1, 10), new Point(10, 1) })
                 Check(this.UpdateSidebarDragFeedback(Data, Point) == DragDropEffects.None && !this.CompleteSidebarDrop(Data, Point),
                     "Built-in sections sidebar margins and out-of-bounds positions reject folder additions");

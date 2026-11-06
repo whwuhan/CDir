@@ -33,6 +33,31 @@ public partial class ExplorerTab
             Check(DefaultSettings.Current.TerminalFontSize == 15 && DefaultSettings.Current.TerminalBackgroundColor == "#1E1E1E"
                 && new AppSettings() is { TerminalFontSize: 15, TerminalBackgroundColor: "#1E1E1E" },
                 "New settings and restored defaults use the requested 15-point charcoal terminal theme");
+            await Task.Delay(450);
+            string Snapshot() { lock (Session!.Buffer.SyncRoot) return Session.Buffer.GetAllText(); }
+            static int Prompts(string Text) => Text.Split("PS ", StringSplitOptions.None).Length - 1;
+            var PromptCount = Prompts(Snapshot());
+            var Resizes = 0;
+            void Resized(object? Sender, EventArgs E) => Resizes++;
+            Session!.ViewportResized += Resized;
+            try
+            {
+                for (var Index = 0; Index < 20; Index++)
+                {
+                    this.TerminalThemeMouseWheel(120, ModifierKeys.Control, true);
+                    this.TerminalThemeMouseWheel(-120, ModifierKeys.Control, true);
+                }
+                this.TerminalThemeMouseWheel(360, ModifierKeys.Control, true);
+                await Task.Delay(550);
+                Check(Resizes is > 0 and <= 2 && Surface.FontSize == 18,
+                    "A burst of wheel zoom applies only the final ConPTY grid instead of every intermediate size");
+                Check(Prompts(Snapshot()) <= PromptCount + 1,
+                    "Zooming does not flood terminal history with repeated current-directory prompts");
+                Check(this.TerminalFontHint.IsVisible && this.TerminalFontHint.Text.Contains("Ctrl+wheel", StringComparison.OrdinalIgnoreCase)
+                    && this.TerminalFontHint.Text.Contains("Ctrl++") && this.TerminalFontHint.Text.Contains("Ctrl+-"),
+                    "The terminal footer displays fixed wheel and focused keyboard zoom tips");
+            }
+            finally { Session.ViewportResized -= Resized; }
             this.ChangeTerminalFontSize(13);
             FocusManager.SetFocusedElement(this, Surface);
             Check(await this.HandleShortcutAsync(Key.OemPlus, ModifierKeys.Control, false, false) && Surface.FontSize == 14,
@@ -44,26 +69,31 @@ public partial class ExplorerTab
             Check(await this.HandleShortcutAsync(Key.OemMinus, ModifierKeys.Control, false, false)
                 && await this.HandleShortcutAsync(Key.Subtract, ModifierKeys.Control, false, false) && Surface.FontSize == 14,
                 "Both main-keyboard and numeric-keypad minus decrease terminal font size");
-            Check(Surface.FontWheel!(120, ModifierKeys.Control) && Surface.FontSize == 15
-                && Surface.FontWheel(-120, ModifierKeys.Control) && Surface.FontSize == 14,
-                "Ctrl wheel up and down adjust the focused terminal font in opposite directions");
-            Check(!Surface.FontWheel(120, ModifierKeys.None) && !Surface.FontWheel(120, ModifierKeys.Control | ModifierKeys.Shift)
-                && Surface.FontSize == 14, "Unassigned wheel gestures retain ordinary scrolling without resizing text");
+            Check(this.TerminalThemeMouseWheel(120, ModifierKeys.Control, true) && Surface.FontSize == 15
+                && this.TerminalThemeMouseWheel(-120, ModifierKeys.Control, true) && Surface.FontSize == 14,
+                "Ctrl wheel zooms in opposite directions while the pointer is inside the terminal");
+            Check(!this.TerminalThemeMouseWheel(120, ModifierKeys.None, true)
+                && !this.TerminalThemeMouseWheel(120, ModifierKeys.Control | ModifierKeys.Shift, true)
+                && Surface.FontSize == 14, "Other wheel gestures retain ordinary scrolling");
             FocusManager.SetFocusedElement(this, this.SearchBox);
             Check(!await this.HandleShortcutAsync(Key.OemPlus, ModifierKeys.Control, true, false)
-                && !Surface.FontWheel(120, ModifierKeys.Control) && Surface.FontSize == 14,
-                "Terminal font keys and wheel gestures do not act while another control has focus");
+                && this.TerminalThemeMouseWheel(120, ModifierKeys.Control, true) && Surface.FontSize == 15
+                && ReferenceEquals(FocusManager.GetFocusedElement(this), this.SearchBox),
+                "Hover wheel zoom works without taking focus from the search field");
+            Check(!this.TerminalThemeMouseWheel(120, ModifierKeys.Control, false) && Surface.FontSize == 15,
+                "Wheel input outside the terminal does not resize its text");
+            this.ChangeTerminalFontSize(14);
             FocusManager.SetFocusedElement(this, Surface);
             Check(this.ChangeShortcut("TerminalFontIncrease", "F7")
                 && !await this.HandleShortcutAsync(Key.OemPlus, ModifierKeys.Control, false, false)
                 && await this.HandleShortcutAsync(Key.F7, ModifierKeys.None, false, false) && Surface.FontSize == 15,
-                "A rebound terminal font key replaces its previous binding");
+                "A rebound keyboard font shortcut replaces its previous binding");
             Check(!this.ChangeShortcut("TerminalFontIncrease", "Ctrl+F"), "Terminal font keys reject conflicts with existing actions");
-            Check(this.ChangeShortcut("TerminalFontIncreaseWheel", "Alt+WheelUp")
-                && !Surface.FontWheel(120, ModifierKeys.Control) && Surface.FontWheel(240, ModifierKeys.Alt) && Surface.FontSize == 17,
-                "Rebound wheel gestures replace defaults and respect multiple wheel notches");
-            Check(this.ChangeShortcut("TerminalFontIncreaseWheel", "") && !Surface.FontWheel(120, ModifierKeys.Alt),
-                "Clearing a wheel binding disables that terminal zoom gesture");
+            Check(!this.ChangeShortcut("TerminalFontIncreaseWheel", "Alt+WheelUp")
+                && !this.ChangeShortcut("TerminalFontDecreaseWheel", "")
+                && !this.TerminalThemeMouseWheel(120, ModifierKeys.Alt, true)
+                && this.TerminalThemeMouseWheel(240, ModifierKeys.Control, true) && Surface.FontSize == 17,
+                "Wheel zoom is fixed to Ctrl and supports multiple notches");
             this.ChangeTerminalFontSize(48);
             Check(await this.HandleShortcutAsync(Key.F7, ModifierKeys.None, false, false) && Surface.FontSize == 48,
                 "Zooming in at the maximum consumes the shortcut without exceeding the limit");

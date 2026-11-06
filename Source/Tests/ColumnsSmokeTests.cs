@@ -14,6 +14,7 @@ public partial class ExplorerTab
 {
     private async Task RunColumnsSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunGridLinesSmokeChecksAsync(Passed);
         await this.RunFolderSizeSmokeChecksAsync(Passed);
         await this.RunHeaderSortSmokeChecksAsync(Passed);
         var InitialOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToArray();
@@ -57,8 +58,24 @@ public partial class ExplorerTab
             var Menu = this.ColumnMenuButton.ContextMenu!;
             Check(this.ColumnMenuButton.IsVisible && Menu.IsOpen
                 && this.ColumnMenuButton.TranslatePoint(new Point(), this).X >= this.SearchContainer.TranslatePoint(new Point(this.SearchContainer.ActualWidth, 0), this).X
-                && Menu.Items.OfType<MenuItem>().All(Item => Item.IsChecked == (Column((string)Item.Tag).Visibility == Visibility.Visible)),
+                && Menu.Items.OfType<MenuItem>().Where(Item => !Equals(Item.Tag, "ShowHidden")).All(Item => Item.IsChecked == (Column((string)Item.Tag).Visibility == Visibility.Visible)),
                 "The dropdown sits to the right of search and marks currently displayed column headers");
+            Check(Menu.Items[^2] is Separator && Menu.Items[^1] is MenuItem { Tag: "ShowHidden" },
+                "A separator and hidden-files toggle finish the column dropdown");
+            var HiddenItem = (MenuItem)Menu.Items[^1];
+            var WasHidden = this.Settings.ShowHidden;
+            Check(HiddenItem.IsChecked == WasHidden, "The dropdown reflects the saved hidden-files setting");
+            HiddenItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            while (!HiddenItem.IsEnabled) await Task.Delay(20);
+            Check(HiddenItem.IsChecked == !WasHidden && this.Settings.ShowHidden == !WasHidden
+                && this.CaptureSaveSettings().ShowHidden == !WasHidden,
+                "The hidden-files dropdown refreshes and persists the same preference used by General");
+            Menu.IsOpen = false;
+            await this.RunPreferencesSmokeChecksAsync(Passed);
+            await this.ChangeShowHiddenAsync(WasHidden);
+            Check(HiddenItem.IsChecked == WasHidden, "Changing the shared preference updates the existing dropdown check");
+            this.ColumnMenuClick(this.ColumnMenuButton, new RoutedEventArgs(Button.ClickEvent));
+            Menu = this.ColumnMenuButton.ContextMenu!;
             var SizeItem = Menu.Items.OfType<MenuItem>().Single(Item => (string)Item.Tag == nameof(FileEntry.Size));
             var SizeWasVisible = Column(nameof(FileEntry.Size)).Visibility == Visibility.Visible;
             SizeItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

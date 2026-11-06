@@ -9,9 +9,9 @@ internal sealed partial class RegressionRunner
         "RestoringFiles", "RestoreComplete", "DeletingFiles", "DeleteComplete", "HistoryStorageProtected", "HistoryHint", "HistoryEmpty", "HistoryChanged", "NothingToUndo", "NothingToRedo", "Undoing", "Redoing", "UndoComplete", "RedoComplete",
         "DriveUsageFormat", "DriveUsageTooltip", "DriveUsageUnavailable", "DriveUsageUnavailableTooltip",
         "HideSidebarTooltip", "ShowSidebarTooltip", "OpenRecycleBin", "ShellMenuError", "NewWindowError",
-        "ExitOnCloseTooltip", "TrayUnavailable", "CopyOnDropTooltip", "FileDropCopyTo", "FileDropMoveTo",
+        "ExitOnCloseTooltip", "TrayUnavailable", "CopyOnDropTooltip", "CalculateFolderSizesTooltip", "ShowBookmarkPathsTooltip", "ShowSidebarDriveUsageTooltip", "StartOnLoginTooltip", "StartOnLoginError", "TerminalFontHint", "FileDropCopyTo", "FileDropMoveTo",
         "RestoreDefaultsTooltip", "DragCategory", "ExpandCategoryFoldersTooltip", "CollapseCategoryFoldersTooltip", "NoCategories", "DeleteCategoryQuestion", "DeleteCategoryHint",
-        "EmptyCategory", "CategoryNameUnavailable", "AccessDenied", "AddressAncestors", "AddressEdit",
+        "EmptyCategory", "CategoryNameUnavailable", "AccessDenied", "AddressAncestors", "AddressEdit", "AddressDrag",
         "AddressTooltip", "BackTooltip", "BrowseHint", "BusyCloseNotice", "ClipboardEmpty",
         "ClipboardError", "CopiedItemsNotice", "CopyComplete", "CopyCurrentPathTooltip", "CopyingFiles",
         "CopyTooltip", "CreatingFolder", "CurrentPathCopied", "CutItemsNotice", "CutTooltip",
@@ -34,6 +34,7 @@ internal sealed partial class RegressionRunner
         "TerminalToggleTooltip", "TerminalRestartTooltip", "TerminalVisible", "TerminalHidden", "TerminalExited", "TerminalStartError",
         "TerminalColorHint", "TerminalColorInvalid", "TabAliasHint",
         "TerminalFontStatus", "TerminalBackgroundStatus",
+        "MultiInstanceSaveQuestion", "PreparingTransfer", "TransferringFiles", "FinalizingTransfer", "HistoryBackupUnverified",
         "ShortcutHint", "ShortcutRecordHint", "ShortcutFixedHint", "ShortcutInvalid", "ShortcutConflict", "ShortcutSaveError", "NoShortcutResults", "HelpOverview", "AddressEditCustom",
     ];
 
