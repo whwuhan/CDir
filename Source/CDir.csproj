@@ -2,6 +2,7 @@
   <Import Project="Version.props" />
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <StartupObject>CDir.Program</StartupObject>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
@@ -24,6 +25,7 @@
     <EmbeddedResource Include="Localization/*.json" />
     <EmbeddedResource Include="Config/DefaultSettings.json" LogicalName="CDir.Config.DefaultSettings.json" />
     <Compile Remove="Tests/**/*.cs" />
+    <Compile Remove="Launcher/**/*.cs" />
     <Compile Include="Tests/*SmokeTests.cs" />
     <None Remove="Tests/**" />
     <None Update="ThirdParty/VirtualTerminal.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

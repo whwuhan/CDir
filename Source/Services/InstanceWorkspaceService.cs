@@ -48,7 +48,7 @@ internal sealed class InstanceWorkspaceService(Func<Task<WorkspaceState?>> Captu
                 try
                 {
                     if (Process.Id != Current.Id && Process.SessionId == Current.SessionId && IsUserInstance(Process.Id)
-                        && string.Equals(Process.MainModule?.FileName, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
+                        && Process.MainModule?.FileName is { } Executable && Runtime.RuntimeLocation.SameInstallation(Executable))
                         Peers.Add((Process.Id, Process.StartTime));
                 }
                 catch (Exception Error) when (Error is System.ComponentModel.Win32Exception or InvalidOperationException) { }

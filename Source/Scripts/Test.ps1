@@ -86,6 +86,13 @@ try {
             }
             Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent -TimeoutSeconds $TimeoutSeconds -TempRoot $TempRoot `
                 -Arguments $UIBuildArguments -AdditionalArguments $BuildFlags
+            $LauncherBuildArguments = @($UIBuildArguments)
+            $LauncherBuildArguments[1] = Join-Path $SourceRoot 'Launcher/CDirLauncher.csproj'
+            Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent -TimeoutSeconds $TimeoutSeconds -TempRoot $TempRoot `
+                -Arguments $LauncherBuildArguments -AdditionalArguments $BuildFlags
+            . (Join-Path $PSScriptRoot 'ApplicationLauncher.ps1')
+            $RuntimeSuffix = if ($PublishConfiguration) { '/win-x64' } else { '' }
+            Install-ApplicationLauncher -ApplicationDirectory (Join-Path $ProjectRoot "Build/Bin/CDir/$Configuration/net10.0-windows$RuntimeSuffix") -LauncherDirectory (Join-Path $ProjectRoot "Build/Bin/CDirLauncher/$Configuration/net10.0-windows$RuntimeSuffix")
         }
         $AppExe = if ($Published) { Join-Path $ProjectRoot 'Publish\CDirWinX64\CDir.exe' }
             elseif ($PublishConfiguration) { Join-Path $ProjectRoot "Build\Bin\CDir\$Configuration\net10.0-windows\win-x64\CDir.exe" }

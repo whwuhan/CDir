@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v2.0.5 interface preview](Docs/Images/CDirPreview.png)
+![CDir v2.1.6 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -23,6 +23,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 
 ### Features
 
+- Opening CDir.exe runs a verified private copy outside the checkout, so switching Git branches can replace the published program files while existing windows stay open. An open window keeps its starting version; open CDir.exe again to use the selected branch's version.
 - Press Alt+R to distribute all panes in the current window as evenly as their minimum sizes allow. Columns share the window width evenly, then rows share the height within each column; split directions, tabs and the active pane stay in place. Customize this shortcut in Keyboard Shortcuts.
 - Right-click any file-list header and choose Size All Columns To Fit, or press Alt+E in the current tab. Each displayed column fits the wider of its header and current file/folder values, including off-screen rows. Only that tab changes. Customize, clear, or reset the shortcut in Keyboard Shortcuts.
 - Drag a tab to the left, right, top, or bottom edge of a pane’s directory tree or file panel. A translucent preview shows the full workspace area before release. Each pane has its own tab strip, address bar, search, tree, file panel, status bar, and terminal. Split panes again, resize their dividers with live content updates, or move tabs between strips; empty panes merge automatically. Layout and selections restore on restart. Tab shortcuts and bulk-close commands act within the current pane.
@@ -252,7 +253,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v2.0.5 界面预览](Docs/Images/CDirPreview.png)
+![CDir v2.1.6 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -267,6 +268,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 ### 已有功能
 
+- 启动 CDir.exe 时会从仓库外经过校验的独立副本运行，窗口保持打开时也可切换 Git 分支并替换发布目录中的程序文件。已打开窗口保留启动时版本；重新打开 CDir.exe 使用当前分支版本。
 - Alt+R 尽可能均匀分布当前窗口内的所有分割窗格，先按列均分宽度，再按每列的行数均分高度，兼容更多列、更多行及连续嵌套分割，并遵守最小尺寸，保留分割方向、Tab 和活动窗格。快捷键可在 Keyboard Shortcuts 自定义。
 - 右键任一文件列表表头，选择“调整所有列宽至合适大小”，或在当前 Tab 按 Alt+E，一次调整所有显示列；每列取表头和当前列表内容（含屏幕外项目）的最大宽度，仅影响当前 Tab。可在 Keyboard Shortcuts 修改、清除或恢复快捷键。
 - 将文件或文件夹拖回原目录时不执行任何操作，复制和移动模式均适用；另一个窗格显示同一目录时也不会生成副本。
