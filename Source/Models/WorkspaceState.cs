@@ -1,4 +1,4 @@
-namespace CDir.Models;
+﻿namespace CDir.Models;
 
 internal sealed class WorkspaceState
 {
@@ -11,6 +11,7 @@ internal sealed class WorkspaceState
     public bool Maximized { get; set; }
     public int ActiveTab { get; set; }
     public List<WorkspaceTabState> Tabs { get; set; } = [];
+    public WorkspacePaneState? Layout { get; set; }
 }
 
 internal sealed class WorkspaceTabState
@@ -29,4 +30,14 @@ internal sealed class WorkspaceTabState
     public double ScrollOffset { get; set; }
     public bool TerminalVisible { get; set; }
     public double TerminalHeight { get; set; } = 240;
+}
+
+internal sealed class WorkspacePaneState
+{
+    public string? Split { get; set; }
+    public double Ratio { get; set; } = .5;
+    public WorkspacePaneState? First { get; set; }
+    public WorkspacePaneState? Second { get; set; }
+    public List<int> Tabs { get; set; } = [];
+    public int ActiveTab { get; set; }
 }

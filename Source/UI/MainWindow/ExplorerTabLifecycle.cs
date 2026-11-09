@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -69,7 +69,7 @@ public partial class ExplorerTab
         if (!this.InitialLayoutReady.Task.IsCompletedSuccessfully) return;
         Dispatcher.BeginInvoke(() =>
         {
-            if (!this.IsTabSelected || this.WindowClosed) return;
+            if (!this.IsTabSelected || this.WindowClosed || !ReferenceEquals(this.HostWindow.ActiveTab, this)) return;
             this.RestoringTabFocus = true;
             try
             {
@@ -79,6 +79,10 @@ public partial class ExplorerTab
             finally { this.RestoringTabFocus = false; }
         });
     }
+
+    internal Rect SplitDropBounds(UIElement RelativeTo)
+        => new(this.ContentPanels.TranslatePoint(new Point(), RelativeTo), this.ContentPanels.RenderSize);
+    internal void RefreshActiveActions() => this.UpdateActions();
 
     internal void DismissSearchTips() => this.SearchTips.Visibility = Visibility.Collapsed;
     internal void HandleWindowMouseDown(object Sender, MouseButtonEventArgs E) => this.WindowInputPreviewMouseDown(Sender, E);
@@ -110,6 +114,7 @@ public partial class ExplorerTab
         this.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
         this.Settings.SeparatePinnedTabs = Shared.SeparatePinnedTabs;
         this.HostWindow.UpdatePinnedTabLayout(Shared.SeparatePinnedTabs);
+        this.Settings.AutoFitColumnsOnNavigation = Shared.AutoFitColumnsOnNavigation;
         this.Settings.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
         this.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
         this.UpdateHiddenItemsMenu();
@@ -118,6 +123,7 @@ public partial class ExplorerTab
         this.Settings.TerminalFontSize = Shared.TerminalFontSize;
         this.Settings.TerminalBackgroundColor = Shared.TerminalBackgroundColor;
         this.Settings.TerminalForegroundColor = Shared.TerminalForegroundColor;
+        this.Settings.ShortcutDefaultsRevision = Source.ShortcutDefaultsRevision;
         this.ShortcutBindings = KeyboardShortcut.Resolve(this.Settings.Shortcuts);
         this.ApplyUIFonts();
         this.ApplyGridLines();

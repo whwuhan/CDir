@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,12 +39,9 @@ public partial class MainWindow : Window
 
     public ObservableCollection<ExplorerTab> Tabs { get; } = [];
     public ObservableCollection<TabHeader> Headers { get; } = [];
-    public ObservableCollection<TabHeader> VisibleHeaders { get; } = [];
-    public ObservableCollection<TabHeader> PinnedHeaders { get; } = [];
     private bool SeparatePinnedTabs;
     private bool ClosingTabBatch;
     internal ExplorerTab? ActiveTab { get; private set; }
-    internal ExplorerTab? PresentedTab { get; private set; }
     internal TrayIconService? TrayIcon { get; private set; }
     private bool ExitRequested;
     private WindowState StateBeforeTray;
@@ -69,6 +66,10 @@ public partial class MainWindow : Window
         var Initial = new ExplorerTab(this, LayoutSettingsFile, InitialPath: Workspace?.Tabs[0].Settings.LastPath,
             InitialSettings: Workspace?.Tabs[0].Settings, RunStartupChecks: LayoutSettingsFile is null);
         InitializeComponent();
+        this.ActivePane = this.CreatePane();
+        this.LayoutRoot = new PaneNode { Pane = this.ActivePane };
+        this.WorkspaceSurface.Children.Add(this.ActivePane);
+        this.InitializePaneDropRouting();
         var Version = typeof(MainWindow).Assembly.GetName().Version!;
         this.TitleVersion.Text = $"v{Version.Major}.{Version.Minor}.{Version.Build}";
         MinWidth = Math.Min(MinWidth, SystemParameters.WorkArea.Width);
@@ -169,8 +170,10 @@ public partial class MainWindow : Window
     {
         if (!this.Tabs.Contains(Page)) return;
         this.ActiveTab?.DismissSearchTips();
+        this.ActivatePane(this.PaneFor(Page));
         this.ActiveTab = Page;
-        foreach (var Tab in this.Tabs) Tab.SetTabSelected(ReferenceEquals(Tab, Page));
+        this.ActivePane.Selected = Page;
+        foreach (var Tab in this.PaneTabs(this.ActivePane)) Tab.SetTabSelected(ReferenceEquals(Tab, Page));
         if (Page.IsInitialLayoutReady) this.PresentTab(Page);
         else
         {
@@ -180,7 +183,7 @@ public partial class MainWindow : Window
         var HeaderControl = this.SeparatePinnedTabs && Page.IsTabPinned ? this.PinnedTabHeaders : this.TabHeaders;
         HeaderControl.UpdateLayout();
         (HeaderControl.ItemContainerGenerator.ContainerFromItem(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page))) as FrameworkElement)?.BringIntoView();
-        if (ReferenceEquals(Page, this.Tabs.Last()) && !(this.SeparatePinnedTabs && Page.IsTabPinned))
+        if (ReferenceEquals(Page, this.PaneTabs(this.ActivePane).Last()) && !(this.SeparatePinnedTabs && Page.IsTabPinned))
         {
             this.TabScroll.UpdateLayout();
             this.NewTabButton.BringIntoView();
@@ -192,23 +195,25 @@ public partial class MainWindow : Window
     internal void TabReady(ExplorerTab Page)
     {
         if (!this.Tabs.Contains(Page)) return;
-        if (ReferenceEquals(this.ActiveTab, Page)) this.PresentTab(Page);
+        if (ReferenceEquals(this.PaneFor(Page).Selected, Page)) this.PresentTab(Page);
         else Page.Visibility = Visibility.Collapsed;
     }
 
     private void PresentTab(ExplorerTab Page)
     {
+        var Pane = this.PaneFor(Page);
+        Page.SetTabSelected(true);
         Page.Visibility = Visibility.Visible;
         Page.Opacity = 1;
         Page.IsHitTestVisible = true;
-        foreach (var Other in this.Tabs.Where(Other => !ReferenceEquals(Other, Page)))
+        foreach (var Other in this.PaneTabs(Pane).Where(Other => !ReferenceEquals(Other, Page)))
         {
             // Pending tabs still need a Loaded event to complete initialization.
             if (Other.IsInitialLayoutReady) Other.Visibility = Visibility.Collapsed;
             Other.Opacity = 0;
             Other.IsHitTestVisible = false;
         }
-        this.PresentedTab = Page;
+        Pane.Presented = Page;
     }
 
     internal bool CloseTab(ExplorerTab Page)
@@ -217,19 +222,29 @@ public partial class MainWindow : Window
         if (Page.IsOperationBusy) { Page.ShowBusyCloseNotice(); return false; }
         // The final tab follows the same saved close behavior as the caption button.
         if (this.Tabs.Count == 1) { this.Close(); return true; }
-        var Index = this.Tabs.IndexOf(Page);
+        var Pane = this.PaneFor(Page);
+        var LocalTabs = this.PaneTabs(Pane);
+        var Index = Array.IndexOf(LocalTabs, Page);
+        var WasSelected = ReferenceEquals(Pane.Selected, Page);
         var WasActive = ReferenceEquals(Page, this.ActiveTab);
         Page.DisposePage();
-        this.TabPages.Children.Remove(Page);
+        Pane.TabPages.Children.Remove(Page);
         this.Tabs.Remove(Page);
         this.Headers.Remove(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page)));
-        if (!this.ClosingTabBatch) this.RefreshTabHeaders();
-        if (ReferenceEquals(Page, this.PresentedTab)) this.PresentedTab = null;
+        if (ReferenceEquals(Page, Pane.Presented)) Pane.Presented = null;
+        if (WasSelected)
+        {
+            var Remaining = this.PaneTabs(Pane);
+            Pane.Selected = Remaining.Length == 0 ? null : Remaining[Math.Min(Index, Remaining.Length - 1)];
+            if (Pane.Selected is { } Next) this.PresentTab(Next);
+        }
+        if (this.PaneTabs(Pane).Length == 0) this.RemoveEmptyPane(Pane);
         if (WasActive)
         {
-            if (this.ClosingTabBatch) this.ActiveTab = null;
-            else this.SelectTab(this.Tabs[Math.Min(Index, this.Tabs.Count - 1)]);
+            this.ActiveTab = this.ActivePane.Selected;
+            if (!this.ClosingTabBatch && this.ActiveTab is { } Next) this.SelectTab(Next);
         }
+        if (!this.ClosingTabBatch) this.RefreshTabHeaders();
         this.PersistWorkspaceNow();
         return true;
     }
@@ -242,7 +257,7 @@ public partial class MainWindow : Window
 
     private void NewTabClick(object Sender, RoutedEventArgs E) => this.AddTab();
 
-    private void TabBarPreviewMouseDown(object Sender, MouseButtonEventArgs E)
+    internal void TabBarPreviewMouseDown(object Sender, MouseButtonEventArgs E)
     {
         if (E.ChangedButton != MouseButton.Left || E.ClickCount != 2) return;
         TabHeader? Header = null;
@@ -269,7 +284,7 @@ public partial class MainWindow : Window
 
     private ExplorerTab[] TabsForCloseCommand(ExplorerTab Anchor, string Command)
     {
-        var Pages = this.Tabs.ToArray();
+        var Pages = this.PaneTabs(this.PaneFor(Anchor));
         var Index = Array.IndexOf(Pages, Anchor);
         if (Index < 0) return [];
         return Command switch
@@ -372,7 +387,7 @@ public partial class MainWindow : Window
         else if (this.ActiveTab is not null && this.Tabs.Count > 1)
         {
             var Delta = Command == "PreviousTab" ? -1 : 1;
-            this.SelectTab(this.Tabs[(this.Tabs.IndexOf(this.ActiveTab) + Delta + this.Tabs.Count) % this.Tabs.Count]);
+            this.SelectTab(this.PaneTabs(this.ActivePane)[(Array.IndexOf(this.PaneTabs(this.ActivePane), this.ActiveTab) + Delta + this.PaneTabs(this.ActivePane).Length) % this.PaneTabs(this.ActivePane).Length]);
         }
         return Task.CompletedTask;
     }
@@ -385,6 +400,7 @@ public partial class MainWindow : Window
 
     private async void WindowInputPreviewMouseDown(object Sender, MouseButtonEventArgs E)
     {
+        if (E.OriginalSource is DependencyObject Origin && this.PaneFromSource(Origin) is { } InputPane) this.ActivatePane(InputPane);
         if (E.ChangedButton is MouseButton.XButton1 or MouseButton.XButton2)
         {
             E.Handled = true;

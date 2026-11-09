@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
+<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
   <UserControl.Resources>
     <ResourceDictionary>
     <ResourceDictionary.MergedDictionaries>
@@ -233,8 +233,8 @@
         <ControlTemplate TargetType="TreeViewItem">
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition x:Name="TreeHeaderColumn" Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-            <controls:TreeBranchLines x:Name="BranchLines" Grid.RowSpan="2" HeaderHeight="{Binding ActualHeight, ElementName=PART_Header}" IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}" ChildCount="{Binding Items.Count, RelativeSource={RelativeSource TemplatedParent}}" IsHitTestVisible="False" />
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <controls:TreeBranchLines x:Name="BranchLines" Grid.RowSpan="3" HeaderHeight="{Binding ActualHeight, ElementName=PART_Header}" IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}" ChildCount="{Binding Items.Count, RelativeSource={RelativeSource TemplatedParent}}" IsHitTestVisible="False" />
             <ToggleButton x:Name="Expander" Style="{StaticResource DirectoryTreeExpander}" VerticalAlignment="Center"
                           IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press" />
             <Border x:Name="PART_Header" Grid.Column="1" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
@@ -242,7 +242,27 @@
               <ContentPresenter x:Name="HeaderHost" ContentSource="Header" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="Center" RecognizesAccessKey="True" />
             </Border>
-            <controls:AnimatedDisclosure x:Name="ItemsReveal" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+            <Canvas Grid.Row="1" Grid.ColumnSpan="3" Height="10" Visibility="{Binding Visibility, ElementName=SidebarDriveMeter}">
+              <Grid Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=TreeView}}" Height="10">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <ProgressBar x:Name="SidebarDriveMeter" Grid.Column="1" Height="6" Margin="{TemplateBinding Padding}"
+                         Value="{Binding DriveUsagePercent, Mode=OneWay}" ToolTip="{Binding DriveUsageTooltip}" AutomationProperties.Name="{DynamicResource TextDriveCapacity}">
+              <ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource DriveUsageMeter}">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <MultiDataTrigger><MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding IsDrive}" Value="True" />
+                    <Condition Binding="{Binding HasDriveUsage}" Value="True" />
+                    <Condition Binding="{Binding ShowSidebarDriveUsage, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True" />
+                  </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible" /></MultiDataTrigger>
+                  <DataTrigger Binding="{Binding DriveUsageBand}" Value="Warning"><Setter Property="Foreground" Value="{StaticResource DriveUsageWarning}" /></DataTrigger>
+                  <DataTrigger Binding="{Binding DriveUsageBand}" Value="Critical"><Setter Property="Foreground" Value="{StaticResource DriveUsageCritical}" /></DataTrigger>
+                </Style.Triggers>
+              </Style></ProgressBar.Style>
+            </ProgressBar>
+              </Grid>
+            </Canvas>
+            <controls:AnimatedDisclosure x:Name="ItemsReveal" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
                                          IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
               <ItemsPresenter x:Name="ItemsHost" />
             </controls:AnimatedDisclosure>
@@ -281,7 +301,15 @@
       <Setter Property="Width" Value="5" /><Setter Property="Background" Value="Transparent" /><Setter Property="Cursor" Value="SizeWE" />
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border Background="{TemplateBinding Background}" /></ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="ColumnFitContextMenu" TargetType="ContextMenu">
+      <Setter Property="FontSize" Value="{DynamicResource UIFontMenus}" /><Setter Property="Padding" Value="2" />
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
+        <Border Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="{TemplateBinding Padding}"><ItemsPresenter /></Border>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style TargetType="DataGridColumnHeader">
+      <EventSetter Event="ContextMenuOpening" Handler="ColumnHeaderContextOpening" />
+      <Setter Property="ContextMenu"><Setter.Value><ContextMenu /></Setter.Value></Setter>
       <Setter Property="Background" Value="{StaticResource SurfaceMiddle}" /><Setter Property="Foreground" Value="{StaticResource Muted}" /><Setter Property="FontWeight" Value="Normal" />
       <Setter Property="Padding" Value="8,3" /><Setter Property="BorderThickness" Value="0,0,1,1" /><Setter Property="BorderBrush" Value="{StaticResource Line}" />
       <Setter Property="FontSize" Value="{DynamicResource UIFontHeaders}" /><Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -507,7 +535,7 @@
               </StackPanel>
             </Expander>
             <Expander x:Name="DirectoryTreeSection" Margin="0,6,0,0" Style="{StaticResource SidebarSection}" Header="{DynamicResource TextDirectoryTree}" ContextMenu="{StaticResource BuiltInCategoryContextMenu}">
-              <TreeView x:Name="FolderTree" Grid.IsSharedSizeScope="True" Background="Transparent" BorderThickness="0" FocusVisualStyle="{x:Null}" SelectedItemChanged="FolderTreeSelectedItemChanged" PreviewMouseWheel="FolderTreeMouseWheel" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+              <TreeView x:Name="FolderTree" Grid.IsSharedSizeScope="True" Background="Transparent" BorderThickness="0" Padding="0" FocusVisualStyle="{x:Null}" SelectedItemChanged="FolderTreeSelectedItemChanged" PreviewMouseWheel="FolderTreeMouseWheel" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                 <TreeView.Style><Style TargetType="TreeView">
                   <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
                   <Style.Triggers><DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" /></DataTrigger></Style.Triggers>
@@ -539,21 +567,10 @@
                       </Style></Grid.Style>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" SharedSizeGroup="DriveCapacities" />
-                        <ColumnDefinition Width="Auto" SharedSizeGroup="DriveMeters" />
                         <ColumnDefinition Width="Auto" SharedSizeGroup="DrivePercentages" />
                       </Grid.ColumnDefinitions>
                       <TextBlock x:Name="SidebarDriveCapacity" Text="{Binding DriveCapacityText}" FontSize="{DynamicResource UIFontSidebar}" VerticalAlignment="Center" />
-                        <ProgressBar x:Name="SidebarDriveMeter" Grid.Column="1" Width="64" Margin="12,0,12,0" Value="{Binding DriveUsagePercent, Mode=OneWay}" VerticalAlignment="Center" AutomationProperties.Name="{DynamicResource TextDriveCapacity}">
-                          <ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource DriveUsageMeter}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                              <DataTrigger Binding="{Binding HasDriveUsage}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
-                              <DataTrigger Binding="{Binding DriveUsageBand}" Value="Warning"><Setter Property="Foreground" Value="{StaticResource DriveUsageWarning}" /></DataTrigger>
-                              <DataTrigger Binding="{Binding DriveUsageBand}" Value="Critical"><Setter Property="Foreground" Value="{StaticResource DriveUsageCritical}" /></DataTrigger>
-                            </Style.Triggers>
-                          </Style></ProgressBar.Style>
-                        </ProgressBar>
-                        <TextBlock x:Name="SidebarDrivePercentage" Grid.Column="2" Text="{Binding DriveUsagePercentageText}" FontSize="{DynamicResource UIFontSidebar}" TextAlignment="Right" VerticalAlignment="Center" />
+                        <TextBlock x:Name="SidebarDrivePercentage" Grid.Column="1" Margin="12,0,0,0" Text="{Binding DriveUsagePercentageText}" FontSize="{DynamicResource UIFontSidebar}" TextAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
                   </Grid>
                 </HierarchicalDataTemplate></TreeView.ItemTemplate>

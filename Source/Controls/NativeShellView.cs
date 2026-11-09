@@ -188,6 +188,13 @@ internal sealed partial class NativeShellView : HwndHost
         void EnableModeless([MarshalAs(UnmanagedType.Bool)] bool Enable);
         void UIActivate(uint State);
         void Refresh();
+        void CreateViewWindow();
+        void DestroyViewWindow();
+        void GetCurrentInfo();
+        void AddPropertySheetPages();
+        void SaveViewState();
+        void SelectItem();
+        void GetItemObject(uint Scope, ref Guid Interface, [MarshalAs(UnmanagedType.IUnknown)] out object Item);
     }
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr CreateWindowEx(uint Extended, string Class, string Name, uint Style, int X, int Y, int Width, int Height, IntPtr Parent, IntPtr Menu, IntPtr Instance, IntPtr Data);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DestroyWindow(IntPtr Window);

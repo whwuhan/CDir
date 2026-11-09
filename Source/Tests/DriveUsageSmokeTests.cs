@@ -178,7 +178,21 @@ public partial class ExplorerTab
             }
         }
         T Element<T>(FolderNode Node, string Name) where T : FrameworkElement
-            => Children<T>((TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node)).Single(Item => Item.Name == Name);
+        {
+            var Container = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node);
+            return Name == "SidebarDriveMeter" ? (T)Container.Template.FindName(Name, Container)
+                : Children<T>(Container).Single(Item => Item.Name == Name);
+        }
+        bool MeterFitsHeader(FolderNode Node)
+        {
+            var Container = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node);
+            var Header = (FrameworkElement)Container.Template.FindName("HeaderHost", Container);
+            var Meter = Element<ProgressBar>(Node, "SidebarDriveMeter");
+            var Left = Meter.TranslatePoint(new Point(), this.FolderTree).X;
+            var Right = Meter.TranslatePoint(new Point(Meter.ActualWidth, 0), this.FolderTree).X;
+            return Math.Abs(Left - Header.TranslatePoint(new Point(), this.FolderTree).X) < .1
+                && Math.Abs(Right - (this.FolderTree.ActualWidth - Container.Padding.Right)) < .1;
+        }
         async Task Refresh(bool Force = true)
         {
             this.QueueSidebarDriveUsageRefresh(Force);
@@ -193,7 +207,8 @@ public partial class ExplorerTab
                 "Fresh and older settings hide My Computer drive usage by default");
             this.ChangeShowSidebarDriveUsage(false);
             this.UpdateLayout();
-            Check(Nodes.All(Node => !Element<Grid>(Node, "SidebarDriveUsage").IsVisible),
+            Check(Nodes.All(Node => !Element<Grid>(Node, "SidebarDriveUsage").IsVisible
+                && !Element<ProgressBar>(Node, "SidebarDriveMeter").IsVisible),
                 "Disabling drive usage hides capacity text, bars and percentages for every drive");
             this.ChangeShowSidebarDriveUsage(true);
             this.SidebarColumn.Width = new GridLength(390);
@@ -227,6 +242,8 @@ public partial class ExplorerTab
                 Check(Nodes.All(Node => Math.Abs(Element<Grid>(Node, "SidebarDriveUsage").TranslatePoint(new Point(), this.SidebarScroll).X
                     - FavoritePath.TranslatePoint(new Point(), this.SidebarScroll).X) < 1),
                     "Drive capacity and folder path columns stay aligned after resizing the sidebar to " + Width);
+                Check(Nodes.Take(2).All(MeterFitsHeader),
+                    "Drive meters align with header content edges while folder paths are visible: " + Width);
                 if (Width == 850 && AppMain.ScreenshotPath is { } AlignedOutput)
                 {
                     var Bitmap = new RenderTargetBitmap((int)this.HostWindow.ActualWidth, (int)this.HostWindow.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -286,17 +303,18 @@ public partial class ExplorerTab
                 var Percentage = Element<TextBlock>(Nodes[0], "SidebarDrivePercentage");
                 var Summary = Element<Grid>(Nodes[0], "SidebarDriveUsage");
                 var CapacityRight = Capacity.TranslatePoint(new Point(Capacity.ActualWidth, 0), Summary).X;
-                var MeterLeft = Meter.TranslatePoint(new Point(), Summary).X;
-                var MeterRight = Meter.TranslatePoint(new Point(Meter.ActualWidth, 0), Summary).X;
                 var PercentLeft = Percentage.TranslatePoint(new Point(), Summary).X;
                 Check(Capacity.FontSize == FontSize && Percentage.FontSize == FontSize
                     && Element<TextBlock>(Nodes[0], "SidebarDriveName").FontSize == FontSize,
                     "Drive usage and percentage always match the sidebar font size: " + FontSize);
-                Check(CapacityRight + 11 <= MeterLeft && MeterRight + 11 <= PercentLeft
+                Check(CapacityRight + 11 <= PercentLeft
                     && Math.Abs(Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight / 2), Summary).Y
                         - Percentage.TranslatePoint(new Point(0, Percentage.ActualHeight / 2), Summary).Y) < 1
-                    && Summary.ActualHeight < Capacity.ActualHeight * 1.5,
-                    "Usage, meter and percentage appear left to right on one spacious row");
+                    && Meter.TranslatePoint(new Point(), this.FolderTree).Y
+                        >= Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight), this.FolderTree).Y
+                    && MeterFitsHeader(Nodes[0]),
+                    "Capacity and percentage retain their row while the lower meter aligns with the header content edges: " + FontSize
+                    + $"; capacity right={CapacityRight}, percentage left={PercentLeft}, meter left={Meter.TranslatePoint(new Point(), this.FolderTree).X}, meter width={Meter.ActualWidth}, tree width={this.FolderTree.ActualWidth}, meter top={Meter.TranslatePoint(new Point(), this.FolderTree).Y}, text bottom={Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight), this.FolderTree).Y}");
                 var NameWidths = Nodes.Select(Node => Element<TextBlock>(Node, "SidebarDriveName").ActualWidth).ToArray();
                 // Inline-rename labels size to their text; their parent grid owns the aligned column.
                 var NameColumnWidths = Nodes.Select(Node => FindAncestor<Grid>(Element<TextBlock>(Node, "SidebarDriveName"))!.ColumnDefinitions[0].ActualWidth).ToArray();
@@ -329,7 +347,7 @@ public partial class ExplorerTab
             await this.RunPreferencesSmokeChecksAsync(Passed, FontSizes: new Dictionary<string, double> { ["Sidebar"] = 13 });
             await CheckUsageLayoutAsync(13);
             double? FixedCapacityLeft = null;
-            double? FixedMeterLeft = null;
+
             foreach (var Width in new[] { 690.0, 390.0, 238.0, 690.0 })
             {
                 this.SidebarColumn.Width = new GridLength(Width);
@@ -345,9 +363,9 @@ public partial class ExplorerTab
                 var CapacityLeft = Element<TextBlock>(Nodes[0], "SidebarDriveCapacity").TranslatePoint(new Point(), this.FolderTree).X;
                 var MeterLeft = Element<ProgressBar>(Nodes[0], "SidebarDriveMeter").TranslatePoint(new Point(), this.FolderTree).X;
                 FixedCapacityLeft ??= CapacityLeft;
-                FixedMeterLeft ??= MeterLeft;
-                Check(Math.Abs(CapacityLeft - FixedCapacityLeft.Value) < 1 && Math.Abs(MeterLeft - FixedMeterLeft.Value) < 1,
-                    "Shrinking and expanding the sidebar keeps capacity and meter columns fixed: " + Width);
+
+                Check(Math.Abs(CapacityLeft - FixedCapacityLeft.Value) < 1 && Nodes.Take(2).All(MeterFitsHeader),
+                    "Resizing keeps capacity text in place and aligns the lower meter with the drive content row: " + Width);
             }
             this.SidebarColumn.Width = new GridLength(690);
             this.UpdateLayout();
@@ -360,6 +378,26 @@ public partial class ExplorerTab
                 using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(Output)!, "SidebarDriveUsage.png"));
                 Encoder.Save(Stream);
             }
+            this.ChangeShowSidebarDriveUsage(false);
+            this.UpdateLayout();
+            Check(Nodes.All(Node => !Element<Grid>(Node, "SidebarDriveUsage").IsVisible
+                && !Element<ProgressBar>(Node, "SidebarDriveMeter").IsVisible),
+                "Turning off drive usage hides both populated capacity text and the separate lower bars");
+            this.ChangeShowSidebarDriveUsage(true);
+            await this.SidebarDriveUsageTask;
+            Nodes[0].Children.Add(new FolderNode("Owned child", Path.Combine(AppMain.SmokeRoot!, "Owned child")));
+            Nodes[0].IsExpanded = true;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            await Task.Delay(200);
+            this.UpdateLayout();
+            var ChildItem = (TreeViewItem)((TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Nodes[0]))
+                .ItemContainerGenerator.ContainerFromItem(Nodes[0].Children[0]);
+            var RootMeter = Element<ProgressBar>(Nodes[0], "SidebarDriveMeter");
+            Check(ChildItem.TranslatePoint(new Point(), this.FolderTree).Y
+                >= RootMeter.TranslatePoint(new Point(0, RootMeter.ActualHeight), this.FolderTree).Y
+                && !Children<ProgressBar>(ChildItem).Single(Item => Item.Name == "SidebarDriveMeter").IsVisible,
+                "Expanded child folders start below the full-width drive meter and do not show their own meter");
+            Nodes[0].IsExpanded = false;
             this.ReadDriveUsage = _ => null;
             await Refresh();
             Check(Nodes.All(Node => !Node.HasDriveUsage && Node.DriveUsagePercentageText.Length == 0),

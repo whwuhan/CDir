@@ -35,6 +35,8 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         new("Open", "Open", FileListOnly: true),
         new("ToggleTerminal", "Terminal", true),
         new("ToggleSidebar", "ToggleSidebar", true),
+        new("AutoFitColumns", "AutoFitColumns", true),
+        new("DistributePanesEvenly", "DistributePanesEvenly", true),
         new("TerminalFontIncrease", "TerminalFontIncrease", TerminalOnly: true),
         new("TerminalFontDecrease", "TerminalFontDecrease", TerminalOnly: true),
         new("TerminalFontIncreaseWheel", "TerminalFontIncreaseWheel", TerminalOnly: true, FixedGesture: "Ctrl+WheelUp"),
@@ -128,7 +130,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         }
         // Damaged or manually edited settings must not leave commands competing for a key.
         // A newly introduced default must not take over an existing personal binding.
-        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin" })
+        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin", "AutoFitColumns", "DistributePanesEvenly" })
             if (Overrides is not null && !Overrides.ContainsKey(NewCommand)
                 && Result.Any(Pair => Pair.Key != NewCommand && Pair.Value == Result[NewCommand]))
                 Result[NewCommand] = "";

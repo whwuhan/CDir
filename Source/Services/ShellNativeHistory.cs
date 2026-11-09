@@ -35,21 +35,45 @@ internal sealed partial class ShellContextMenu
 
     internal static string HistoryVerb(bool Redo) => Redo ? "redo" : "undo";
 
+    internal static string[] InspectHistoryMenu(object Bound)
+    {
+        var Menu = (IContextMenu)Bound;
+        var Handle = CreatePopupMenu();
+        if (Handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+        try
+        {
+            var Result = Menu.QueryContextMenu(Handle, 0, 1, 0x7fff, 4 | 0x1000);
+            Marshal.ThrowExceptionForHR(Result);
+            var Verbs = new List<string>();
+            for (uint Index = 0; Index < (Result & 0xffff); Index++)
+            {
+                var Verb = new StringBuilder(256);
+                if (Menu.GetCommandString(Index, 4, IntPtr.Zero, Verb, (uint)Verb.Capacity) >= 0 && Verb.Length > 0)
+                    Verbs.Add(Verb.ToString());
+            }
+            return Verbs.ToArray();
+        }
+        finally { DestroyMenu(Handle); }
+    }
+
     // Invoke Explorer's canonical background command, not a CDir backup replay.
     internal static void Replay(IntPtr Owner, string FolderPath, bool Redo)
     {
         if (AppMain.SmokeTest) throw new InvalidOperationException("UI checks must not modify the user's Windows undo history.");
         if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA) throw new InvalidOperationException("Shell operations require an STA thread.");
-        var Id = typeof(IShellItem).GUID;
-        Marshal.ThrowExceptionForHR(SHCreateItemFromParsingName(FolderPath, IntPtr.Zero, ref Id, out var Folder));
-        IContextMenu? Menu = null;
+        CDir.Controls.NativeShellView.WithHistoryMenu(Owner, FolderPath, Bound =>
+            ReplayHistoryMenu(Owner, FolderPath, Redo, Bound));
+    }
+
+    internal static void ReplayHistoryMenu(IntPtr Owner, string FolderPath, bool Redo, object Bound,
+        Action<uint>? InvokeOwnedCommand = null)
+    {
+        if (AppMain.SmokeTest && InvokeOwnedCommand is null)
+            throw new InvalidOperationException("UI checks must not modify the user's Windows undo history.");
+        var Menu = (IContextMenu)Bound;
         var Handle = IntPtr.Zero;
         try
         {
-            var MenuId = typeof(IContextMenu).GUID;
-            var Handler = new Guid("3981E226-F559-11D3-8E3A-00C04F6837D5");
-            Marshal.ThrowExceptionForHR(Folder.BindToHandler(IntPtr.Zero, ref Handler, ref MenuId, out var Bound));
-            Menu = (IContextMenu)Bound;
             Handle = CreatePopupMenu();
             if (Handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
             var Result = Menu.QueryContextMenu(Handle, 0, 1, 0x7fff, 4 | 0x1000);
@@ -60,6 +84,7 @@ internal sealed partial class ShellContextMenu
                 if (Menu.GetCommandString(Index, 4, IntPtr.Zero, Verb, (uint)Verb.Capacity) < 0
                     || !string.Equals(Verb.ToString(), HistoryVerb(Redo), StringComparison.OrdinalIgnoreCase)
                     || (GetMenuState(Handle, Index + 1, 0) & 3) != 0) continue;
+                if (InvokeOwnedCommand is not null) { InvokeOwnedCommand(Index); return; }
                 var Info = new InvokeInfo { Size = Marshal.SizeOf<InvokeInfo>(), Mask = 0x4000 | 0x100,
                     Window = Owner, Verb = (IntPtr)Index, VerbW = (IntPtr)Index, Show = 1,
                     Directory = FolderPath, DirectoryW = FolderPath };
@@ -72,8 +97,6 @@ internal sealed partial class ShellContextMenu
         finally
         {
             if (Handle != IntPtr.Zero) DestroyMenu(Handle);
-            if (Menu is not null) Marshal.ReleaseComObject(Menu);
-            Marshal.ReleaseComObject(Folder);
         }
     }
 

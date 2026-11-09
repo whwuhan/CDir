@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
@@ -92,7 +92,8 @@ public partial class MainWindow
 
     internal WorkspaceState? CaptureWorkspace()
     {
-        if (this.ClosingTabBatch || this.RestoringWorkspace || this.WorkspaceClosed || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)) return null;
+        if (this.ClosingTabBatch || this.RestoringWorkspace || this.WorkspaceClosed || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)
+            || this.Panes.Any(Pane => Pane.Selected is null || !ReferenceEquals(Pane.Selected.Parent, Pane.TabPages))) return null;
         this.WorkspaceCaptureCount++;
         var Bounds = this.WindowState == WindowState.Normal ? new Rect(this.Left, this.Top, this.Width, this.Height) : this.RestoreBounds;
         return new WorkspaceState
@@ -100,7 +101,8 @@ public partial class MainWindow
             LastActivatedUtc = this.LastActivatedUtc,
             Left = Bounds.Left, Top = Bounds.Top, Width = Bounds.Width, Height = Bounds.Height,
             Maximized = this.WindowState == WindowState.Maximized || this.WindowState == WindowState.Minimized && this.LastWorkspaceMaximized,
-            ActiveTab = Math.Max(0, this.Tabs.IndexOf(this.ActiveTab!)), Tabs = this.Tabs.Select(Tab => Tab.CaptureWorkspaceTab()).ToList()
+            ActiveTab = Math.Max(0, this.Tabs.IndexOf(this.ActiveTab!)), Tabs = this.Tabs.Select(Tab => Tab.CaptureWorkspaceTab()).ToList(),
+            Layout = this.CapturePane(this.LayoutRoot)
         };
     }
 
@@ -152,6 +154,7 @@ public partial class MainWindow
                     this.AttachTab(Page);
                     await Page.RestoreWorkspaceTabAsync(State);
                 }
+                this.RestorePanes(Saved.Layout);
                 this.SelectTab(this.Tabs[Math.Clamp(Saved.ActiveTab, 0, this.Tabs.Count - 1)]);
                 this.ActiveTab!.ActivateRecoveredPreferences();
             }

@@ -1,4 +1,4 @@
-<Window x:Class="CDir.UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+﻿<Window x:Class="CDir.UI.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="{DynamicResource TextWindowTitle}" Icon="/CDir;component/Resource/App.ico" Width="1280" Height="820" MinWidth="960" MinHeight="600" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" PreviewKeyDown="WindowPreviewKeyDown" PreviewMouseWheel="WindowPreviewMouseWheel" PreviewMouseDown="WindowInputPreviewMouseDown" Closing="WindowClosing">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="{DynamicResource UITitleControlHeight}" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" /></shell:WindowChrome.WindowChrome>
   <Window.Resources>
@@ -163,35 +163,7 @@
           </Button>
         </StackPanel>
       </Border>
-      <Border x:Name="TabBar" Grid.Row="2" Background="{StaticResource SurfaceOuter}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,2,6,0" PreviewMouseDown="TabBarPreviewMouseDown">
-        <StackPanel>
-          <Border x:Name="PinnedTabRow" Visibility="Collapsed" Background="Transparent" AllowDrop="True" PreviewDragEnter="TabRowDragOver" PreviewDragOver="TabRowDragOver" PreviewDragLeave="TabRowDragLeave" PreviewDrop="TabRowDrop">
-            <Grid>
-          <ScrollViewer x:Name="PinnedTabScroll" services:ScrollBarReveal.IsEnabled="True" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False" Margin="0,0,0,2">
-            <ItemsControl x:Name="PinnedTabHeaders" ItemTemplate="{StaticResource TabHeaderTemplate}" ItemsSource="{Binding PinnedHeaders, RelativeSource={RelativeSource AncestorType=Window}}">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            </ItemsControl>
-          </ScrollViewer>
-              <Border x:Name="PinnedTabDropMarker" Width="2" HorizontalAlignment="Left" Background="{StaticResource Accent}" IsHitTestVisible="False" Visibility="Collapsed" />
-            </Grid>
-          </Border>
-          <Border x:Name="NormalTabRow" Background="Transparent" AllowDrop="True" PreviewDragEnter="TabRowDragOver" PreviewDragOver="TabRowDragOver" PreviewDragLeave="TabRowDragLeave" PreviewDrop="TabRowDrop">
-            <Grid>
-          <ScrollViewer x:Name="TabScroll" services:ScrollBarReveal.IsEnabled="True" Background="Transparent" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-            <ItemsControl x:Name="TabHeaders" ItemTemplate="{StaticResource TabHeaderTemplate}" ItemsSource="{Binding VisibleHeaders, RelativeSource={RelativeSource AncestorType=Window}}">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            </ItemsControl>
-              <Button x:Name="NewTabButton" Content="+" Width="24" Height="24" Margin="4,0,0,1" FontSize="18" Padding="0" VerticalAlignment="Top"
-                      Click="NewTabClick" ToolTip="{DynamicResource TextNewTab}" AutomationProperties.Name="{DynamicResource TextNewTab}" />
-            </StackPanel>
-          </ScrollViewer>
-              <Border x:Name="NormalTabDropMarker" Width="2" HorizontalAlignment="Left" Background="{StaticResource Accent}" IsHitTestVisible="False" Visibility="Collapsed" />
-            </Grid>
-          </Border>
-        </StackPanel>
-      </Border>
-      <Grid x:Name="TabPages" Grid.Row="3" />
+      <Grid x:Name="WorkspaceSurface" Grid.Row="2" Grid.RowSpan="2" />
     </Grid>
   </Border>
 </Window>

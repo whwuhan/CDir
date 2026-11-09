@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -31,6 +31,7 @@ public partial class MainWindow
     internal bool PrepareTabDrag(DependencyObject Source, int ClickCount, Point Position)
     {
         this.TabDragCandidate = null;
+        if (this.PaneFromSource(Source) is { } Pane) this.ActivatePane(Pane);
         if (ClickCount != 1 || this.DragHeaderFromSource(Source) is not { } Header || !this.Tabs.Contains(Header.Page)) return false;
         this.TabDragCandidate = (Header.Page, Position);
         return true;
@@ -54,7 +55,7 @@ public partial class MainWindow
                 Captured.ReleaseMouseCapture();
             this.StartTabDragDrop(this.TabBar, Data, DragDropEffects.Move);
         }
-        finally { this.ActiveTabDrag = null; this.ClearTabDropFeedback(); }
+        finally { this.ActiveTabDrag = null; this.ClearTabDropFeedback(); this.ClearSplitFeedback(); }
         return true;
     }
 
@@ -87,7 +88,7 @@ public partial class MainWindow
         Items.UpdateLayout();
         var DraggedPage = Page;
         var TargetPinned = Pinned;
-        var Others = this.Headers.Where(Header => Header.Page.IsTabPinned == TargetPinned
+        var Others = this.Headers.Where(Header => ReferenceEquals(Header.Page.Parent, this.TabPages) && Header.Page.IsTabPinned == TargetPinned
             && !ReferenceEquals(Header.Page, DraggedPage)).ToArray();
         var Slot = 0;
         foreach (var Header in Others)
@@ -97,7 +98,7 @@ public partial class MainWindow
             if (Position.X < Left + Container.ActualWidth / 2) break;
             Slot++;
         }
-        Destination = (Pinned ? 0 : this.Tabs.Count(Tab => Tab.IsTabPinned && !ReferenceEquals(Tab, DraggedPage))) + Slot;
+        Destination = (Pinned ? 0 : this.PaneTabs(this.ActivePane).Count(Tab => Tab.IsTabPinned && !ReferenceEquals(Tab, DraggedPage))) + Slot;
         if (Slot < Others.Length)
             MarkerX = ((FrameworkElement)Items.ItemContainerGenerator.ContainerFromItem(Others[Slot])).TranslatePoint(new Point(), Row).X;
         else if (Others.Length > 0)
@@ -114,6 +115,7 @@ public partial class MainWindow
     internal DragDropEffects UpdateTabDragFeedback(IDataObject Data, bool PinnedRow, Point Position)
     {
         this.ClearTabDropFeedback();
+        this.ClearSplitFeedback();
         if (!this.TryTabDropPlan(Data, PinnedRow, Position, out _, out _, out _, out var MarkerX)) return DragDropEffects.None;
         var Row = PinnedRow ? this.PinnedTabRow : this.NormalTabRow;
         var Marker = PinnedRow ? this.PinnedTabDropMarker : this.NormalTabDropMarker;
@@ -139,19 +141,28 @@ public partial class MainWindow
     {
         try
         {
-            return this.TryTabDropPlan(Data, PinnedRow, Position, out var Page, out var Pinned, out var Destination, out _)
-                && this.MoveTab(Page, Pinned, Destination);
+            if (!this.TryTabDropPlan(Data, PinnedRow, Position, out var Page, out var Pinned, out var Destination, out _)) return false;
+            var Source = this.PaneFor(Page);
+            var Target = this.ActivePane;
+            var Transferred = !ReferenceEquals(Source, Target);
+            if (Transferred) this.TransferTab(Page, Source, Target);
+            var Moved = this.MoveTab(Page, Pinned, Destination);
+            if (Transferred) this.SelectTab(Page);
+            return Transferred || Moved;
         }
         finally { this.ClearTabDropFeedback(); }
     }
 
     private void ClearTabDropFeedback()
     {
-        this.PinnedTabDropMarker.Visibility = Visibility.Collapsed;
-        this.NormalTabDropMarker.Visibility = Visibility.Collapsed;
+        foreach (var Pane in this.Panes)
+        {
+            Pane.PinnedTabDropMarker.Visibility = Visibility.Collapsed;
+            Pane.NormalTabDropMarker.Visibility = Visibility.Collapsed;
+        }
     }
 
-    private void TabRowDragOver(object Sender, DragEventArgs E)
+    internal void TabRowDragOver(object Sender, DragEventArgs E)
     {
         E.Effects = (E.AllowedEffects & DragDropEffects.Move) != 0
             ? this.UpdateTabDragFeedback(E.Data, ReferenceEquals(Sender, this.PinnedTabRow), E.GetPosition((IInputElement)Sender))
@@ -159,13 +170,13 @@ public partial class MainWindow
         E.Handled = true;
     }
 
-    private void TabRowDragLeave(object Sender, DragEventArgs E)
+    internal void TabRowDragLeave(object Sender, DragEventArgs E)
     {
         var Row = (FrameworkElement)Sender;
         if (!new Rect(Row.RenderSize).Contains(E.GetPosition(Row))) this.ClearTabDropFeedback();
     }
 
-    private void TabRowDrop(object Sender, DragEventArgs E)
+    internal void TabRowDrop(object Sender, DragEventArgs E)
     {
         E.Effects = (E.AllowedEffects & DragDropEffects.Move) != 0
             && this.CompleteTabDrop(E.Data, ReferenceEquals(Sender, this.PinnedTabRow), E.GetPosition((IInputElement)Sender))

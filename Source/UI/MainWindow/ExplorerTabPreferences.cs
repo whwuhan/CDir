@@ -24,6 +24,13 @@ public partial class ExplorerTab
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
+    private void ChangeAutoFitColumnsOnNavigation(bool Fit)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.AutoFitColumnsOnNavigation = Fit;
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
     private void ChangeSeparatePinnedTabs(bool Separate)
     {
         this.Settings.SeparatePinnedTabs = Separate;
@@ -59,6 +66,7 @@ public partial class ExplorerTab
         }
         if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI)
         {
+            this.Settings.AutoFitColumnsOnNavigation = Defaults.AutoFitColumnsOnNavigation;
             this.Settings.ShowGridLines = Defaults.ShowGridLines;
             this.Settings.SeparatePinnedTabs = Defaults.SeparatePinnedTabs;
             this.HostWindow.UpdatePinnedTabLayout(Defaults.SeparatePinnedTabs);

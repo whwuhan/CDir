@@ -160,7 +160,7 @@ public partial class ExplorerTab
                     Check(this.Settings.CalculateFolderSizes == CalculateFolderSizes.Value,
                         "The folder-size checkbox applies immediately");
                 }
-                Check(!Dialog.ShowBookmarkPathsCheck.IsVisible && !Dialog.ShowSidebarDriveUsageCheck.IsVisible,
+                Check(!Dialog.ShowBookmarkPathsCheck.IsVisible && !Dialog.ShowSidebarDriveUsageCheck.IsVisible && !Dialog.AutoFitColumnsOnNavigationCheck.IsVisible,
                     "Folder paths and drive usage are absent from General");
                 Dialog.Categories.SelectedItem = Dialog.UICategory;
                 Dialog.UpdateLayout();
@@ -168,6 +168,17 @@ public partial class ExplorerTab
                     && Dialog.ShowSidebarDriveUsageCheck.IsChecked == this.Settings.ShowSidebarDriveUsage
                     && Dialog.ShowSidebarDriveUsageCheck.Content?.ToString() == LanguageService.Text("ShowSidebarDriveUsage"),
                     "UI exposes the localized drive usage choice with its saved value");
+                Check(Dialog.AutoFitColumnsOnNavigationCheck.IsVisible && Dialog.AutoFitColumnsOnNavigationCheck.IsEnabled
+                    && Dialog.AutoFitColumnsOnNavigationCheck.IsChecked == this.Settings.AutoFitColumnsOnNavigation
+                    && Dialog.AutoFitColumnsOnNavigationCheck.Content?.ToString() == LanguageService.Text("AutoFitColumnsOnNavigation")
+                    && Dialog.AutoFitColumnsOnNavigationCheck.ToolTip?.ToString() == LanguageService.Text("AutoFitColumnsOnNavigationTooltip"),
+                    "UI exposes the localized automatic column-fitting checkbox with its saved value");
+                var InitialFit = this.Settings.AutoFitColumnsOnNavigation;
+                Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = !InitialFit;
+                Check(this.Settings.AutoFitColumnsOnNavigation == !InitialFit
+                    && this.CaptureSaveSettings().AutoFitColumnsOnNavigation == !InitialFit,
+                    "Automatic column fitting updates its persisted preference immediately");
+                Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = InitialFit;
                 var InitialUsage = this.Settings.ShowSidebarDriveUsage;
                 Dialog.ShowSidebarDriveUsageCheck.IsChecked = !InitialUsage;
                 Check(this.Settings.ShowSidebarDriveUsage == !InitialUsage && this.ShowSidebarDriveUsage == !InitialUsage
@@ -318,6 +329,7 @@ public partial class ExplorerTab
                     Dialog.CalculateFolderSizesCheck.IsChecked = true;
                     Dialog.ShowBookmarkPathsCheck.IsChecked = true;
                     Dialog.ShowSidebarDriveUsageCheck.IsChecked = true;
+                    Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = true;
                     Dialog.StartOnLoginCheck.IsChecked = true;
                     while (!Dialog.ShowHiddenCheck.IsEnabled && Failure is null) await Task.Delay(20);
                     Check(Dialog.ShowHiddenCheck.IsEnabled && this.Settings.ShowHidden, "Reset fixture enables hidden items through Preferences");
@@ -342,6 +354,7 @@ public partial class ExplorerTab
                             && Dialog.CalculateFolderSizesCheck.IsChecked == false && !this.Settings.CalculateFolderSizes
                             && Dialog.ShowBookmarkPathsCheck.IsChecked == false && !this.Settings.ShowBookmarkPaths && !this.ShowBookmarkPaths
                             && Dialog.ShowSidebarDriveUsageCheck.IsChecked == false && !this.Settings.ShowSidebarDriveUsage && !this.ShowSidebarDriveUsage
+                            && Dialog.AutoFitColumnsOnNavigationCheck.IsChecked == false && !this.Settings.AutoFitColumnsOnNavigation
                             && Dialog.StartOnLoginCheck.IsChecked == false && !this.ReadStartOnLogin()
                             && Dialog.GridLinesCheck.IsChecked == false && !this.Settings.ShowGridLines
                             && this.Settings.TerminalFontSize == Models.DefaultSettings.Current.TerminalFontSize

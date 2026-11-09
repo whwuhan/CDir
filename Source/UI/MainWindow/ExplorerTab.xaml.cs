@@ -1,4 +1,4 @@
-using CDir.UI.Dialogs;
+﻿using CDir.UI.Dialogs;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -269,6 +269,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.UpdateAddressPath(PreserveEditing: this.AddressEditing && !RecordHistory && PreserveFilter && SamePath(OldPath, this.CurrentPath));
             if (!PreserveFilter) this.SearchBox.Text = "";
             this.ShowEntries(this.FolderEntries, SearchSelection);
+            // Fit newly opened folders, while watcher/manual refreshes keep personal widths.
+            if (!Computer && !PreserveFilter && this.Settings.AutoFitColumnsOnNavigation)
+                this.FitVisibleColumns();
             if (SelectPath is not null) this.SelectPath(SelectPath);
             this.ConfigureWatcher();
             if (Computer) this.SelectSidebarNode(null);
@@ -575,7 +578,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ForwardButton.IsEnabled = this.HistoryIndex >= 0 && this.HistoryIndex < this.History.Count - 1 && (!this.Loading || this.IsRecycleBin);
         this.UpButton.IsEnabled = HasPath && !this.IsVirtualLocation && this.Files.GetParent(this.CurrentPath) is not null && !this.Loading;
         this.LoadingBar.Visibility = this.Loading || this.OperationBusy || this.Searching ? Visibility.Visible : Visibility.Collapsed;
-        if (this.IsTabSelected && this.HostWindow.PreferencesMenuItem is not null)
+        if (ReferenceEquals(this.HostWindow.ActiveTab, this) && this.HostWindow.PreferencesMenuItem is not null)
             this.HostWindow.PreferencesMenuItem.IsEnabled = !this.Loading && !this.OperationBusy;
     }
     private void SelectPath(string Path, bool Append = false)
@@ -615,6 +618,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     private void FileGridRightClick(object Sender, MouseButtonEventArgs E)
     {
+        if (FindAncestor<DataGridColumnHeader>(E.OriginalSource as DependencyObject) is not null) return;
         var Row = FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject);
         if (Row is null) this.FileGrid.SelectedItems.Clear();
         else if (!Row.IsSelected) { this.FileGrid.SelectedItems.Clear(); Row.IsSelected = true; }
@@ -881,6 +885,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.Settings.CalculateFolderSizes, this.ChangeCalculateFolderSizes,
             this.Settings.ShowBookmarkPaths, this.ChangeShowBookmarkPaths,
             this.Settings.ShowSidebarDriveUsage, this.ChangeShowSidebarDriveUsage,
+            this.Settings.AutoFitColumnsOnNavigation, this.ChangeAutoFitColumnsOnNavigation,
             this.Settings.SeparatePinnedTabs, this.ChangeSeparatePinnedTabs,
             this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);

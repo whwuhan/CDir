@@ -1,8 +1,8 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('filesystem', 'search', 'language', 'address', 'version-control', 'all')]
     [string[]]$Group = @('filesystem', 'language', 'address'),
-    [ValidateSet('transfer', 'selection', 'lifecycle', 'tabs', 'navigation', 'sidebar', 'address', 'operations', 'columns', 'fonts', 'search', 'language', 'shortcuts', 'shell-icons', 'version-control', 'terminal', 'all')]
+    [ValidateSet('transfer', 'selection', 'lifecycle', 'tabs', 'panes', 'navigation', 'sidebar', 'address', 'operations', 'columns', 'fonts', 'search', 'language', 'shortcuts', 'shell-icons', 'version-control', 'terminal', 'all')]
     [string[]]$UIGroup = @(),
     [ValidateSet('release')][string[]]$ScriptGroup = @(),
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
@@ -32,7 +32,7 @@ if ($FatalBugFix -and -not $PublishConfiguration) { throw '-FatalBugFix requires
 if ($FeatureRelease -and -not $PublishConfiguration) { throw '-FeatureRelease requires -PublishConfiguration to test the release candidate.' }
 if ($null -ne $MajorVersion -and -not $PublishConfiguration) { throw '-MajorVersion requires -PublishConfiguration to test the release candidate.' }
 $AvailableGroups = @('filesystem', 'search', 'language', 'address', 'version-control')
-$AvailableUIGroups = @('transfer', 'selection', 'lifecycle', 'tabs', 'navigation', 'sidebar', 'address', 'operations', 'columns', 'fonts', 'search', 'language', 'shortcuts', 'shell-icons', 'version-control', 'terminal')
+$AvailableUIGroups = @('transfer', 'selection', 'lifecycle', 'tabs', 'panes', 'navigation', 'sidebar', 'address', 'operations', 'columns', 'fonts', 'search', 'language', 'shortcuts', 'shell-icons', 'version-control', 'terminal')
 if ($Group -contains 'all') { $Group = $AvailableGroups }
 # Keep a fresh window and owned app scope per group, including all, while building the project once.
 if ($UIGroup -contains 'all') { $UIGroup = $AvailableUIGroups }

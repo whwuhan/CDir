@@ -56,6 +56,7 @@ public partial class ExplorerTab
                 }
         }
         LanguageService.SetLanguage(this.Settings.Language);
+        this.Settings.UpgradeShortcutDefaults();
         this.ShortcutBindings = KeyboardShortcut.Resolve(this.Settings.Shortcuts);
         this.ApplyLanguageResources();
     }
@@ -202,10 +203,12 @@ public partial class ExplorerTab
             ShowBookmarkPaths = this.Settings.ShowBookmarkPaths,
             SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
             ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
+            AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
             ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
             HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
             FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
             TitleBarFontRevision = this.Settings.TitleBarFontRevision,
+            ShortcutDefaultsRevision = this.Settings.ShortcutDefaultsRevision,
             Shortcuts = this.Settings.Shortcuts is null ? null : new(this.Settings.Shortcuts, StringComparer.Ordinal),
             TerminalFontSize = this.Settings.TerminalFontSize,
             TerminalBackgroundColor = this.Settings.TerminalBackgroundColor,

@@ -30,6 +30,19 @@ public partial class ExplorerTab
         try
         {
             await this.NavigateAsync(Work, RecordHistory: false);
+            string[]? NativeVerbs = null;
+            Check(await this.RunOperationAsync("Reading owned Shell view commands", () =>
+                CDir.Controls.NativeShellView.WithHistoryMenu(Owner, Work, Menu => NativeVerbs = ShellContextMenu.InspectHistoryMenu(Menu)),
+                "Owned Shell view commands read", RequiresSta: true) && NativeVerbs is not null
+                && NativeVerbs.Contains("view") && NativeVerbs.Contains("refresh"),
+                "The undo adapter obtains commands from an initialized native Shell view without showing or activating it");
+            if (AppMain.ScreenshotPath is { } Output)
+                File.WriteAllText(Path.Combine(Path.GetDirectoryName(Output)!, "NativeHistoryMenu.json"), System.Text.Json.JsonSerializer.Serialize(NativeVerbs));
+            Check(await this.TransferFilesAsync([FilePath], Work, false), "The Shell completes a real same-folder file copy before history replay");
+            var SameFolderCopy = Directory.EnumerateFiles(Work).Single(Path => !SamePath(Path, FilePath));
+            Passed.AddRange(ShellContextMenu.CheckOwnedHistoryMenu(Owner, Work, SameFolderCopy));
+            Check(File.ReadAllText(FilePath) == "Owned native history route" && File.ReadAllText(SameFolderCopy) == "Owned native history route",
+                "Repeated copy undo and redo preserve the original file and copied contents");
             this.ReplayShellOperation = (Window, Folder, Redo) =>
             {
                 Sta &= Thread.CurrentThread.GetApartmentState() == ApartmentState.STA;

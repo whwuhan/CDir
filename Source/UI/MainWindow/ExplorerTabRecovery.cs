@@ -59,8 +59,13 @@ public partial class ExplorerTab
         }
         foreach (var Column in this.FileGrid.Columns)
             if (State.ColumnWidths?.TryGetValue(Column.SortMemberPath, out var Width) == true && double.IsFinite(Width) && Width >= 24 && Width <= 10000)
+            {
+                if (Width < Column.MinWidth) Column.MinWidth = 0;
                 Column.Width = new DataGridLength(Width);
+            }
         if (!string.IsNullOrEmpty(State.Search)) { this.SearchBox.Text = State.Search; await this.SearchTask; }
+        // An enabled automatic fit takes precedence over saved widths when reopening a folder.
+        if (this.Settings.AutoFitColumnsOnNavigation && !this.IsVirtualLocation) this.FitVisibleColumns();
         if (ColumnKeys.Contains(State.Sort)) this.SortProperty = State.Sort;
         this.SortDirection = State.Descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         this.ApplySort();

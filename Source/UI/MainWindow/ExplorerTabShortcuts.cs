@@ -20,6 +20,7 @@ public partial class ExplorerTab
         if (Gesture.Length > 0 && this.ShortcutBindings.Any(Item => Item.Key != Id && Item.Value == Gesture)) return false;
         var Previous = this.Settings.Shortcuts;
         this.Settings.Shortcuts = new(this.ShortcutBindings, StringComparer.Ordinal) { [Id] = Gesture };
+        this.Settings.ShortcutDefaultsRevision = 1;
         if (!this.SaveSettings())
         {
             this.Settings.Shortcuts = Previous;
@@ -75,6 +76,8 @@ public partial class ExplorerTab
             case "NewWindow": this.OpenNewWindow(); break;
             case "NewTab": case "CloseTab": case "NextTab": case "PreviousTab": await this.HostWindow.ExecuteTabCommandAsync(Shortcut.Id); break;
             case "ToggleTerminal": await this.ToggleTerminalAsync(); break;
+            case "DistributePanesEvenly": this.HostWindow.DistributePanesEvenly(); break;
+            case "AutoFitColumns": this.AutoFitColumns(); break;
             case "ToggleSidebar": this.ToggleSidebarClick(this.SidebarToggleButton, new RoutedEventArgs()); break;
             case "EditPath": case "EditPathAlternate": this.BeginAddressEdit(); break;
             case "Search": this.SearchBox.Focus(); this.SearchBox.SelectAll(); break;

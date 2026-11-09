@@ -87,3 +87,6 @@
 
 回收站拖放在 transfer 组创建短路径的自有输入，使用原生删除回调获取仅该测试项目的标识，再按确切路径绑定回收站命名空间，验证真实复制/移动、原名、嵌套内容、复制保留来源、移动移除来源、CIDA 相对/绝对标识、错误数据拦截和取消结果。仅操作创建前验证所有权的测试文件夹；不枚举用户回收站，不写入系统撤销历史，不执行全局撤销。复制用例结束后由 Windows 按已捕获标识清理自有回收站项目；短路径根带运行所有权标记，结束后验证并删除。sidebar 组验证 CDir 回收站视图可拖出原生 Shell 标识。
 Windows 自带回收站回归必须通过其 IShellFolder.GetUIObjectOf 获取原生 COM IDataObject，并使用 GetAttributesOf 返回的真实 Move-only 能力进行 DragEnter/DragOver/Drop 协商；不得用自行构造的 Copy|Move 掩码替代来源能力。覆盖文件、嵌套文件夹、混合批次、复制选项的两种状态、真实移动及 COM SetData 的完成回执、取消保留来源，以及普通/混合非回收站标识不得在复制模式被降级为移动。旧的纯 CIDA 用例仅验证序列化协议，不代表 Windows 资源管理器的拖出协商。
+分割窗格使用 `-UIGroup panes`：覆盖四向范围预览、拖放取消、中心与过窄目标拒绝、完整窗格、窄窗口可用性、嵌套布局、跨窗格标签移动及空窗格合并、活动窗格快捷键、置顶状态、分隔比例保存、重启恢复与损坏布局回退。与标签或持久化同时修改时组合选择 `panes,tabs,lifecycle,shortcuts,address,sidebar` 和 `-ScriptGroup release -PublishConfiguration`；发布后仅需 `-UIGroup panes -Published` 捕获当前版本预览。
+
+表头自适应使用 `-UIGroup columns,shortcuts`，覆盖所有当前显示列、虚拟化屏幕外内容、当前筛选结果、字体与单 Tab 隔离、右键菜单、自定义/清除快捷键和窄列恢复。`panes` 同时验证 Alt+R 按叶窗格数量均分嵌套区域、最小尺寸保护、自定义绑定和持久化。Alt+Q 默认迁移通过 shortcuts 和 lifecycle 组验证；个人 Alt+1 重绑定在迁移后保留。

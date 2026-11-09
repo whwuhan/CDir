@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -9,23 +9,33 @@ public partial class MainWindow
     internal void SetTabPinned(ExplorerTab Page, bool Pinned)
     {
         if (!this.Tabs.Contains(Page) || Page.IsTabPinned == Pinned) return;
-        var Destination = this.Tabs.Count(Tab => Tab.IsTabPinned && !ReferenceEquals(Tab, Page));
+        // Saved pane memberships use indices into the saved tab order. Restore
+        // pin flags without moving those indices while tabs are being loaded.
+        if (this.RestoringWorkspace) { Page.SetTabPinned(Pinned); this.RefreshTabHeaders(); return; }
+        var Destination = this.PaneTabs(this.PaneFor(Page)).Count(Tab => Tab.IsTabPinned && !ReferenceEquals(Tab, Page));
         this.MoveTab(Page, Pinned, Destination);
     }
 
     private bool MoveTab(ExplorerTab Page, bool Pinned, int Destination)
     {
-        var OldIndex = this.Tabs.IndexOf(Page);
-        if (OldIndex < 0 || Destination < 0 || Destination >= this.Tabs.Count) return false;
+        var Pane = this.PaneFor(Page);
+        var Local = this.PaneTabs(Pane).ToList();
+        var OldIndex = Local.IndexOf(Page);
+        if (OldIndex < 0 || Destination < 0 || Destination >= Local.Count) return false;
         if (Page.IsTabPinned == Pinned && OldIndex == Destination) return false;
         if (Page.IsTabPinned != Pinned) Page.SetTabPinned(Pinned);
-        this.Tabs.Move(OldIndex, Destination);
-        this.Headers.Move(OldIndex, Destination);
+        Local.Remove(Page); Local.Insert(Destination, Page);
+        var Slots = this.Tabs.Select((Tab, Index) => (Tab, Index)).Where(Item => ReferenceEquals(Item.Tab.Parent, Pane.TabPages)).Select(Item => Item.Index).ToArray();
+        for (var Index = 0; Index < Slots.Length; Index++)
+        {
+            this.Tabs.Move(this.Tabs.IndexOf(Local[Index]), Slots[Index]);
+            this.Headers.Move(this.Headers.IndexOf(this.Headers.Single(Header => ReferenceEquals(Header.Page, Local[Index]))), Slots[Index]);
+        }
         this.RefreshTabHeaders();
         this.PersistWorkspaceNow();
-        var Control = this.SeparatePinnedTabs && Pinned ? this.PinnedTabHeaders : this.TabHeaders;
+        var Control = this.SeparatePinnedTabs && Pinned ? Pane.PinnedTabHeaders : Pane.TabHeaders;
         Control.UpdateLayout();
-        (Control.ItemContainerGenerator.ContainerFromItem(this.Headers[Destination]) as FrameworkElement)?.BringIntoView();
+        (Control.ItemContainerGenerator.ContainerFromItem(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page))) as FrameworkElement)?.BringIntoView();
         return true;
     }
 
@@ -37,10 +47,14 @@ public partial class MainWindow
 
     private void RefreshTabHeaders()
     {
-        Synchronize(this.VisibleHeaders, this.Headers.Where(Header => !this.SeparatePinnedTabs || !Header.Page.IsTabPinned).ToArray());
-        Synchronize(this.PinnedHeaders, this.Headers.Where(Header => this.SeparatePinnedTabs && Header.Page.IsTabPinned).ToArray());
-        this.PinnedTabScroll.Visibility = this.PinnedHeaders.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        this.PinnedTabRow.Visibility = this.PinnedTabScroll.Visibility;
+        foreach (var Pane in this.Panes)
+        {
+            var Local = this.Headers.Where(Header => ReferenceEquals(Header.Page.Parent, Pane.TabPages)).ToArray();
+            Synchronize(Pane.VisibleHeaders, Local.Where(Header => !this.SeparatePinnedTabs || !Header.Page.IsTabPinned).ToArray());
+            Synchronize(Pane.PinnedHeaders, Local.Where(Header => this.SeparatePinnedTabs && Header.Page.IsTabPinned).ToArray());
+            Pane.PinnedTabScroll.Visibility = Pane.PinnedHeaders.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            Pane.PinnedTabRow.Visibility = Pane.PinnedTabScroll.Visibility;
+        }
 
         static void Synchronize(ObservableCollection<TabHeader> Target, TabHeader[] Desired)
         {

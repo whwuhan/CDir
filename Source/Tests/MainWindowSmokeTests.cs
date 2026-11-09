@@ -56,6 +56,7 @@ public partial class ExplorerTab
             Passed.Add("initial navigation and directory tree are synchronized");
         }
         if (Group is "tabs" or "all") await RunGroup("tabs", () => this.RunTabsSmokeChecksAsync(Passed));
+        if (Group is "panes" or "all") await RunGroup("panes", async () => { await this.RunPaneSmokeChecksAsync(Passed); await this.RunPaneBalanceSmokeChecksAsync(Passed); });
         if (Group is "lifecycle" or "all") await RunGroup("lifecycle", () => this.RunLifecycleSmokeChecksAsync(Passed));
         if (Group is "selection" or "all") await RunGroup("selection", () => this.RunMarqueeSmokeChecksAsync(Passed));
         if (Group is "transfer" or "all") await RunGroup("transfer", () => this.RunFileTransferSmokeChecksAsync(Passed));

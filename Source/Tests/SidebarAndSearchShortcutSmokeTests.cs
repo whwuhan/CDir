@@ -34,15 +34,15 @@ public partial class ExplorerTab
             this.ApplySidebarVisibility();
             this.ApplyShortcutHints();
             var Width = this.SidebarColumn.Width;
-            var Hide = await Press(this.FileGrid, Key.D1, ModifierKeys.Alt);
+            var Hide = await Press(this.FileGrid, Key.Q, ModifierKeys.Alt);
             Check(Hide.Handled && !this.Settings.ShowSidebar && !this.SidebarPanel.IsVisible,
-                "Alt+1 hides the complete sidebar through the actual key route");
-            var Show = await Press(this.SearchBox, Key.D1, ModifierKeys.Alt);
+                "Alt+Q hides the complete sidebar through the actual key route");
+            var Show = await Press(this.SearchBox, Key.Q, ModifierKeys.Alt);
             Check(Show.Handled && this.Settings.ShowSidebar && this.SidebarPanel.IsVisible && this.SidebarColumn.Width == Width
                 && SamePath(this.CurrentPath, InitialPath),
-                "Alt+1 from a text field restores the sidebar width without changing navigation");
+                "Alt+Q from a text field restores the sidebar width without changing navigation");
             Check(this.ChangeShortcut("ToggleSidebar", "Ctrl+Shift+B"), "The sidebar toggle accepts a personal binding");
-            var OldKey = await Press(this.FileGrid, Key.D1, ModifierKeys.Alt);
+            var OldKey = await Press(this.FileGrid, Key.Q, ModifierKeys.Alt);
             Check(!OldKey.Handled && this.Settings.ShowSidebar, "The old sidebar key stops dispatching after reassignment");
             var NewKey = await Press(this.SearchBox, Key.B, ModifierKeys.Control | ModifierKeys.Shift);
             Check(NewKey.Handled && !this.Settings.ShowSidebar, "The customized sidebar shortcut works from the search field");
