@@ -26,6 +26,7 @@ public partial class ExplorerTab
 
     private void BeginFileRename(string Path)
     {
+        if (this.IsComputer) return;
         if (!this.Entries.Any(Entry => SamePath(Entry.FullPath, Path))) return;
         if (this.Entries.First(Entry => SamePath(Entry.FullPath, Path)) is { } Candidate && this.View?.Contains(Candidate) != true)
             this.SearchBox.Clear();

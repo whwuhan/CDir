@@ -102,7 +102,7 @@ public partial class ExplorerTab
 
     private async void FileGridKeyboardFocusWithinChanged(object Sender, DependencyPropertyChangedEventArgs E)
     {
-        if (this.IsRecycleBin) return;
+        if (this.IsVirtualLocation) return;
         if (E.NewValue is true) this.CancelSidebarFolderClick();
         var FocusVersion = ++this.PanelFocusVersion;
         if (this.RestoringTabFocus || this.RestoringCollapseFocus) { this.PanelTreeSyncRequested = false; return; }
@@ -147,6 +147,7 @@ public partial class ExplorerTab
 
     private async Task SyncNavigationTreeAsync(string Key, string Current, int Version, bool Reveal)
     {
+        if (this.IsVirtualLocation) return;
         if (Version != this.NavigationVersion || this.WindowClosed) return;
         if (Key == "folder-tree")
         {

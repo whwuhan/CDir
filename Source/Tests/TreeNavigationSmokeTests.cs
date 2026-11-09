@@ -19,6 +19,7 @@ public partial class ExplorerTab
         var InitialTree = this.DirectoryTreeSection.IsExpanded;
         var InitialLanguage = LanguageService.CurrentLanguage;
         ContextMenu? ActiveMenu = null;
+        var MenuStayOpen = new Dictionary<ContextMenu, bool>();
         var FixtureId = Guid.NewGuid().ToString("N");
         var Fixture = Path.Combine(Path.GetTempPath(), "CDirTreeNavigation" + FixtureId);
         var Parent = Directory.CreateDirectory(Path.Combine(Fixture, "Parent 中文")).FullName;
@@ -266,6 +267,9 @@ public partial class ExplorerTab
                 Item.BringIntoView(new Rect(0, 0, Math.Min(180, Item.ActualWidth), 24));
                 await Settle();
                 ActiveMenu = Item.ContextMenu ?? throw new InvalidOperationException("Folder menu is missing.");
+                // Keep owned menu assertions independent of desktop mouse capture changes.
+                MenuStayOpen.TryAdd(ActiveMenu, ActiveMenu.StaysOpen);
+                ActiveMenu.StaysOpen = true;
                 ActiveMenu.PlacementTarget = Item;
                 ActiveMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
                 ActiveMenu.IsOpen = true;
@@ -342,6 +346,7 @@ public partial class ExplorerTab
         finally
         {
             if (ActiveMenu is not null) ActiveMenu.IsOpen = false;
+            foreach (var Menu in MenuStayOpen) Menu.Key.StaysOpen = Menu.Value;
             this.ChangeLanguage(InitialLanguage, Persist: false);
             await this.NavigateAsync(InitialPath, RecordHistory: false);
             this.FavoritesSection.IsExpanded = InitialFavorites;

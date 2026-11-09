@@ -20,7 +20,7 @@ public partial class ExplorerTab
     private FolderNode[] LayoutRoots(object Section) => Section is SidebarCategory Category
         ? Category.Folders.Select(Folder => Folder.Node).ToArray()
         : ReferenceEquals(Section, this.FavoritesSection)
-            ? this.FavoritesList.Items.OfType<FavoriteLocation>().Select(Folder => Folder.Node).ToArray()
+            ? this.FavoritesList.Items.OfType<FavoriteLocation>().Where(Folder => !Folder.IsVirtual).Select(Folder => Folder.Node).ToArray()
             : this.Roots.ToArray();
 
     private Dictionary<string, SidebarTreeLayout> CaptureSidebarTreeLayouts()

@@ -35,6 +35,7 @@ public partial class ExplorerTab
         if (this.WindowClosed || this.CategorySection(Button) is not { } Section) return;
         var Node = Button.DataContext switch { CategoryFolder Folder => Folder.Node, FavoriteLocation Location => Location.Node, _ => null };
         if (Node is null) return;
+        if (CDir.Services.ShellLocations.IsVirtual(Node.FullPath)) return;
         ++this.PanelFocusVersion;
         this.PanelTreeSyncRequested = false;
         var WasSyncing = this.SyncingTree;

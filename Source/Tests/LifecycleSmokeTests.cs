@@ -19,6 +19,7 @@ public partial class ExplorerTab
         await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
         await this.RunInstanceWorkspaceSmokeChecksAsync(Passed);
         await this.RunExitConflictSmokeChecksAsync(Passed);
+        await this.RunSessionEndingSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
             if (!Condition) throw new InvalidOperationException("Lifecycle UI check failed: " + Name);
@@ -62,6 +63,9 @@ public partial class ExplorerTab
             File.WriteAllText(SettingsFile, "{}"); // Existing settings without the new field use the new default.
             await Open();
             var Page = Probe!.ActiveTab!;
+            Probe.WindowState = WindowState.Normal;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            CheckResizeBorders(Probe, Passed);
             await CheckCaptionButtons("Initial display");
             Check(!Page.Settings.ExitOnClose && !new AppSettings().ExitOnClose, "Fresh and legacy settings default to hiding on close");
             var Tray = Probe.TrayIcon!;
@@ -94,6 +98,7 @@ public partial class ExplorerTab
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Probe.UpdateLayout();
             var WorkArea = WindowWorkArea.ReadWorkArea(new System.Windows.Interop.WindowInteropHelper(Probe).Handle);
+            CheckResizeBorders(Probe, Passed);
             Check(Probe.BorderThickness == new Thickness(0) && Probe.WindowFrame.BorderThickness == new Thickness(0)
                 && Probe.WindowFrame.TranslatePoint(new Point(), Probe) == new Point()
                 && Math.Abs(Probe.WindowFrame.ActualWidth - Probe.ActualWidth) <= 1

@@ -14,7 +14,7 @@ public partial class ExplorerTab
     private bool PrepareAddressFolderDrag(DependencyObject? Source, int ClickCount, Point Origin)
     {
         this.AddressFolderDragCandidate = null;
-        if (this.WindowClosed || this.AddressEditing || this.IsRecycleBin || this.OperationBusy || this.Loading || ClickCount != 1)
+        if (this.WindowClosed || this.AddressEditing || this.IsVirtualLocation || this.OperationBusy || this.Loading || ClickCount != 1)
             return false;
         FrameworkElement? Element = null;
         string? FolderPath = null;
@@ -49,7 +49,7 @@ public partial class ExplorerTab
     {
         var Source = this.AddressFolderDragCandidate;
         this.AddressFolderDragCandidate = null;
-        if (Source is null || this.WindowClosed || this.AddressEditing || this.IsRecycleBin || this.OperationBusy || this.Loading) return;
+        if (Source is null || this.WindowClosed || this.AddressEditing || this.IsVirtualLocation || this.OperationBusy || this.Loading) return;
         this.CancelAddressNavigation();
         this.AddressFolderDragActive = true;
         try { this.StartSidebarFolderAddDrag(Source); }

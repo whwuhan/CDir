@@ -123,7 +123,7 @@ public partial class ExplorerTab
         this.UpdateSearchTips();
         this.CurrentSearch = SearchQuery.Parse(this.SearchBox.Text);
         if (this.CurrentPath.Length == 0) return;
-        if (this.IsRecycleBin)
+        if (this.IsVirtualLocation)
         {
             this.CancelSearch();
             this.SearchTask = Task.CompletedTask;
@@ -140,7 +140,7 @@ public partial class ExplorerTab
 
     private void QueueSearch(bool Debounce = true, IEnumerable<string>? Selection = null)
     {
-        if (this.IsRecycleBin)
+        if (this.IsVirtualLocation)
         {
             this.CancelSearch();
             this.CurrentSearch = SearchQuery.Parse(this.SearchBox.Text);

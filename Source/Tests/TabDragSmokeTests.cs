@@ -2,10 +2,13 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using CDir.Models;
+using CDir.Services;
 
 namespace CDir.UI;
 
@@ -70,6 +73,53 @@ public partial class ExplorerTab
             Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
             using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(Output)!, Name + ".png"));
             Encoder.Save(Stream);
+        }
+        async Task CheckHoverReveal(ScrollViewer Viewer, string Row)
+        {
+            Viewer.UpdateLayout();
+            var Bar = (ScrollBar)Viewer.Template.FindName("PART_HorizontalScrollBar", Viewer);
+            var Track = (Track)Bar.Template.FindName("PART_Track", Bar);
+            var HitTestVisible = Bar.IsHitTestVisible;
+            var RowHeight = Viewer.ActualHeight;
+            void Hover(bool Inside) => Bar.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, Environment.TickCount)
+                { RoutedEvent = Inside ? Mouse.MouseEnterEvent : Mouse.MouseLeaveEvent });
+            try
+            {
+                // Exercise routed input without moving or depending on the user's pointer.
+                Bar.IsHitTestVisible = false;
+                Hover(false);
+                Check(Bar.IsVisible && Bar.Orientation == Orientation.Horizontal && Viewer.ScrollableWidth > 0
+                    && ScrollBarReveal.GetIsEnabled(Bar) && Track.Opacity == 0,
+                    Row + " overflow scrollbar starts hidden with the directory-tree hover policy");
+                Hover(true);
+                Check(Track.Opacity == 0, Row + " scrollbar does not appear immediately on entry");
+                await Task.Delay(35);
+                Hover(false);
+                await Task.Delay(ScrollBarReveal.HoverDelay + TimeSpan.FromMilliseconds(50));
+                Check(Track.Opacity == 0 && !ScrollBarReveal.GetIsRevealed(Bar),
+                    Row + " scrollbar stays hidden after a quick crossing cancels the delay");
+                Hover(true);
+                var Deadline = Environment.TickCount64 + 5000;
+                while (Track.Opacity == 0 && Environment.TickCount64 < Deadline) await Task.Delay(20);
+                Check(Track.Opacity == 1 && ScrollBarReveal.GetIsRevealed(Bar),
+                    Row + " scrollbar appears after sustained hover");
+                Capture(Row + "ScrollbarHover");
+                Hover(false);
+                Check(Track.Opacity == 0, Row + " scrollbar hides when the pointer leaves");
+                Track.Thumb!.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+                Hover(false);
+                Check(Track.Opacity == 1, Row + " scrollbar remains visible while dragged outside its bounds");
+                Track.Thumb.RaiseEvent(new DragCompletedEventArgs(0, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+                Check(Track.Opacity == 0, Row + " scrollbar hides after dragging ends outside");
+                Viewer.UpdateLayout();
+                Check(Viewer.ActualHeight == RowHeight, Row + " hover visibility preserves tab row height");
+                Capture(Row + "ScrollbarHidden");
+            }
+            finally
+            {
+                Hover(false);
+                Bar.IsHitTestVisible = HitTestVisible;
+            }
         }
         try
         {
@@ -170,6 +220,7 @@ public partial class ExplorerTab
             Probe.UpdatePinnedTabLayout(false);
             Probe.SelectTab(Probe.Tabs.Last());
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            await CheckHoverReveal(Probe.TabScroll, "OrdinaryTabs");
             var Offset = Probe.TabScroll.HorizontalOffset;
             var Overflow = Begin(Probe.Tabs.Last());
             Check(Offset > 0 && Probe.UpdateTabDragFeedback(Overflow, false, new Point(1, 8)) == DragDropEffects.Move
@@ -180,6 +231,7 @@ public partial class ExplorerTab
             Probe.SelectTab(Probe.Tabs.Last());
             await Task.Delay(60);
             Probe.UpdateLayout();
+            await CheckHoverReveal(Probe.PinnedTabScroll, "PinnedTabs");
             Offset = Probe.PinnedTabScroll.HorizontalOffset;
             Overflow = Begin(Probe.Tabs.Last());
             Check(Offset > 0 && Probe.UpdateTabDragFeedback(Overflow, true, new Point(1, 8)) == DragDropEffects.Move

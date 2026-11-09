@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v1.1.35 interface preview](Docs/Images/CDirPreview.png)
+![CDir v1.1.39 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -22,6 +22,8 @@ Keep all files and subfolders in the release together. The package includes the 
 The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automated regression checks currently run on Windows 11 x64; Windows 10 still needs validation on an actual installation. Windows 10 compatibility depends on the exact edition and version: the official .NET 10 support list is limited to supported LTSC / Enterprise releases. Windows 10 Home/Pro 22H2 is not on that list. See [Microsoft's installation and support information](https://learn.microsoft.com/en-us/dotnet/core/install/windows) and the [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 
 ### Features
+
+- Drag any edge or corner of a restored window to resize it. Quick Access includes My Computer and Recycle Bin, and uses the fixed order Home, Desktop, Documents, Downloads, Pictures, My Computer, Recycle Bin. My Computer opens a drive overview in the current tab. Close Other Tabs preserves every pinned tab and closes only the other unpinned tabs, with one final workspace save for the batch.
 
 - Folder size calculation is off by default. Enable Preferences > General > Calculate Folder Sizes In The Background to show recursive totals in the Size column, including hidden descendants. Unchecking stops calculation and clears folder totals; file sizes remain visible. One throttled background scan runs at a time; changing folders or tabs and hiding Size cancel pending work. `—` means unknown, `≥` marks a partial total, and links are not traversed. Press `F5` to recalculate after changes inside subfolders.
 - Expand or collapse Quick Access and the drive tree by clicking their headings; section state is saved. Directories load on demand and selection follows navigation. A single tree-folder click navigates immediately without expanding or waiting for a double-click interval. A double-click also expands or collapses that folder without duplicate loading or history entries. When the main panel gains focus, the tree and matching bookmark category synchronize to its current path. Navigation preserves selection and sidebar scroll position; arrows change expansion independently. Category headings do not connect to bookmark roots. Expanded root folders retain their full subtree indentation guides; child connectors and pinned rows use the actual child-tree guide columns. Right-click a drive or folder in the tree to expand or collapse all subfolders in that branch.
@@ -245,7 +247,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v1.1.35 界面预览](Docs/Images/CDirPreview.png)
+![CDir v1.1.39 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -259,6 +261,8 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 设计目标为 **Windows 10 / Windows 11 64 位**。当前构建与自动回归验证环境为 Windows 11 x64，Windows 10 尚需实机验收。Windows 10 兼容性取决于具体版本和版本类型：.NET 10 的 Windows 10 官方支持清单限于仍在支持期的 LTSC / Enterprise 版本，不包含 Windows 10 Home/Pro 22H2，详见 [Microsoft 支持说明](https://learn.microsoft.com/en-us/dotnet/core/install/windows) 和 [.NET 10 系统清单](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)。
 
 ### 已有功能
+
+- 普通窗口支持拖动四边或四角调整大小。Quick Access 加入“我的电脑”，入口固定依次为 Home、Desktop、Documents、Downloads、Pictures、My Computer、Recycle Bin；“我的电脑”在当前标签显示磁盘列表。“关闭其他标签页”保留所有置顶标签，只关闭其他未置顶标签，整批结束后仅保存一次最终工作区。
 
 - 置顶标签和普通标签均可在各自分组中拖拽排序。置顶标签单独一行且已显示时，跨行拖拽可切换置顶状态，并按释放位置插入；拖拽时显示插入标记，行边缘支持自动横向滚动，排序会保存。
 - 文件列表网格线默认关闭，重置 UI 或全部偏好设置后也保持关闭；已保存的明确选择继续保留。

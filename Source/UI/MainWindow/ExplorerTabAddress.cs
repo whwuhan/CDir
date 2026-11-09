@@ -39,7 +39,7 @@ public partial class ExplorerTab
     private void UpdateAddressPath(bool PreserveEditing = false)
     {
         if (this.AddressOverflowButton.ContextMenu is { } Menu) Menu.IsOpen = false;
-        this.AddressSegments = this.IsRecycleBin ? [new AddressSegment(CDir.Localization.LanguageService.Text("RecycleBin"), this.CurrentPath, "")]
+        this.AddressSegments = this.IsVirtualLocation ? [new AddressSegment(CDir.Localization.LanguageService.Text(this.IsComputer ? "DirectoryTree" : "RecycleBin"), this.CurrentPath, "")]
             : AddressSegment.Create(this.CurrentPath);
         this.AddressBreadcrumbs.ItemsSource = this.AddressSegments;
         if (!PreserveEditing)

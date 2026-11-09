@@ -80,7 +80,7 @@ public partial class ExplorerTab
             }
             finally { Probe.SyncingTree = false; }
             Check(Child.IsExpanded, "The closing fixture remembers a child expansion hidden inside a collapsed parent");
-            var QuickRoot = Probe.FavoritesList.Items.OfType<FavoriteLocation>().First().Node;
+            var QuickRoot = Probe.FavoritesList.Items.OfType<FavoriteLocation>().First(Favorite => !Favorite.IsVirtual).Node;
             await Probe.EnsureChildrenAsync(QuickRoot);
             QuickRoot.IsExpanded = true;
             await Settle();

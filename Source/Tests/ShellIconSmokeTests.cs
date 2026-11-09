@@ -54,6 +54,7 @@ public partial class ExplorerTab
             CreateIconTestShortcut(CommandLink, CommandPath);
             var Samples = new[]
             {
+                new ShellIconSample("Computer", ShellLocations.Computer, true),
                 new ShellIconSample("Folder", FolderPath, true),
                 new ShellIconSample("OpenFolder", FolderPath, true, 16, true),
                 new ShellIconSample("Drive", System.IO.Path.GetPathRoot(Fixture)!, true),
@@ -224,15 +225,27 @@ public partial class ExplorerTab
                     if (Sample.Size <= 16) Flags |= 1;
                     if (Sample.IsDirectory && Sample.OpenFolder) Flags |= 2;
                     if (System.IO.Path.GetExtension(Sample.Path).Equals(".lnk", StringComparison.OrdinalIgnoreCase)) Flags |= 0x8000;
+                    var Pidl = IntPtr.Zero;
                     try
                     {
-                        if (IconReferenceGetFileInfo(Sample.Path, 0, ref Info, (uint)Marshal.SizeOf<IconReferenceFileInfo>(), Flags) == IntPtr.Zero || Info.Icon == IntPtr.Zero)
+                        IntPtr Result;
+                        if (ShellLocations.IsVirtual(Sample.Path))
+                        {
+                            Marshal.ThrowExceptionForHR(IconReferenceParseName(Sample.Path, IntPtr.Zero, out Pidl, 0, out _));
+                            Result = IconReferenceGetPidlInfo(Pidl, 0, ref Info, (uint)Marshal.SizeOf<IconReferenceFileInfo>(), Flags | 8);
+                        }
+                        else Result = IconReferenceGetFileInfo(Sample.Path, 0, ref Info, (uint)Marshal.SizeOf<IconReferenceFileInfo>(), Flags);
+                        if (Result == IntPtr.Zero || Info.Icon == IntPtr.Zero)
                             throw new InvalidOperationException("Native Shell reference lookup failed: " + Sample.Name);
                         var Bitmap = Imaging.CreateBitmapSourceFromHIcon(Info.Icon, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(Sample.Size, Sample.Size));
                         Bitmap.Freeze();
                         Results.Add(Sample.Name, Bitmap);
                     }
-                    finally { if (Info.Icon != IntPtr.Zero) IconReferenceDestroyIcon(Info.Icon); }
+                    finally
+                    {
+                        if (Info.Icon != IntPtr.Zero) IconReferenceDestroyIcon(Info.Icon);
+                        if (Pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(Pidl);
+                    }
                 }
             }
             catch (Exception Error) { Failure = Error; }
@@ -288,6 +301,10 @@ public partial class ExplorerTab
 
     [DllImport("shell32.dll", EntryPoint = "SHGetFileInfoW", CharSet = CharSet.Unicode)]
     private static extern IntPtr IconReferenceGetFileInfo(string Path, uint Attributes, ref IconReferenceFileInfo Info, uint Size, uint Flags);
+    [DllImport("shell32.dll", EntryPoint = "SHGetFileInfoW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr IconReferenceGetPidlInfo(IntPtr Pidl, uint Attributes, ref IconReferenceFileInfo Info, uint Size, uint Flags);
+    [DllImport("shell32.dll", EntryPoint = "SHParseDisplayName", CharSet = CharSet.Unicode)]
+    private static extern int IconReferenceParseName(string Name, IntPtr Context, out IntPtr Pidl, uint Requested, out uint Attributes);
     [DllImport("user32.dll", EntryPoint = "DestroyIcon")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IconReferenceDestroyIcon(IntPtr Icon);

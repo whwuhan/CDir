@@ -22,7 +22,7 @@ public partial class ExplorerTab
     {
         if (this.HostWindow.Tabs.Any(Tab => Tab.OperationBusy) || this.Loading) return;
         var Owner = new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle;
-        var Folder = this.IsRecycleBin ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : this.CurrentPath;
+        var Folder = this.IsVirtualLocation ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : this.CurrentPath;
         await this.RunOperationAsync(LanguageService.Text(Redo ? "Redoing" : "Undoing"),
             () => this.ReplayShellOperation(Owner, Folder, Redo), LanguageService.Text(Redo ? "RedoComplete" : "UndoComplete"), RequiresSta: true);
         foreach (var Tab in this.HostWindow.Tabs.Where(Tab => !ReferenceEquals(Tab, this))) Tab.ScheduleRefresh();

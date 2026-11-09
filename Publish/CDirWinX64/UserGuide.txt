@@ -1,5 +1,7 @@
 CDir File Manager
 
+Resize a restored window by dragging any outer edge or corner. Quick Access includes My Computer and Recycle Bin and uses the fixed order Home, Desktop, Documents, Downloads, Pictures, My Computer, Recycle Bin. My Computer shows drives in the current tab. Close Other Tabs preserves all pinned tabs and closes only the other unpinned tabs. Bulk close refreshes the tab strip and saves the final workspace once. Side-button presses and releases form one navigation gesture; rapid Back/Forward requests run in order.
+
 The title bar shows the current version next to CDir as vmajor.minor.patch, starting at v0.0.0.
 The major version is controlled manually. The minor version increases after a release that fixes a fatal crash or hang, or when the user explicitly requests an increase for a major new feature. The release workflow manages the patch version: source or configuration changes increase it on the next successful release. Releasing or packaging unchanged source, building, testing, or a failed release does not increase it. Increasing minor does not reset patch or automatically change major.
 The title and version use the sidebar's default font size. Adjust the title bar independently under Preferences > UI > Panel Font Sizes.
@@ -199,6 +201,8 @@ Preferences > General > Start CDir When I Sign In To Windows is unchecked by def
 
 Recovery after a crash or power loss
 When only one instance is running, the current window automatically saves its workspace about once per second, including tabs, active directory, aliases, navigation history, search/sort, selection, column widths, sidebar and terminal panel layout, and window bounds. Settings use atomic writes with disk flush and a .bak backup. Restarting loads the latest complete workspace; an unreadable main file falls back to its backup. Sudden power loss can still lose changes after the last completed write. Terminal panels start fresh shell sessions. Recovery files are stored alongside Settings.json as Settings.json.workspace.json and its .bak backup.
+
+When Windows shuts down, restarts, or signs out, CDir saves a separate workspace snapshot for each instance without an overwrite prompt, a busy-operation veto, or waiting for another instance. The next startup restores the most recently active window's complete configuration and tabs. Multiple instances also keep periodic private snapshots; normal exits retain configuration conflict confirmation. Snapshots are stored in Settings.json.workspace.json.sessions. A newer normal save takes precedence over an older snapshot.
 
 App-authored menus use compact separators across their available width, without the default Windows icon-gutter indentation. Configured menu text sizes are preserved.
 

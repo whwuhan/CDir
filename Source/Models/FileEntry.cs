@@ -28,6 +28,7 @@ public sealed class FileEntry : INotifyPropertyChanged
     public string Name { get; init; } = string.Empty;
     public string FullPath { get; init; } = string.Empty;
     public bool IsDirectory { get; init; }
+    public bool IsDrive { get; init; }
     public string Extension { get; init; } = string.Empty;
     public string? TypeKey { get; init; }
     public object?[] TypeArguments { get; init; } = [];
@@ -78,7 +79,7 @@ public sealed class FileEntry : INotifyPropertyChanged
         }
     }
     public string DisplaySize => this.Size is { } ByteCount ? (this.FolderSizePartial ? "≥ " : "") + FormatSize(ByteCount) : "—";
-    public string DisplayModified => this.Modified.ToString(
+    public string DisplayModified => this.IsDrive ? "—" : this.Modified.ToString(
         this.Use12HourClock ? "yyyy/MM/dd hh:mm:ss tt" : "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
     public event PropertyChangedEventHandler? PropertyChanged;
 

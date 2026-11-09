@@ -65,7 +65,7 @@ internal static class DurableJsonStore
         finally { if (File.Exists(Temporary)) File.Delete(Temporary); }
     }
 
-    private static void CheckTestPath(string Path)
+    internal static void CheckTestPath(string Path)
     {
         if (!AppMain.SmokeTest) return;
         if (!AppMain.IsInsideSmokeScope(Path)) throw new IOException("Test settings must stay inside the owned UI-check scope.");

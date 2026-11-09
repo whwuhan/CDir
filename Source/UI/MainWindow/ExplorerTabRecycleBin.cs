@@ -22,7 +22,9 @@ public partial class ExplorerTab
     private long RecycleReadVersion;
     private bool RecycleBinLoaded;
     private bool IsRecycleBin => ShellLocations.IsRecycleBin(this.CurrentPath);
-    private string FileSystemWorkingDirectory => this.IsRecycleBin
+    private bool IsComputer => ShellLocations.IsComputer(this.CurrentPath);
+    private bool IsVirtualLocation => ShellLocations.IsVirtual(this.CurrentPath);
+    private string FileSystemWorkingDirectory => this.IsVirtualLocation
         ? this.History.Take(Math.Max(0, this.HistoryIndex + 1)).LastOrDefault(Path.IsPathFullyQualified)
             ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : this.CurrentPath;
 

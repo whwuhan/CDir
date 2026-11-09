@@ -17,7 +17,7 @@ public partial class ExplorerTab
     private async void FileContextOpening(object Sender, ContextMenuEventArgs E)
     {
         E.Handled = true;
-        if (this.ShellMenuOpen || this.OperationBusy || this.Loading || this.CurrentPath.Length == 0 || this.WindowClosed) return;
+        if (this.IsComputer || this.ShellMenuOpen || this.OperationBusy || this.Loading || this.CurrentPath.Length == 0 || this.WindowClosed) return;
         this.ShellMenuOpen = true;
         try
         {

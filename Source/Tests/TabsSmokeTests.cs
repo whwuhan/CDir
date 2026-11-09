@@ -283,6 +283,7 @@ public partial class ExplorerTab
             await this.RunTabContextMenuSmokeChecksAsync(Passed);
             await this.RunPinnedTabSmokeChecksAsync(Passed);
             await this.RunTabDragSmokeChecksAsync(Passed);
+            await this.RunTabBulkCloseSmokeChecksAsync(Passed);
         }
         finally
         {

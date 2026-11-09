@@ -28,7 +28,9 @@ public partial class ExplorerTab
             if (OpenedMenu is not null) OpenedMenu.IsOpen = false;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Probe!.UpdateLayout();
-            var Presenter = (ContentPresenter)Probe.TabHeaders.ItemContainerGenerator.ContainerFromIndex(Probe.Tabs.IndexOf(Page));
+            var Header = Probe.Headers.Single(Header => ReferenceEquals(Header.Page, Page));
+            var HeaderItems = Probe.PinnedHeaders.Contains(Header) ? Probe.PinnedTabHeaders : Probe.TabHeaders;
+            var Presenter = (ContentPresenter)HeaderItems.ItemContainerGenerator.ContainerFromItem(Header);
             var Surface = FindVisualChild<Border>(Presenter)!;
             var Menu = Surface.ContextMenu;
             Menu.StaysOpen = true;
@@ -137,6 +139,24 @@ public partial class ExplorerTab
             await Invoke(Middle, "CloseOtherTabs");
             Check(Probe.Tabs.Count == 1 && ReferenceEquals(Probe.ActiveTab, Middle) && C.WindowClosed && Right.WindowClosed,
                 "Close Others preserves only the clicked tab, including when that tab was inactive");
+            var Pinned = await Add();
+            Probe.SetTabPinned(Pinned, true);
+            Pinned.OperationBusy = true;
+            var Unpinned = await Add();
+            await Invoke(Middle, "CloseOtherTabs");
+            Check(Probe.Tabs.SequenceEqual(new[] { Pinned, Middle }) && Unpinned.WindowClosed && !Pinned.WindowClosed
+                && ReferenceEquals(Probe.ActiveTab, Middle),
+                "Close Others preserves pinned tabs, ignores their busy state and closes only other unpinned tabs");
+            var NoOthers = await Open(Middle);
+            Check(!Command(NoOthers, "CloseOtherTabs").IsEnabled, "Close Others is disabled when every other tab is pinned");
+            NoOthers.IsOpen = false;
+            var ExtraUnpinned = await Add();
+            await Invoke(Pinned, "CloseOtherTabs");
+            Check(Probe.Tabs.Count == 1 && ReferenceEquals(Probe.ActiveTab, Pinned) && Middle.WindowClosed && ExtraUnpinned.WindowClosed,
+                "Close Others on a pinned anchor closes all unpinned tabs and preserves that anchor");
+            Pinned.OperationBusy = false;
+            Probe.SetTabPinned(Pinned, false);
+            Middle = Pinned;
             var Survivor = await Add();
             await Invoke(Middle, "CloseTab");
             Check(Probe.Tabs.Count == 1 && Middle.WindowClosed && ReferenceEquals(Probe.ActiveTab, Survivor),

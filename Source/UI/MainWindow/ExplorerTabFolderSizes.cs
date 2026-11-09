@@ -25,7 +25,7 @@ public partial class ExplorerTab
             if (this.SortProperty == nameof(FileEntry.Size)) this.View?.Refresh();
             return;
         }
-        if (this.WindowClosed || !this.IsTabSelected || this.IsRecycleBin || this.Entries.Count == 0
+        if (this.WindowClosed || !this.IsTabSelected || this.IsVirtualLocation || this.Entries.Count == 0
             || this.Settings.HiddenColumns?.Contains(nameof(FileEntry.Size)) == true) return;
         var Cancellation = new CancellationTokenSource();
         this.FolderSizeCancellation = Cancellation;

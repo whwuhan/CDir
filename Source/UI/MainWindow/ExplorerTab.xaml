@@ -485,23 +485,25 @@
                 <ItemsControl.ItemTemplate><DataTemplate>
                   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                  <controls:TreeBranchLines Grid.RowSpan="2" IsBookmarkRoot="True" HeaderHeight="{Binding ActualHeight, ElementName=FavoriteFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
-                  <ToggleButton Style="{StaticResource DirectoryTreeExpander}" IsChecked="{Binding Node.IsExpanded, Mode=TwoWay}" Click="SidebarFolderToggleClick" />
+                  <controls:TreeBranchLines x:Name="FavoriteBranch" Grid.RowSpan="2" IsBookmarkRoot="True" HeaderHeight="{Binding ActualHeight, ElementName=FavoriteFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
+                  <ToggleButton x:Name="FavoriteExpander" Style="{StaticResource DirectoryTreeExpander}" IsChecked="{Binding Node.IsExpanded, Mode=TwoWay}" Click="SidebarFolderToggleClick" />
                   <Button x:Name="FavoriteFolderHeader" Style="{StaticResource SidebarFolderHeader}" Grid.Column="1" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="0" FontSize="{DynamicResource UISidebarFavoriteFontSize}" Click="FavoriteClick" Tag="{Binding FullPath}" ToolTip="{Binding FullPath}">
-                    <ContentPresenter Content="{Binding Node}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
+                    <Grid>
+                      <ContentPresenter x:Name="FavoriteContent" Content="{Binding Node}" ContentTemplate="{StaticResource BookmarkFolderContent}" />
+                      <StackPanel x:Name="VirtualFavoriteContent" Visibility="Collapsed" Orientation="Horizontal"><controls:ShellIcon Path="{Binding FullPath}" IsDirectory="True" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" /><TextBlock Text="{Binding Name}" VerticalAlignment="Center" /></StackPanel>
+                    </Grid>
                   </Button>
                   <controls:AnimatedDisclosure Grid.Row="1" Grid.ColumnSpan="2" IsExpanded="{Binding Node.IsExpanded}">
                     <TreeView Style="{StaticResource SidebarFolderChildren}" />
                   </controls:AnimatedDisclosure></Grid>
+                  <DataTemplate.Triggers><DataTrigger Binding="{Binding IsVirtual}" Value="True">
+                    <Setter TargetName="FavoriteBranch" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="FavoriteExpander" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="FavoriteContent" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="VirtualFavoriteContent" Property="Visibility" Value="Visible" />
+                  </DataTrigger></DataTemplate.Triggers>
                 </DataTemplate></ItemsControl.ItemTemplate>
               </ItemsControl>
-              <Button x:Name="RecycleBinButton" Style="{StaticResource SidebarFolderHeader}" HorizontalContentAlignment="Stretch" Padding="0,2" Margin="19,0,0,0"
-                      Click="RecycleBinClick" ToolTip="{DynamicResource TextOpenRecycleBin}" AutomationProperties.Name="{DynamicResource TextRecycleBin}">
-                <StackPanel Orientation="Horizontal">
-                  <controls:ShellIcon x:Name="RecycleBinIcon" Path="shell:RecycleBinFolder" IsDirectory="True" Width="16" Height="16" Margin="0,0,4,0" VerticalAlignment="Center" />
-                  <TextBlock Text="{DynamicResource TextRecycleBin}" FontSize="{DynamicResource UISidebarFavoriteFontSize}" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
               </StackPanel>
             </Expander>
             <Expander x:Name="DirectoryTreeSection" Margin="0,6,0,0" Style="{StaticResource SidebarSection}" Header="{DynamicResource TextDirectoryTree}" ContextMenu="{StaticResource BuiltInCategoryContextMenu}">

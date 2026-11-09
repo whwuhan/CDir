@@ -28,6 +28,7 @@ public partial class ExplorerTab
         if (this.WindowClosed || this.CurrentPath.Length == 0) return;
         if (this.InlineRenameTarget is not null) { this.FolderRefreshPending = true; return; }
         if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(); return; }
+        if (this.IsComputer) { await this.NavigateAsync(this.CurrentPath, RecordHistory: false, PreserveFilter: true); return; }
         var Request = ++this.FolderRefreshVersion;
         var Navigation = this.NavigationVersion;
         var Search = this.SearchVersion;

@@ -22,7 +22,7 @@ public partial class ExplorerTab
         if (FindAncestor<TreeViewItem>(Source) is { DataContext: FolderNode { IsPlaceholder: false } Node } Item
             && this.IsSidebarFolderTree(FindAncestor<TreeView>(Item)) && FindAncestor<ToggleButton>(Source) is null)
             return new(new FileEntry { Name = Node.Name, FullPath = Node.FullPath, IsDirectory = true }, Item);
-        if (!this.Loading && FindAncestor<Button>(Source) is { DataContext: FavoriteLocation Location } Button
+        if (!this.Loading && FindAncestor<Button>(Source) is { DataContext: FavoriteLocation { IsVirtual: false } Location } Button
             && ReferenceEquals(FindAncestor<ItemsControl>(Button), this.FavoritesList))
             return new(new FileEntry { Name = Location.Name, FullPath = Location.FullPath, IsDirectory = true }, Button);
         return null;

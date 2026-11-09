@@ -6,7 +6,7 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
-    private IEnumerable<FolderNode> SidebarBookmarkRoots() => this.FavoritesList.Items.OfType<FavoriteLocation>().Select(Folder => Folder.Node)
+    private IEnumerable<FolderNode> SidebarBookmarkRoots() => this.FavoritesList.Items.OfType<FavoriteLocation>().Where(Folder => !Folder.IsVirtual).Select(Folder => Folder.Node)
         .Concat(this.CustomCategories.SelectMany(Category => Category.Folders).Select(Folder => Folder.Node));
 
     private Expander? CategoryMenuSection(ContextMenu Menu)
@@ -30,7 +30,7 @@ public partial class ExplorerTab
     }
 
     private FolderNode[] CategoryFolderRoots(Expander Section) => ReferenceEquals(Section, this.DirectoryTreeSection) ? this.Roots.ToArray()
-        : ReferenceEquals(Section, this.FavoritesSection) ? this.FavoritesList.Items.OfType<FavoriteLocation>().Select(Folder => Folder.Node).ToArray()
+        : ReferenceEquals(Section, this.FavoritesSection) ? this.FavoritesList.Items.OfType<FavoriteLocation>().Where(Folder => !Folder.IsVirtual).Select(Folder => Folder.Node).ToArray()
         : Section.DataContext is SidebarCategory Category && this.CustomCategories.Contains(Category) ? Category.Folders.Select(Folder => Folder.Node).ToArray() : [];
 
     private void CategoryContextOpened(object Sender, RoutedEventArgs E)

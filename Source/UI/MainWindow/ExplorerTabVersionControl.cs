@@ -134,7 +134,7 @@ public partial class ExplorerTab
 
     private async Task RefreshVersionStatusesAsync()
     {
-        if (this.IsRecycleBin) return;
+        if (this.IsVirtualLocation) return;
         if (this.WindowClosed || this.CurrentPath.Length == 0) return;
         this.VersionDebounce.Stop();
         if (this.VersionCancellation is not null)

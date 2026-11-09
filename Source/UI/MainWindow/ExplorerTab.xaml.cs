@@ -202,9 +202,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
 
     private async Task<bool> NavigateAsync(string Raw, int? HistoryIndex = null, bool RecordHistory = true, bool PreserveFilter = false, bool RevealTree = true, bool SyncNavigationTree = true, string TreeKey = "folder-tree")
     {
+        if (RecordHistory && !HistoryIndex.HasValue) ++this.BrowseHistoryEpoch;
         this.CancelInlineRename();
         this.DismissFileDragFeedback();
         if (ShellLocations.IsRecycleBin(Raw)) return await this.NavigateRecycleBinAsync(HistoryIndex, RecordHistory);
+        if (ShellLocations.IsComputer(Raw)) TreeKey = "quick-access";
         // A background refresh must not cancel a user's pending breadcrumb click.
         if (!PreserveFilter || RecordHistory || HistoryIndex.HasValue)
         {
@@ -226,12 +228,20 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.UpdateActions();
         try
         {
-            var Normalized = this.Files.NormalizePath(Raw, string.IsNullOrEmpty(this.CurrentPath) ? null : this.CurrentPath);
+            var Computer = ShellLocations.IsComputer(Raw);
+            var ComputerRoots = Computer ? this.Roots.ToArray() : [];
+            var Normalized = Computer ? ShellLocations.Computer : this.Files.NormalizePath(Raw, string.IsNullOrEmpty(this.CurrentPath) ? null : this.FileSystemWorkingDirectory);
             this.NavigatingPath = Normalized;
-            if (AppMain.SmokeTest && !AppMain.IsInsideSmokeScope(Normalized))
+            if (AppMain.SmokeTest && !Computer && !AppMain.IsInsideSmokeScope(Normalized))
                 throw new UnauthorizedAccessException("UI checks may only navigate inside their owned test scope.");
             var Result = await Task.Run(() =>
             {
+                if (Computer)
+                {
+                    var Drives = AppMain.SmokeTest ? ComputerRoots.Select(Node => new DriveEntry(Node.Name, Node.FullPath, "")) : this.Files.GetRoots();
+                    return (Path: ShellLocations.Computer, Entries: (IReadOnlyList<FileEntry>)Drives.Select(Drive => new FileEntry
+                    { Name = Drive.Name, FullPath = Drive.FullPath, IsDirectory = true, IsDrive = true, TypeKey = "DriveLocal" }).ToArray());
+                }
                 var Path = Normalized;
                 if (System.IO.File.Exists(Path)) { SelectPath = Path; Path = System.IO.Path.GetDirectoryName(Path)!; }
                 return (Path: Path, Entries: this.Files.GetEntries(Path, ShowHidden));
@@ -241,7 +251,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.CloseRecycleBinView();
             this.NotifyTabHeader();
             this.QueueDriveUsageRefresh(this.CurrentPath);
-            this.AddressIcon.IsDrive = SamePath(this.CurrentPath, System.IO.Path.GetPathRoot(this.CurrentPath)!);
+            this.AddressIcon.IsDrive = !Computer && SamePath(this.CurrentPath, System.IO.Path.GetPathRoot(this.CurrentPath)!);
             this.AddressIcon.Path = this.CurrentPath;
             this.AddressIcon.VersionStatus = VersionStatus.None;
             this.FolderEntries = Result.Entries;
@@ -261,7 +271,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.ShowEntries(this.FolderEntries, SearchSelection);
             if (SelectPath is not null) this.SelectPath(SelectPath);
             this.ConfigureWatcher();
-            if (SyncNavigationTree)
+            if (Computer) this.SelectSidebarNode(null);
+            else if (SyncNavigationTree)
                 await this.SyncNavigationTreeAsync(TreeKey, this.CurrentPath, Version,
                     Reveal: RevealTree && (RecordHistory || HistoryIndex.HasValue || this.FileGrid.IsKeyboardFocusWithin));
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
@@ -284,6 +295,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
 
     private async Task EnsureChildrenAsync(FolderNode Node)
     {
+        if (ShellLocations.IsVirtual(Node.FullPath)) return;
         if (Node.IsPlaceholder || Node.IsLoaded) return;
         if (Node.LoadTask is not null) { await Node.LoadTask; return; }
         var ShowHidden = this.Settings.ShowHidden;
@@ -418,6 +430,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async void FavoriteClick(object Sender, RoutedEventArgs E)
     {
         E.Handled = true;
+        if (Sender is Button { DataContext: FavoriteLocation { IsVirtual: true } Location })
+        {
+            await this.NavigateAsync(Location.FullPath, TreeKey: "quick-access");
+            return;
+        }
         if (Sender is Button Button) await this.OpenSidebarFolderClickAsync(() => this.OpenBookmarkFolderAsync(Button, Navigate: true), Button);
     }
     private async void GoClick(object Sender, RoutedEventArgs E)
@@ -431,16 +448,33 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         else if (E.Key == System.Windows.Input.Key.Escape) { this.CancelAddressEdit(); E.Handled = true; }
     }
     private async void BackClick(object Sender, RoutedEventArgs E) => await this.BackAsync();
-    internal Task NavigateBrowseHistoryAsync(bool Forward) => Forward ? this.ForwardAsync() : this.BackAsync();
-    private async Task BackAsync() { if (this.HistoryIndex > 0) await this.NavigateAsync(this.History[this.HistoryIndex - 1], this.HistoryIndex - 1, TreeKey: this.HistoryTreeKeys[this.HistoryIndex - 1]); }
+    private readonly SemaphoreSlim BrowseHistoryGate = new(1);
+    private int BrowseHistoryEpoch;
+    internal async Task NavigateBrowseHistoryAsync(bool Forward)
+    {
+        var Epoch = this.BrowseHistoryEpoch;
+        this.CancelAddressNavigation();
+        this.CancelSidebarFolderClick();
+        await this.BrowseHistoryGate.WaitAsync();
+        try
+        {
+            if (this.WindowClosed || Epoch != this.BrowseHistoryEpoch) return;
+            var Index = this.HistoryIndex + (Forward ? 1 : -1);
+            if (Index >= 0 && Index < this.History.Count)
+                await this.NavigateAsync(this.History[Index], Index, TreeKey: this.HistoryTreeKeys[Index]);
+        }
+        finally { this.BrowseHistoryGate.Release(); }
+    }
+    private Task BackAsync() => this.NavigateBrowseHistoryAsync(false);
     private async void ForwardClick(object Sender, RoutedEventArgs E) => await this.ForwardAsync();
-    private async Task ForwardAsync() { if (this.HistoryIndex + 1 < this.History.Count) await this.NavigateAsync(this.History[this.HistoryIndex + 1], this.HistoryIndex + 1, TreeKey: this.HistoryTreeKeys[this.HistoryIndex + 1]); }
+    private Task ForwardAsync() => this.NavigateBrowseHistoryAsync(true);
     private async void UpClick(object Sender, RoutedEventArgs E) => await this.UpAsync();
-    private async Task UpAsync() { if (!this.IsRecycleBin && !string.IsNullOrEmpty(this.CurrentPath) && this.Files.GetParent(this.CurrentPath) is { } Parent) await this.NavigateAsync(Parent, TreeKey: this.NavigationTreeKey); }
+    private async Task UpAsync() { if (!this.IsVirtualLocation && !string.IsNullOrEmpty(this.CurrentPath) && this.Files.GetParent(this.CurrentPath) is { } Parent) await this.NavigateAsync(Parent, TreeKey: this.NavigationTreeKey); }
     private async void RefreshClick(object Sender, RoutedEventArgs E) { this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAsync(true); }
     private async Task RefreshAsync(bool RefreshTree = false)
     {
         if (string.IsNullOrEmpty(this.CurrentPath) || this.WindowClosed) return;
+        if (this.IsComputer) { await this.NavigateAsync(this.CurrentPath, RecordHistory: false, PreserveFilter: true, TreeKey: this.NavigationTreeKey); return; }
         if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(); return; }
         if (!RefreshTree) { await this.RefreshCurrentFolderAsync(false); return; }
         var Selected = this.SelectedEntries().Select(X => X.FullPath).ToArray();
@@ -539,7 +573,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         var HasPath = !string.IsNullOrEmpty(this.CurrentPath);
         this.BackButton.IsEnabled = this.HistoryIndex > 0 && (!this.Loading || this.IsRecycleBin);
         this.ForwardButton.IsEnabled = this.HistoryIndex >= 0 && this.HistoryIndex < this.History.Count - 1 && (!this.Loading || this.IsRecycleBin);
-        this.UpButton.IsEnabled = HasPath && !this.IsRecycleBin && this.Files.GetParent(this.CurrentPath) is not null && !this.Loading;
+        this.UpButton.IsEnabled = HasPath && !this.IsVirtualLocation && this.Files.GetParent(this.CurrentPath) is not null && !this.Loading;
         this.LoadingBar.Visibility = this.Loading || this.OperationBusy || this.Searching ? Visibility.Visible : Visibility.Collapsed;
         if (this.IsTabSelected && this.HostWindow.PreferencesMenuItem is not null)
             this.HostWindow.PreferencesMenuItem.IsEnabled = !this.Loading && !this.OperationBusy;
@@ -597,6 +631,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private void CutClick(object Sender, RoutedEventArgs E) => this.CopySelection(true);
     private void CopySelection(bool Cut)
     {
+        if (this.IsComputer && Cut) return;
         if (this.IsRecycleBin) { if (!Cut) _ = this.ExecuteRecycleSelectionAsync("copy"); return; }
         this.CopyFilePathsToClipboard(this.SelectedEntries().Select(Entry => Entry.FullPath).ToArray(), Cut);
     }
@@ -630,7 +665,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async void PasteClick(object Sender, RoutedEventArgs E) => await this.PasteAsync();
     private async Task PasteAsync()
     {
-        if (this.OperationBusy || this.Loading || this.IsRecycleBin || this.CurrentPath.Length == 0) return;
+        if (this.OperationBusy || this.Loading || this.IsVirtualLocation || this.CurrentPath.Length == 0) return;
         try
         {
             if (FailedFileClipboard is { } Failed && this.ReadClipboardVersion() == Failed.Version)
@@ -666,7 +701,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async void NewFolderClick(object Sender, RoutedEventArgs E) => await this.NewFolderAsync();
     private async Task NewFolderAsync()
     {
-        if (this.OperationBusy || this.Loading || this.IsRecycleBin || this.CurrentPath.Length == 0) return;
+        if (this.OperationBusy || this.Loading || this.IsVirtualLocation || this.CurrentPath.Length == 0) return;
         this.CancelInlineRename();
         var Parent = this.CurrentPath;
         var Navigation = this.NavigationVersion;
@@ -677,13 +712,14 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async void RenameClick(object Sender, RoutedEventArgs E) => await this.RenameAsync();
     private Task RenameAsync()
     {
-        if (!this.IsRecycleBin && !this.OperationBusy && !this.Loading && this.SelectedEntries() is { Length: 1 } Entries)
+        if (!this.IsVirtualLocation && !this.OperationBusy && !this.Loading && this.SelectedEntries() is { Length: 1 } Entries)
             this.BeginFileRename(Entries[0].FullPath);
         return Task.CompletedTask;
     }
     private async void DeleteClick(object Sender, RoutedEventArgs E) => await this.DeleteAsync();
     private async Task DeleteAsync()
     {
+        if (this.IsComputer) return;
         if (this.IsRecycleBin) { await this.ExecuteRecycleSelectionAsync("delete"); return; }
         if (this.OperationBusy || this.Loading) return;
         var Entries = this.SelectedEntries();
@@ -806,6 +842,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     {
         this.Watcher?.Dispose();
         this.Watcher = null;
+        if (this.IsVirtualLocation) return;
         try
         {
             this.Watcher = new FileSystemWatcher(this.CurrentPath) { NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size, IncludeSubdirectories = false };

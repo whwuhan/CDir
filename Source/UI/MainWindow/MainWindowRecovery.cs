@@ -10,6 +10,8 @@ namespace CDir.UI;
 public partial class MainWindow
 {
     private string? WorkspacePath;
+    private SessionWorkspaceStore? SessionStore;
+    private bool SessionIsEnding;
     private InstanceWorkspaceService? InstanceService;
     private bool TrackInstances;
     private DateTimeOffset LastActivatedUtc = DateTimeOffset.UtcNow;
@@ -18,6 +20,8 @@ public partial class MainWindow
     internal Func<MessageBoxResult>? ConfirmWorkspaceSave;
     private readonly Dictionary<string, string?> SharedStateBaselines = new(StringComparer.OrdinalIgnoreCase);
     private string? SharedSettingsPath;
+    internal int WorkspaceWriteCount { get; private set; }
+    internal int WorkspaceCaptureCount { get; private set; }
 
     private static string NormalizeSharedState(string Json, bool Workspace)
     {
@@ -88,7 +92,8 @@ public partial class MainWindow
 
     internal WorkspaceState? CaptureWorkspace()
     {
-        if (this.RestoringWorkspace || this.WorkspaceClosed || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)) return null;
+        if (this.ClosingTabBatch || this.RestoringWorkspace || this.WorkspaceClosed || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)) return null;
+        this.WorkspaceCaptureCount++;
         var Bounds = this.WindowState == WindowState.Normal ? new Rect(this.Left, this.Top, this.Width, this.Height) : this.RestoreBounds;
         return new WorkspaceState
         {
@@ -124,11 +129,12 @@ public partial class MainWindow
         if (this.SharedSettingsPath is { } SettingsPath) this.SharedStateBaselines[SettingsPath] = this.ReadSharedState(SettingsPath);
         if (!Restore || AppMain.SmokeTest && SettingsFile is null) return null;
         this.WorkspacePath = (SettingsFile ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CDir", "Settings.json")) + ".workspace.json";
+        this.SessionStore = new SessionWorkspaceStore(this.WorkspacePath);
         this.SharedStateBaselines[this.WorkspacePath] = this.ReadSharedState(this.WorkspacePath);
         this.RestoringWorkspace = true;
         if (!AppMain.SmokeTest && AppMain.StartupPath is not null) return null;
-        var Saved = InitialWorkspace ?? (SettingsFile is null ? AppMain.StartupWorkspace ?? DurableJsonStore.Read<WorkspaceState>(this.WorkspacePath)
-            : DurableJsonStore.Read<WorkspaceState>(this.WorkspacePath));
+        var Saved = InitialWorkspace ?? (SettingsFile is null ? AppMain.StartupWorkspace : null)
+            ?? this.SessionStore.ReadLatest() ?? DurableJsonStore.Read<WorkspaceState>(this.WorkspacePath);
         return Saved is { Version: 1, Tabs.Count: > 0 } && Saved.Tabs.All(Tab => Tab is not null && Tab.Settings is not null) ? Saved : null;
     }
 
@@ -166,22 +172,37 @@ public partial class MainWindow
 
     internal bool PersistWorkspaceNow()
     {
-        if (this.WorkspacePath is null || this.RestoringWorkspace || this.WorkspaceClosed
+        if (this.SessionIsEnding || this.ClosingTabBatch || this.WorkspacePath is null || this.RestoringWorkspace || this.WorkspaceClosed
             || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)) return false;
         try
         {
-            if (!this.CanPersistSharedState) return false;
+            if (!this.CanPersistSharedState)
+            {
+                if (this.SaveOnExit is null && this.CaptureWorkspace() is { } PrivateState) this.SessionStore?.Save(PrivateState);
+                return false;
+            }
             var State = this.CaptureWorkspace();
             if (State is null) return false;
             var Json = JsonSerializer.Serialize(State);
             if (Json != this.LastWorkspaceJson || this.SaveOnExit == true && this.ReadSharedState(this.WorkspacePath) != NormalizeSharedState(Json, Workspace: true))
             {
                 DurableJsonStore.Write(this.WorkspacePath, Json);
+                this.WorkspaceWriteCount++;
                 this.LastWorkspaceJson = Json;
                 this.RecordSharedWrite(this.WorkspacePath, Json);
             }
             return true;
         }
+        catch (Exception Error) when (Error is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException) { return false; }
+    }
+
+    internal bool PersistSessionEndingWorkspace()
+    {
+        // Do not enter tray, busy-operation or conflict UI during Windows shutdown.
+        this.SessionIsEnding = true;
+        this.SaveOnExit = false;
+        this.WorkspaceTimer?.Stop();
+        try { return this.CaptureWorkspace() is { } State && this.SessionStore?.Save(State) == true; }
         catch (Exception Error) when (Error is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException) { return false; }
     }
 }

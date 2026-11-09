@@ -190,9 +190,22 @@ public partial class ExplorerTab
                         ["SelectionStatus"] = this.SelectionStatusText.Text,
                         ["ExpectedSelectionStatus"] = LanguageService.Text("SelectedCount", 1)
                     }));
-                Check(this.FavoritesList.Items.Cast<FavoriteLocation>().First().Name == LanguageService.Text("FavoriteHome")
+                Check(this.FavoritesList.Items.Cast<FavoriteLocation>().Any(Favorite => !Favorite.IsVirtual && Favorite.Name == LanguageService.Text("FavoriteHome"))
                     && this.Entries.Single(Entry => SamePath(Entry.FullPath, AlphaPath)).TypeName == LanguageService.Text("TypeText"),
                     Code + " favorites and cached file types update");
+                var QuickAccess = this.FavoritesList.Items.Cast<FavoriteLocation>().ToArray();
+                Check(QuickAccess.Select(Favorite => Favorite.Name).SequenceEqual(new[] { "FavoriteHome", "DirectoryTree", "RecycleBin" }.Select(Key => LanguageService.Text(Key)))
+                    && QuickAccess.Single(Favorite => CDir.Services.ShellLocations.IsComputer(Favorite.FullPath)).Name == LanguageService.Text("DirectoryTree")
+                    && QuickAccess.Single(Favorite => CDir.Services.ShellLocations.IsRecycleBin(Favorite.FullPath)).Name == LanguageService.Text("RecycleBin"),
+                    Code + " Quick Access keeps its fixed order after language changes");
+                var QuickFixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "QuickAccessOrder")).FullName;
+                var QuickFolders = new[] { "Desktop", "Documents", "Downloads", "Pictures" }
+                    .Select(Name => Directory.CreateDirectory(Path.Combine(QuickFixture, Name)).FullName).ToArray();
+                var FullQuickAccess = CreateQuickAccess(QuickFixture, QuickFolders[0], QuickFolders[1], QuickFolders[2], QuickFolders[3]);
+                Check(FullQuickAccess.Select(Favorite => Favorite.FullPath).SequenceEqual(new[] { QuickFixture }.Concat(QuickFolders)
+                    .Concat(new[] { CDir.Services.ShellLocations.Computer, CDir.Services.ShellLocations.RecycleBin }))
+                    && FullQuickAccess.Select(Favorite => Favorite.Name).SequenceEqual(new[] { "FavoriteHome", "FavoriteDesktop", "FavoriteDocuments", "FavoriteDownloads", "FavoritePictures", "DirectoryTree", "RecycleBin" }.Select(Key => LanguageService.Text(Key))),
+                    Code + " all seven Quick Access entries follow Home, Desktop, Documents, Downloads, Pictures, My Computer, Recycle Bin");
                 Check(SamePath(this.CurrentPath, BrowserPath) && SamePath(this.AddressBox.Text, BrowserPath)
                     && this.SearchBox.Text == ".txt" && this.View!.Cast<FileEntry>().Count() == 2
                     && this.SelectedEntries() is { Length: 1 } Selected && SamePath(Selected[0].FullPath, AlphaPath)

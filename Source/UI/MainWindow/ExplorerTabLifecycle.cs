@@ -22,7 +22,7 @@ public partial class ExplorerTab
     public event PropertyChangedEventHandler? PropertyChanged;
     public string TabPath => this.CurrentPath.Length > 0 ? this.CurrentPath : this.InitialPath ?? "";
     public string TabAlias { get; private set; } = "";
-    public string TabTitle => this.TabAlias.Length > 0 ? this.TabAlias : this.IsRecycleBin ? LanguageService.Text("RecycleBin") : this.TabPath.Length == 0 ? LanguageService.Text("NewTab")
+    public string TabTitle => this.TabAlias.Length > 0 ? this.TabAlias : this.IsComputer ? LanguageService.Text("DirectoryTree") : this.IsRecycleBin ? LanguageService.Text("RecycleBin") : this.TabPath.Length == 0 ? LanguageService.Text("NewTab")
         : Path.GetFileName(Path.TrimEndingDirectorySeparator(this.TabPath)) is { Length: > 0 } Name ? Name : this.TabPath;
     public bool IsTabSelected { get; private set; }
     public bool IsTabPinned { get; private set; }

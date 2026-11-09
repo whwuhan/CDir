@@ -90,7 +90,7 @@ public partial class AppMain : Application
         RecordSmokeProgress("Constructing main window");
         SessionEnding += (_, _) =>
         {
-            foreach (var Window in this.Windows.OfType<MainWindow>().ToArray()) Window.PersistWorkspaceNow();
+            foreach (var Window in this.Windows.OfType<MainWindow>().ToArray()) Window.PersistSessionEndingWorkspace();
         };
         WindowAppearance.Initialize();
         ScrollInteraction.Initialize();

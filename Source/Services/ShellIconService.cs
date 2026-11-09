@@ -202,9 +202,9 @@ public static class ShellIconService
 
     private static BitmapSource? ReadPathIcon(IconKey Key)
     {
-        if (ShellLocations.IsRecycleBin(Key.Path))
+        if (ShellLocations.IsVirtual(Key.Path))
         {
-            var List = ShellLocations.RecycleBinIdList();
+            var List = ShellLocations.IsComputer(Key.Path) ? ShellLocations.ComputerIdList() : ShellLocations.RecycleBinIdList();
             var RecycleInfo = new ShellFileInfo { DisplayName = string.Empty, TypeName = string.Empty };
             try
             {
@@ -314,6 +314,7 @@ public static class ShellIconService
     private static string? NormalizePath(string? Path)
     {
         if (ShellLocations.IsRecycleBin(Path)) return ShellLocations.RecycleBin;
+        if (ShellLocations.IsComputer(Path)) return ShellLocations.Computer;
         if (string.IsNullOrWhiteSpace(Path) || Path.Length > 32767) return null;
         try { return System.IO.Path.GetFullPath(Path); }
         catch (Exception Error) when (Error is ArgumentException or NotSupportedException or IOException) { return null; }

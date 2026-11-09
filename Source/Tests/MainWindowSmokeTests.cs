@@ -47,7 +47,7 @@ public partial class ExplorerTab
             else this.SkippedSmokeGroups.Add(Name);
             AppMain.RecordSmokeProgress("Finished group: " + Name);
         }
-        if (Group is "navigation" or "all") await RunGroup("navigation", async () => { await this.RunNavigationSmokeChecksAsync(Passed); await this.RunMainPanelNavigationSmokeChecksAsync(Passed); });
+        if (Group is "navigation" or "all") await RunGroup("navigation", async () => { await this.RunNavigationSmokeChecksAsync(Passed); await this.RunMainPanelNavigationSmokeChecksAsync(Passed); await this.RunQuickAccessSmokeChecksAsync(Passed); });
         else
         {
             if (this.CurrentPath.Length == 0 || this.View is null || !SamePath(this.AddressBox.Text, this.CurrentPath)

@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     public ObservableCollection<TabHeader> VisibleHeaders { get; } = [];
     public ObservableCollection<TabHeader> PinnedHeaders { get; } = [];
     private bool SeparatePinnedTabs;
+    private bool ClosingTabBatch;
     internal ExplorerTab? ActiveTab { get; private set; }
     internal ExplorerTab? PresentedTab { get; private set; }
     internal TrayIconService? TrayIcon { get; private set; }
@@ -124,6 +125,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             this.PersistWorkspaceNow();
+            if (!this.SessionIsEnding) this.SessionStore?.Discard();
             this.WorkspaceClosed = true;
             this.InstanceService?.Dispose();
             this.WorkspaceTimer?.Stop();
@@ -221,9 +223,13 @@ public partial class MainWindow : Window
         this.TabPages.Children.Remove(Page);
         this.Tabs.Remove(Page);
         this.Headers.Remove(this.Headers.Single(Header => ReferenceEquals(Header.Page, Page)));
-        this.RefreshTabHeaders();
+        if (!this.ClosingTabBatch) this.RefreshTabHeaders();
         if (ReferenceEquals(Page, this.PresentedTab)) this.PresentedTab = null;
-        if (WasActive) this.SelectTab(this.Tabs[Math.Min(Index, this.Tabs.Count - 1)]);
+        if (WasActive)
+        {
+            if (this.ClosingTabBatch) this.ActiveTab = null;
+            else this.SelectTab(this.Tabs[Math.Min(Index, this.Tabs.Count - 1)]);
+        }
         this.PersistWorkspaceNow();
         return true;
     }
@@ -270,7 +276,7 @@ public partial class MainWindow : Window
         {
             "CloseRightTabs" => Pages[(Index + 1)..],
             "CloseLeftTabs" => Pages[..Index],
-            "CloseOtherTabs" => Pages.Where(Page => !ReferenceEquals(Page, Anchor)).ToArray(),
+            "CloseOtherTabs" => Pages.Where(Page => !ReferenceEquals(Page, Anchor) && !Page.IsTabPinned).ToArray(),
             "CloseTab" => [Anchor],
             _ => []
         };
@@ -302,8 +308,23 @@ public partial class MainWindow : Window
             Busy.ShowBusyCloseNotice();
             return;
         }
-        if (Command != "CloseTab" && this.ActiveTab is { } Active && Targets.Contains(Active)) this.SelectTab(Header.Page);
-        foreach (var Page in Targets) this.CloseTab(Page);
+        if (Targets.Length == 0) return;
+        if (Command == "CloseTab") { this.CloseTab(Header.Page); return; }
+        var SelectAnchor = this.ActiveTab is null || Targets.Contains(this.ActiveTab);
+        // Close the complete set before rebuilding headers, revealing a survivor,
+        // or serializing it. Per-tab saves otherwise repeatedly scan all remaining trees.
+        this.ClosingTabBatch = true;
+        try
+        {
+            foreach (var Page in Targets) this.CloseTab(Page);
+            this.RefreshTabHeaders();
+            if (SelectAnchor) this.SelectTab(Header.Page);
+        }
+        finally
+        {
+            this.ClosingTabBatch = false;
+            this.PersistWorkspaceNow();
+        }
     }
     private void SelectTabClick(object Sender, RoutedEventArgs E)
     {
@@ -378,6 +399,17 @@ public partial class MainWindow : Window
     internal IntPtr BrowserAppCommand(IntPtr Window, int Message, IntPtr WParam, IntPtr LParam, ref bool Handled)
     {
         this.ActiveTab?.AddressWindowMouseMessage(Window, Message, WParam, LParam, ref Handled);
+        // Consume both halves of the native gesture so DefWindowProc cannot
+        // turn its release into a second browser command after navigation.
+        if (Message is 0x020B or 0x020C or 0x020D or 0x00AB or 0x00AC or 0x00AD)
+        {
+            var Button = (WParam.ToInt64() >> 16) & 0xffff;
+            if (Button is not (1 or 2)) return IntPtr.Zero;
+            Handled = true;
+            if (Message is 0x020B or 0x020D or 0x00AB or 0x00AD)
+                if (this.ActiveTab is { } Page) _ = Page.NavigateBrowseHistoryAsync(Button == 2);
+            return (IntPtr)1;
+        }
         if (Message != 0x319) return IntPtr.Zero; // WM_APPCOMMAND from mouse or keyboard drivers.
         var Command = (LParam.ToInt64() >> 16) & 0xfff;
         if (Command is not (1 or 2)) return IntPtr.Zero;
@@ -455,6 +487,7 @@ public partial class MainWindow : Window
 
     private void WindowClosing(object? Sender, CancelEventArgs E)
     {
+        if (this.SessionIsEnding) return;
         if (!this.ExitRequested && this.ActiveTab?.PageSettings.ExitOnClose != true)
         {
             E.Cancel = true;

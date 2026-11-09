@@ -48,6 +48,30 @@ public partial class ExplorerTab
             this.BeginAddressEdit();
             await Press(this.AddressBox, MouseButton.XButton2, Second);
             this.CancelAddressEdit();
+            var NativeHandle = new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle;
+            foreach (var (Button, Expected) in new[] { (1, First), (2, Second) })
+            {
+                var Before = this.HistoryIndex;
+                var Result = SendTraySmokeMessage(NativeHandle, 0x20B, new IntPtr(Button << 16), IntPtr.Zero);
+                var End = Environment.TickCount64 + 10000;
+                while (this.Loading && Environment.TickCount64 < End) await Task.Delay(20);
+                var Release = SendTraySmokeMessage(NativeHandle, 0x20C, new IntPtr(Button << 16), IntPtr.Zero);
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                Check(Result == (IntPtr)1 && Release == (IntPtr)1 && SamePath(this.CurrentPath, Expected)
+                    && this.HistoryIndex == Before + (Button == 1 ? -1 : 1),
+                    "A complete native side-button gesture navigates exactly once without release bounce: " + Button);
+            }
+            var Third = Directory.CreateDirectory(Path.Combine(Fixture, "Third")).FullName;
+            await this.NavigateAsync(Third);
+            var HistoryCount = this.History.Count;
+            await Task.WhenAll(this.NavigateBrowseHistoryAsync(false), this.NavigateBrowseHistoryAsync(false));
+            Check(SamePath(this.CurrentPath, First) && this.History.Count == HistoryCount,
+                "Rapid consecutive Back requests traverse two entries in order without rewriting history");
+            await Task.WhenAll(this.NavigateBrowseHistoryAsync(true), this.NavigateBrowseHistoryAsync(true));
+            Check(SamePath(this.CurrentPath, Third), "Rapid consecutive Forward requests preserve their order");
+            await Task.WhenAll(this.NavigateBrowseHistoryAsync(false), this.NavigateBrowseHistoryAsync(true));
+            Check(SamePath(this.CurrentPath, Third), "An immediate Back then Forward returns to the same location without stale navigation");
+            await this.BackAsync(); // Existing driver and browser-key checks start at Second.
             foreach (var (Command, Expected) in new[] { (1, First), (2, Second) })
             {
                 var Handle = new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle;

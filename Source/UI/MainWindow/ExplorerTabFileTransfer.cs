@@ -61,7 +61,7 @@ public partial class ExplorerTab
 
     private FileTransferPlan? PlanFileTransfer(IDataObject Data, string? Destination, DragDropEffects Allowed)
     {
-        if (this.WindowClosed || this.OperationBusy || this.Loading || ShellLocations.IsRecycleBin(Destination) || string.IsNullOrWhiteSpace(Destination)) return null;
+        if (this.WindowClosed || this.OperationBusy || this.Loading || ShellLocations.IsVirtual(Destination) || string.IsNullOrWhiteSpace(Destination)) return null;
         var Effect = this.Settings.CopyOnDrop ? DragDropEffects.Copy : DragDropEffects.Move;
         try
         {

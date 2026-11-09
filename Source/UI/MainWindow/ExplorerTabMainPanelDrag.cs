@@ -35,7 +35,7 @@ public partial class ExplorerTab
 
     private MainPanelFolderDragPayload? CreateMainPanelFolderDrag()
     {
-        if (this.IsRecycleBin || this.MainPanelDragCandidate is not { } Candidate || this.OperationBusy || this.Loading
+        if (this.IsVirtualLocation || this.MainPanelDragCandidate is not { } Candidate || this.OperationBusy || this.Loading
             || !this.FileGrid.SelectedItems.Contains(Candidate)) return null;
         var Selection = this.SelectedEntries();
         return Selection.Length > 0 && Selection.All(Entry => Entry.IsDirectory) ? new(this, Selection) : null;

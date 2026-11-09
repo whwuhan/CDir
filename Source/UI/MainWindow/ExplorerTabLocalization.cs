@@ -126,7 +126,7 @@ public partial class ExplorerTab
                 if (this.View.Contains(Entry)) this.FileGrid.SelectedItems.Add(Entry);
         }
         this.UpdateCounts();
-        if (this.IsRecycleBin) { this.UpdateAddressPath(); this.NotifyTabHeader(); }
+        if (this.IsVirtualLocation) { this.UpdateAddressPath(); this.NotifyTabHeader(); }
         this.UpdateDriveUsageStatus();
         this.UpdateTerminalStatus();
         if (Persist && !this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
@@ -134,22 +134,27 @@ public partial class ExplorerTab
 
     private void UpdateFavorites()
     {
-        if (AppMain.SmokeTest)
-        {
-            this.FavoritesList.ItemsSource = new[] { new FavoriteLocation(LanguageService.Text("FavoriteHome"), AppMain.StartupPath ?? AppMain.SmokeRoot!) };
-            return;
-        }
-        var Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var Home = AppMain.SmokeTest ? AppMain.StartupPath ?? AppMain.SmokeRoot! : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        this.FavoritesList.ItemsSource = AppMain.SmokeTest ? CreateQuickAccess(Home, "", "", "", "")
+            : CreateQuickAccess(Home, Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), GetDownloadsPath(Home),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
+    }
+
+    private static FavoriteLocation[] CreateQuickAccess(string Home, string Desktop, string Documents, string Downloads, string Pictures)
+    {
         var Favorites = new List<FavoriteLocation> { new(LanguageService.Text("FavoriteHome"), Home) };
         void AddFavorite(string Key, string FolderPath)
         {
             if (Directory.Exists(FolderPath)) Favorites.Add(new(LanguageService.Text(Key), FolderPath));
         }
-        AddFavorite("FavoriteDesktop", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
-        AddFavorite("FavoriteDownloads", GetDownloadsPath(Home));
-        AddFavorite("FavoriteDocuments", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
-        AddFavorite("FavoritePictures", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
-        this.FavoritesList.ItemsSource = Favorites;
+        AddFavorite("FavoriteDesktop", Desktop);
+        AddFavorite("FavoriteDocuments", Documents);
+        AddFavorite("FavoriteDownloads", Downloads);
+        AddFavorite("FavoritePictures", Pictures);
+        Favorites.Add(new(LanguageService.Text("DirectoryTree"), ShellLocations.Computer));
+        Favorites.Add(new(LanguageService.Text("RecycleBin"), ShellLocations.RecycleBin));
+        return Favorites.ToArray();
     }
 
     private static AppSettings ReadSettings(string SettingsFile)
