@@ -12,6 +12,17 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    private bool UsageBarHasNoInset(System.Windows.Controls.ControlTemplate Template)
+    {
+        var Bar = new System.Windows.Controls.ProgressBar { Width = 64, Height = 10, Minimum = 0, Maximum = 100, Value = 50,
+            Template = Template, Foreground = (Brush)this.FindResource("DriveUsageLow"), Background = Brushes.White,
+            BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), SnapsToDevicePixels = true, UseLayoutRounding = true };
+        Bar.Measure(new Size(64, 10)); Bar.Arrange(new Rect(0, 0, 64, 10)); Bar.UpdateLayout();
+        var Bitmap = new RenderTargetBitmap(64, 10, 96, 96, PixelFormats.Pbgra32); Bitmap.Render(Bar);
+        var Bytes = new byte[64 * 10 * 4]; Bitmap.CopyPixels(Bytes, 64 * 4, 0);
+        bool IsFilled(int X, int Y) { var Offset = (Y * 64 + X) * 4; return Bytes[Offset + 1] > Bytes[Offset] && Bytes[Offset + 1] > Bytes[Offset + 2]; }
+        return IsFilled(1, 1) && IsFilled(1, 8) && IsFilled(30, 1) && IsFilled(30, 8);
+    }
     private async Task RunDriveUsageSmokeChecksAsync(List<string> Passed)
     {
         var InitialReader = this.ReadDriveUsage;
@@ -34,6 +45,10 @@ public partial class ExplorerTab
         const long GB = 1073741824;
         try
         {
+            Check(((SolidColorBrush)this.FindResource("DriveUsageLow")).Color == Color.FromRgb(0x2E, 0x8B, 0x57)
+                && ((SolidColorBrush)this.FindResource("DriveUsageWarning")).Color == Color.FromRgb(0xE6, 0x95, 0x00)
+                && ((SolidColorBrush)this.FindResource("DriveUsageCritical")).Color == Color.FromRgb(0xD1, 0x34, 0x38),
+                "Drive usage restores the original green, orange and red palette");
             await this.DriveUsageRefreshTask;
             Check(this.CurrentDriveUsage is { TotalBytes: > 0 } Actual && Actual.Root == DriveUsage.GetRoot(this.CurrentPath)
                 && this.DriveUsagePanel.IsVisible && this.DriveUsageText.Text.EndsWith(" GB", StringComparison.Ordinal)
@@ -50,6 +65,10 @@ public partial class ExplorerTab
                 && this.DriveUsageBar.Value == 50 && this.DriveUsageBar.IsVisible
                 && this.DriveUsagePercentageText.IsVisible && this.DriveUsagePercentageText.Text == 0.5.ToString("P1", LanguageService.Culture),
                 "Used and total capacities each show GB with an accurate meter and visible percentage");
+            Check(this.UsageBarHasNoInset(this.DriveUsageBar.Template), "Status usage fill touches the frame on all inner edges without a white inset");
+            Check(this.DriveUsageBar.Template.FindName("UsageFrame", this.DriveUsageBar) is Border Frame
+                && Frame.BorderThickness == new Thickness(1) && Frame.Effect is null,
+                "The status usage frame restores one-DIP thickness without a shadow");
             var Track = (FrameworkElement)this.DriveUsageBar.Template.FindName("PART_Track", this.DriveUsageBar);
             var Indicator = (FrameworkElement)this.DriveUsageBar.Template.FindName("PART_Indicator", this.DriveUsageBar);
             Check(Math.Abs(Indicator.ActualWidth - Track.ActualWidth / 2) < 1
@@ -191,7 +210,7 @@ public partial class ExplorerTab
             var Left = Meter.TranslatePoint(new Point(), this.FolderTree).X;
             var Right = Meter.TranslatePoint(new Point(Meter.ActualWidth, 0), this.FolderTree).X;
             return Math.Abs(Left - Header.TranslatePoint(new Point(), this.FolderTree).X) < .1
-                && Math.Abs(Right - (this.FolderTree.ActualWidth - Container.Padding.Right)) < .1;
+                && Math.Abs(Right - (this.FolderTree.ActualWidth - Container.Padding.Right - 8)) < .1;
         }
         async Task Refresh(bool Force = true)
         {
@@ -225,6 +244,15 @@ public partial class ExplorerTab
             this.UpdateLayout();
             foreach (var Node in Nodes)
             {
+                var Meter = Element<ProgressBar>(Node, "SidebarDriveMeter");
+                Meter.ApplyTemplate();
+                Check(ReferenceEquals(Meter.Template, this.DriveUsageBar.Template) && Meter.Height == this.DriveUsageBar.Height
+                    && Meter.Template.FindName("UsageFrame", Meter) is Border Frame && Frame.BorderThickness == new Thickness(1),
+                    $"Tree and status meters share the same height, template and one-DIP frame (shared={ReferenceEquals(Meter.Template, this.DriveUsageBar.Template)}, height={Meter.Height}/{this.DriveUsageBar.Height}, frame={Meter.Template.FindName("UsageFrame", Meter)})");
+                Check(this.UsageBarHasNoInset(Element<ProgressBar>(Node, "SidebarDriveMeter").Template),
+                    "Sidebar usage fill touches the frame without a white inset");
+                Check(Element<ProgressBar>(Node, "SidebarDriveMeter").Height == 10,
+                    "The sidebar drive meter has a thicker ten-DIP outline and fill");
                 Check(!Children<TextBlock>((TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node))
                     .Any(Text => Text.IsVisible && Text.Text == Node.FullPath),
                     "My Computer drive rows do not repeat the drive root beside their name: " + Node.Name);
@@ -254,8 +282,36 @@ public partial class ExplorerTab
                     Encoder.Save(Stream);
                 }
             }
-            this.ChangeShowBookmarkPaths(false);
+            // Reproduce a narrow My Computer section with both metadata options enabled.
             this.SidebarColumn.Width = new GridLength(390);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
+            var PathViewer = FindVisualChild<ScrollViewer>(this.FolderTree)!;
+            PathViewer.ScrollToLeftEnd();
+            this.UpdateLayout();
+            var CapacityLabel = Element<TextBlock>(Nodes[0], "SidebarDriveCapacity");
+            var CapacityX = CapacityLabel.TranslatePoint(new Point(), this.FolderTree).X;
+            var Extent = PathViewer.ExtentWidth;
+            var OuterOffset = this.SidebarScroll.VerticalOffset;
+            Check(PathViewer.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto && PathViewer.ScrollableWidth > 0,
+                "Folder paths and drive usage retain horizontal scrolling in a narrow directory tree");
+            ScrollInteraction.HandleWheel(CapacityLabel, -120, System.Windows.Input.ModifierKeys.Shift);
+            this.UpdateLayout();
+            Check(PathViewer.HorizontalOffset > 0
+                && Math.Abs(CapacityLabel.TranslatePoint(new Point(), this.FolderTree).X - CapacityX + PathViewer.HorizontalOffset) < 1
+                && Math.Abs(PathViewer.ExtentWidth - Extent) < 1 && this.SidebarScroll.VerticalOffset == OuterOffset,
+                "Shift wheel moves the capacity column with stable widths and no vertical movement when folder paths are shown");
+            ScrollInteraction.HandleWheel(CapacityLabel, 120, System.Windows.Input.ModifierKeys.Shift);
+            this.UpdateLayout();
+            Check(PathViewer.HorizontalOffset == 0, "Shift wheel returns the path-enabled directory tree to the left edge");
+            PathViewer.ScrollToRightEnd();
+            this.UpdateLayout();
+            var PercentageLabel = Element<TextBlock>(Nodes[0], "SidebarDrivePercentage");
+            Check(PercentageLabel.TranslatePoint(new Point(PercentageLabel.ActualWidth, 0), PathViewer).X <= PathViewer.ViewportWidth + 1,
+                "The right edge exposes the complete drive percentage instead of clipping it permanently");
+            PathViewer.ScrollToLeftEnd();
+            this.UpdateLayout();
+            this.ChangeShowBookmarkPaths(false);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             this.UpdateLayout();
             Check(Nodes[0].DriveCapacityText == LanguageService.Text("DriveUsageCompact", 256.0, 512.0)

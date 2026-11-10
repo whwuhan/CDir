@@ -72,7 +72,7 @@ public partial class ExplorerTab
         }
         // Empty panels do not take focus themselves. Move it before the click continues,
         // allowing buttons, text fields and other controls to perform their usual actions.
-        FocusManager.SetFocusedElement(this, this.FileGrid);
+        FocusManager.SetFocusedElement(this, this.ActiveFileControl);
         this.SearchTips.Visibility = Visibility.Collapsed;
     }
 
@@ -105,11 +105,14 @@ public partial class ExplorerTab
         foreach (var Entry in Entries) Entry.Use12HourClock = this.Settings.Use12HourClock;
         this.View = CollectionViewSource.GetDefaultView(this.Entries);
         this.View.Filter = this.MatchesFilter;
-        this.FileGrid.ItemsSource = this.View;
+        this.SyncingFileViews = true;
+        try { this.FileTiles.ItemsSource = this.View; this.FileGrid.ItemsSource = this.View; }
+        finally { this.SyncingFileViews = false; }
+        this.SyncTileSelection();
+        this.UpdateComputerSorting();
         // DataGrid clears a newly assigned view's sorting when ItemsSource changes.
         this.ApplySort();
-        foreach (var Column in this.FileGrid.Columns)
-            Column.SortDirection = Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
+        this.UpdateComputerSorting();
         if (Selection is not null)
             foreach (var Path in Selection) this.SelectPath(Path, Append: true);
         this.UpdateCounts();
@@ -203,6 +206,7 @@ public partial class ExplorerTab
                     Entry.Use12HourClock = this.Settings.Use12HourClock;
                     Entry.VersionStatus = this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Contains(Entry.FullPath))?.GetStatus(Entry.FullPath)
                         ?? VersionStatus.None;
+                    Entry.ViewGroup = this.GroupLabel(Entry);
                     Items.Add(Entry);
                 }
                 foreach (var Path in this.PendingSearchSelection.ToArray()) this.SelectPath(Path, Append: true);

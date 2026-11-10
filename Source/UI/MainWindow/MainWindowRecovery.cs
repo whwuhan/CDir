@@ -90,17 +90,37 @@ public partial class MainWindow
         }
     }
 
+    private Rect LastFinitePersistenceBounds = Rect.Empty;
+    internal bool PersistenceMaximized => this.WindowState == WindowState.Maximized
+        || this.WindowState == WindowState.Minimized && this.LastWorkspaceMaximized;
+
+    internal Rect CapturePersistenceBounds()
+    {
+        var Bounds = this.WindowState == WindowState.Normal ? new Rect(this.Left, this.Top, this.Width, this.Height) : this.RestoreBounds;
+        if (!Bounds.IsEmpty && double.IsFinite(Bounds.Left) && double.IsFinite(Bounds.Top)
+            && double.IsFinite(Bounds.Width) && double.IsFinite(Bounds.Height) && Bounds.Width > 0 && Bounds.Height > 0)
+            this.LastFinitePersistenceBounds = Bounds;
+        if (!this.LastFinitePersistenceBounds.IsEmpty) return this.LastFinitePersistenceBounds;
+        // Unshown/tearing-down WPF windows may have NaN coordinates or no restore
+        // rectangle. Keep persisted geometry finite even before the first capture.
+        static double Dimension(double Requested, double Actual, double Default) => double.IsFinite(Requested) && Requested > 0 ? Requested
+            : double.IsFinite(Actual) && Actual > 0 ? Actual : Default;
+        return new Rect(double.IsFinite(this.Left) ? this.Left : 0, double.IsFinite(this.Top) ? this.Top : 0,
+            Dimension(this.Width, this.ActualWidth, DefaultSettings.Current.Width),
+            Dimension(this.Height, this.ActualHeight, DefaultSettings.Current.Height));
+    }
+
     internal WorkspaceState? CaptureWorkspace()
     {
         if (this.ClosingTabBatch || this.RestoringWorkspace || this.WorkspaceClosed || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)
             || this.Panes.Any(Pane => Pane.Selected is null || !ReferenceEquals(Pane.Selected.Parent, Pane.TabPages))) return null;
         this.WorkspaceCaptureCount++;
-        var Bounds = this.WindowState == WindowState.Normal ? new Rect(this.Left, this.Top, this.Width, this.Height) : this.RestoreBounds;
+        var Bounds = this.CapturePersistenceBounds();
         return new WorkspaceState
         {
             LastActivatedUtc = this.LastActivatedUtc,
             Left = Bounds.Left, Top = Bounds.Top, Width = Bounds.Width, Height = Bounds.Height,
-            Maximized = this.WindowState == WindowState.Maximized || this.WindowState == WindowState.Minimized && this.LastWorkspaceMaximized,
+            Maximized = this.PersistenceMaximized,
             ActiveTab = Math.Max(0, this.Tabs.IndexOf(this.ActiveTab!)), Tabs = this.Tabs.Select(Tab => Tab.CaptureWorkspaceTab()).ToList(),
             Layout = this.CapturePane(this.LayoutRoot)
         };

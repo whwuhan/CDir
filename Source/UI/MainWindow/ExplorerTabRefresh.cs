@@ -112,7 +112,7 @@ public partial class ExplorerTab
             Entry.Use12HourClock = this.Settings.Use12HourClock;
             return Entry;
         }).ToArray();
-        var Viewer = FindVisualChild<ScrollViewer>(this.FileGrid);
+        var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
         var Vertical = Viewer?.VerticalOffset ?? 0;
         var Horizontal = Viewer?.HorizontalOffset ?? 0;
         var WasApplying = this.ApplyingSearchSelection;
@@ -127,7 +127,7 @@ public partial class ExplorerTab
         this.RefreshCutFeedback();
         if (Viewer is not null)
         {
-            this.FileGrid.UpdateLayout();
+            this.ActiveFileControl.UpdateLayout();
             if (Math.Abs(Viewer.VerticalOffset - Vertical) > 0.5) Viewer.ScrollToVerticalOffset(Vertical);
             if (Math.Abs(Viewer.HorizontalOffset - Horizontal) > 0.5) Viewer.ScrollToHorizontalOffset(Horizontal);
         }

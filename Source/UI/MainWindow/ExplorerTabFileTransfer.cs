@@ -45,7 +45,7 @@ public partial class ExplorerTab
             if (Source is not null && (ReferenceEquals(Source, this.AddressDisplay) || this.AddressDisplay.IsAncestorOf(Source)))
                 return FindAncestor<Button>(Source) is { Tag: string AddressPath } AddressButton
                     && this.AddressBreadcrumbs.IsAncestorOf(AddressButton) ? (AddressPath, AddressButton) : null;
-            if (FindAncestor<DataGridRow>(Source) is { Item: FileEntry Entry } Row)
+            if (this.FileItemContainer(Source) is { DataContext: FileEntry Entry } Row)
                 return (Entry.IsDirectory ? Entry.FullPath : Path.GetDirectoryName(Entry.FullPath)!, Row);
             return this.CurrentPath.Length > 0 ? (this.CurrentPath, null) : null;
         }
@@ -172,7 +172,7 @@ public partial class ExplorerTab
         }
         else if (this.MarqueeViewport() is { } Viewport)
         {
-            var Bounds = Target.Element is { } Row ? new Rect(Row.TranslatePoint(new Point(), this.FileGrid), Row.RenderSize) : Viewport.Bounds;
+            var Bounds = Target.Element is { } Row ? new Rect(Row.TranslatePoint(new Point(), this.ActiveFileControl), Row.RenderSize) : Viewport.Bounds;
             Bounds.Intersect(Viewport.Bounds);
             if (!Bounds.IsEmpty)
             {

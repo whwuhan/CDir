@@ -119,7 +119,7 @@ public partial class ExplorerTab
             // field to a sidebar button. Wait until the click's real focus is settled.
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             if (FocusVersion != this.PanelFocusVersion || this.WindowClosed) return;
-            if (!this.FileGrid.IsKeyboardFocusWithin && !ReferenceEquals(FocusManager.GetFocusedElement(this), this.FileGrid))
+            if (!this.ActiveFileControl.IsKeyboardFocusWithin && !ReferenceEquals(FocusManager.GetFocusedElement(this), this.ActiveFileControl))
             {
                 this.PanelTreeSyncRequested = false;
                 return;

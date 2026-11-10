@@ -6,6 +6,7 @@ internal sealed partial class RegressionRunner
     // These resources are prose or status fragments; all other English resources are functional captions.
     private static readonly HashSet<string> SentenceCaseKeys =
     [
+        "FolderViewApplied", "FolderViewsReset",
         "ResetScopeQuestion", "RestoringFiles", "RestoreComplete", "DeletingFiles", "DeleteComplete", "HistoryStorageProtected", "HistoryHint", "HistoryEmpty", "HistoryChanged", "NothingToUndo", "NothingToRedo", "Undoing", "Redoing", "UndoComplete", "RedoComplete",
         "DriveUsageFormat", "DriveUsageTooltip", "DriveUsageUnavailable", "DriveUsageUnavailableTooltip",
         "HideSidebarTooltip", "ShowSidebarTooltip", "OpenRecycleBin", "ShellMenuError", "NewWindowError",

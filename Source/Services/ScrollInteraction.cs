@@ -22,17 +22,30 @@ internal static class ScrollInteraction
     internal static bool HandleWheel(DependencyObject? Source, int Delta, ModifierKeys Modifiers)
     {
         if (Modifiers != ModifierKeys.Shift || Delta == 0) return false;
+        HandleHorizontalWheel(Source, -Delta);
+        // At an edge (or without horizontal overflow), Shift must not fall back to vertical scrolling.
+        return true;
+    }
+
+    // Native horizontal wheel deltas are positive to the right, opposite to Shift+wheel.
+    internal static bool HandleHorizontalWheel(DependencyObject? Source, int Delta)
+    {
+        if (Delta == 0) return false;
         for (var Element = Source; Element is not null; Element = Parent(Element))
         {
             if (Element is ScrollViewer Viewer && Viewer.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled
                 && Viewer.ScrollableWidth > 0)
             {
-                Viewer.ScrollToHorizontalOffset(Viewer.HorizontalOffset - Delta / 120.0 * 48);
-                break;
+                Viewer.ScrollToHorizontalOffset(Viewer.HorizontalOffset + Delta / 120.0 * 48);
+                return true;
             }
         }
-        // At an edge (or without horizontal overflow), Shift must not fall back to vertical scrolling.
-        return true;
+        if (Source is not null && CDir.Controls.SidebarPathColumns.GetReferenceScroll(Source) is { ScrollableWidth: > 0 } Reference)
+        {
+            Reference.ScrollToHorizontalOffset(Reference.HorizontalOffset + Delta / 120.0 * 48);
+            return true;
+        }
+        return false;
     }
 
     private static DependencyObject? Parent(DependencyObject Element) => Element is Visual or Visual3D

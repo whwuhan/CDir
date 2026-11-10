@@ -110,7 +110,7 @@ public partial class ExplorerTab
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 
-    private void ApplyGridLines() => this.FileGridLines.Visibility = this.Settings.ShowGridLines ? Visibility.Visible : Visibility.Collapsed;
+    private void ApplyGridLines() => this.FileGridLines.Visibility = this.Settings.ShowGridLines && this.IsDetailsView && this.FileGroupProperty.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void ChangeGridLines(bool ShowGridLines)
     {

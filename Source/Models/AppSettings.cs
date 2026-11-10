@@ -14,6 +14,12 @@ internal sealed class AppSettings
         this.ShortcutDefaultsRevision = 1;
     }
 
+    public FileViewMode FileView { get; set; } = FileViewMode.Details;
+    public int FileViewIconSize { get; set; }
+    public Dictionary<string, FileViewMode>? FolderViews { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, FileViewMode>? FolderViewDefaults { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int>? FolderViewIconSizes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int>? FolderViewDefaultIconSizes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool ShowHidden { get; set; } = DefaultSettings.Current.ShowHidden;
     public bool ShowSidebar { get; set; } = DefaultSettings.Current.ShowSidebar;
     public double SidebarWidth { get; set; } = DefaultSettings.Current.SidebarWidth;

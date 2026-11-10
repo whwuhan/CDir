@@ -1,4 +1,4 @@
-<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
+﻿<UserControl x:Class="CDir.UI.ExplorerTab" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:CDir.Models" xmlns:controls="clr-namespace:CDir.Controls" xmlns:services="clr-namespace:CDir.Services" Loaded="WindowLoaded">
   <UserControl.Resources>
     <ResourceDictionary>
     <ResourceDictionary.MergedDictionaries>
@@ -45,15 +45,18 @@
       </Grid>
 
     </DataTemplate>
+    <ControlTemplate x:Key="DriveUsageBarTemplate" TargetType="ProgressBar">
+      <Grid ClipToBounds="True" SnapsToDevicePixels="True" UseLayoutRounding="True" Effect="{x:Null}">
+        <Border Background="{TemplateBinding Background}" />
+        <Grid x:Name="PART_Track"><Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" HorizontalAlignment="Left" /></Grid>
+        <Border x:Name="UsageFrame" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" IsHitTestVisible="False" />
+      </Grid>
+    </ControlTemplate>
     <Style x:Key="DriveUsageMeter" TargetType="ProgressBar">
       <Setter Property="Height" Value="9" /><Setter Property="Minimum" Value="0" /><Setter Property="Maximum" Value="100" />
       <Setter Property="Background" Value="{StaticResource SurfaceInner}" /><Setter Property="BorderBrush" Value="{StaticResource NeutralIndicator}" /><Setter Property="BorderThickness" Value="1" />
       <Setter Property="Foreground" Value="{StaticResource DriveUsageLow}" /><Setter Property="Focusable" Value="False" /><Setter Property="IsTabStop" Value="False" />
-      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ProgressBar">
-        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="1">
-          <Grid x:Name="PART_Track"><Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" HorizontalAlignment="Left" /></Grid>
-        </Border>
-      </ControlTemplate></Setter.Value></Setter>
+      <Setter Property="Template" Value="{StaticResource DriveUsageBarTemplate}" />
     </Style>
     <Style x:Key="WindowCaptionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="36" /><Setter Property="Height" Value="{DynamicResource UITitleControlHeight}" />
@@ -103,6 +106,7 @@
     </Style>
     <Style x:Key="SidebarSection" TargetType="Expander">
       <Setter Property="IsExpanded" Value="True" />
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="VerticalContentAlignment" Value="Stretch" />
       <Setter Property="Template">
@@ -151,8 +155,11 @@
               </StackPanel>
               </Grid>
               <controls:AnimatedDisclosure IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                <ScrollViewer x:Name="CategoryScroll" HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                              VerticalScrollBarVisibility="Disabled" Focusable="False" PreviewMouseWheel="FolderTreeMouseWheel" ScrollChanged="CategoryScrollChanged">
                 <ContentPresenter x:Name="SectionContent" ContentSource="Content" Margin="0,4,0,0"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </ScrollViewer>
               </controls:AnimatedDisclosure>
             </DockPanel>
           </ControlTemplate>
@@ -242,10 +249,10 @@
               <ContentPresenter x:Name="HeaderHost" ContentSource="Header" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="Center" RecognizesAccessKey="True" />
             </Border>
-            <Canvas Grid.Row="1" Grid.ColumnSpan="3" Height="10" Visibility="{Binding Visibility, ElementName=SidebarDriveMeter}">
-              <Grid Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=TreeView}}" Height="10">
+            <Canvas Grid.Row="1" Grid.ColumnSpan="3" Height="12" Visibility="{Binding Visibility, ElementName=SidebarDriveMeter}">
+              <Grid Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=TreeView}}" Height="12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-            <ProgressBar x:Name="SidebarDriveMeter" Grid.Column="1" Height="6" Margin="{TemplateBinding Padding}"
+            <ProgressBar x:Name="SidebarDriveMeter" Grid.Column="1" Height="10" Margin="3,1,11,1" Effect="{x:Null}"
                          Value="{Binding DriveUsagePercent, Mode=OneWay}" ToolTip="{Binding DriveUsageTooltip}" AutomationProperties.Name="{DynamicResource TextDriveCapacity}">
               <ProgressBar.Style><Style TargetType="ProgressBar" BasedOn="{StaticResource DriveUsageMeter}">
                 <Setter Property="Visibility" Value="Collapsed" />
@@ -332,6 +339,11 @@
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderSurface" Property="Background" Value="{StaticResource SurfaceHover}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /><Setter TargetName="SortArrow" Property="Stroke" Value="{StaticResource HighlightText}" /></Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="HeaderSurface" Property="Background" Value="{StaticResource SurfacePressed}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /><Setter TargetName="SortArrow" Property="Stroke" Value="{StaticResource HighlightText}" /></Trigger>
             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="HeaderSurface" Property="Opacity" Value="0.5" /></Trigger>
+            <DataTrigger Binding="{Binding CanUserSortColumns, RelativeSource={RelativeSource AncestorType=DataGrid}}" Value="False">
+              <Setter TargetName="SortArrow" Property="Stroke" Value="#CCCCCC" />
+              <Setter TargetName="HeaderSurface" Property="Background" Value="Transparent" />
+              <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            </DataTrigger>
             <DataTrigger Binding="{Binding Column, RelativeSource={RelativeSource Self}}" Value="{x:Null}"><Setter TargetName="SortArrow" Property="Visibility" Value="Collapsed" /></DataTrigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -351,7 +363,46 @@
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="DataGridCell"><Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ContentPresenter VerticalAlignment="Center" /></Border></ControlTemplate></Setter.Value></Setter>
       <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger></Style.Triggers>
     </Style>
-    </ResourceDictionary>
+
+    <Style x:Key="TileMetadataText" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Style.Triggers><DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></DataTrigger></Style.Triggers>
+    </Style>
+    <DataTemplate x:Key="FileViewNameTemplate"><Grid><TextBlock Text="{Binding Name}" Style="{StaticResource RenameLabel}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullPath}" /><TextBox Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontFileList}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" /></Grid></DataTemplate>
+    <DataTemplate x:Key="IconFileTemplate">
+      <StackPanel Margin="6,6,6,2"><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" ShowThumbnails="True" ThumbnailStamp="{Binding Modified.Ticks}" IconSize="{DynamicResource FileViewIconPixels}" Width="{DynamicResource FileViewIconSize}" Height="{DynamicResource FileViewIconSize}" VerticalAlignment="Center" />
+        <Grid Margin="0,6,0,0">
+          <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" MaxHeight="{DynamicResource FileViewNameHeight}" TextTrimming="CharacterEllipsis" Style="{StaticResource RenameLabel}" ToolTip="{Binding FullPath}" />
+          <TextBox Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontFileList}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" />
+        </Grid>
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate x:Key="CompactFileTemplate">
+      <DockPanel Margin="4,2"><ContentControl DockPanel.Dock="Left" Content="{Binding}" Margin="0,0,6,0"><ContentControl.ContentTemplate><DataTemplate><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" ShowThumbnails="True" ThumbnailStamp="{Binding Modified.Ticks}" IconSize="{DynamicResource FileViewIconPixels}" Width="{DynamicResource FileViewIconSize}" Height="{DynamicResource FileViewIconSize}" VerticalAlignment="Center" /></DataTemplate></ContentControl.ContentTemplate></ContentControl>
+        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FileViewNameTemplate}" VerticalAlignment="Center" />
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate x:Key="TileFileTemplate">
+      <DockPanel Margin="6,4"><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" ShowThumbnails="True" ThumbnailStamp="{Binding Modified.Ticks}" IconSize="{DynamicResource FileViewIconPixels}" Width="{DynamicResource FileViewIconSize}" Height="{DynamicResource FileViewIconSize}" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="0,0,10,0" />
+        <StackPanel VerticalAlignment="Center"><ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FileViewNameTemplate}" />
+          <TextBlock Text="{Binding TypeName}" Style="{StaticResource TileMetadataText}" />
+          <TextBlock Text="{Binding DisplaySize}" Style="{StaticResource TileMetadataText}" />
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate x:Key="ContentFileTemplate">
+      <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="8,6">
+        <DockPanel><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" ShowThumbnails="True" ThumbnailStamp="{Binding Modified.Ticks}" IconSize="{DynamicResource FileViewIconPixels}" Width="{DynamicResource FileViewIconSize}" Height="{DynamicResource FileViewIconSize}" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="0,0,14,0" />
+          <StackPanel VerticalAlignment="Center"><ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource FileViewNameTemplate}" />
+            <TextBlock Text="{Binding TypeName}" Style="{StaticResource TileMetadataText}" />
+            <TextBlock Text="{Binding DisplayModified}" Style="{StaticResource TileMetadataText}" />
+            <TextBlock Text="{Binding DisplaySize}" Style="{StaticResource TileMetadataText}" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </ResourceDictionary>
   </UserControl.Resources>
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="{DynamicResource UINavigationRowHeight}" /><RowDefinition Height="*" /><RowDefinition Height="{DynamicResource UIStatusRowHeight}" /></Grid.RowDefinitions>
@@ -477,7 +528,7 @@
                         </TextBlock>
                         <ItemsControl x:Name="CategoryFoldersList" ItemsSource="{Binding Folders}">
                           <ItemsControl.ItemTemplate><DataTemplate>
-                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" MaxWidth="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                             <controls:TreeBranchLines Grid.RowSpan="2" IsBookmarkRoot="True" HeaderHeight="{Binding ActualHeight, ElementName=CategoryFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
                             <ToggleButton IsChecked="{Binding Node.IsExpanded, Mode=TwoWay}" Click="SidebarFolderToggleClick">
@@ -511,7 +562,7 @@
               <StackPanel>
               <ItemsControl x:Name="FavoritesList">
                 <ItemsControl.ItemTemplate><DataTemplate>
-                  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                  <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="19" MaxWidth="19" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                   <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                   <controls:TreeBranchLines x:Name="FavoriteBranch" Grid.RowSpan="2" IsBookmarkRoot="True" HeaderHeight="{Binding ActualHeight, ElementName=FavoriteFolderHeader}" IsExpanded="{Binding Node.IsExpanded}" ChildCount="{Binding Node.Children.Count}" IsHitTestVisible="False" />
                   <ToggleButton x:Name="FavoriteExpander" Style="{StaticResource DirectoryTreeExpander}" IsChecked="{Binding Node.IsExpanded, Mode=TwoWay}" Click="SidebarFolderToggleClick" />
@@ -534,11 +585,10 @@
               </ItemsControl>
               </StackPanel>
             </Expander>
-            <Expander x:Name="DirectoryTreeSection" Margin="0,6,0,0" Style="{StaticResource SidebarSection}" Header="{DynamicResource TextDirectoryTree}" ContextMenu="{StaticResource BuiltInCategoryContextMenu}">
+            <Expander x:Name="DirectoryTreeSection" Margin="0,6,0,0" Style="{StaticResource SidebarSection}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Header="{DynamicResource TextDirectoryTree}" ContextMenu="{StaticResource BuiltInCategoryContextMenu}">
               <TreeView x:Name="FolderTree" Grid.IsSharedSizeScope="True" Background="Transparent" BorderThickness="0" Padding="0" FocusVisualStyle="{x:Null}" SelectedItemChanged="FolderTreeSelectedItemChanged" PreviewMouseWheel="FolderTreeMouseWheel" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                 <TreeView.Style><Style TargetType="TreeView">
                   <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
-                  <Style.Triggers><DataTrigger Binding="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" /></DataTrigger></Style.Triggers>
                 </Style></TreeView.Style>
                 <TreeView.ItemTemplate><HierarchicalDataTemplate DataType="{x:Type models:FolderNode}" ItemsSource="{Binding Children}">
                   <Grid ToolTip="{Binding FullPath}" ToolTipService.InitialShowDelay="0" ToolTipService.BetweenShowDelay="0" controls:SidebarPathColumns.NameColumn="0" controls:SidebarPathColumns.IsEnabled="{Binding ShowBookmarkPaths, RelativeSource={RelativeSource AncestorType=UserControl}}">
@@ -660,7 +710,7 @@
           <RowDefinition x:Name="TerminalSplitterRow" Height="0" />
           <RowDefinition x:Name="TerminalRow" Height="0" />
         </Grid.RowDefinitions>
-        <Grid x:Name="MainPanelContent" Background="Transparent" AllowDrop="True" PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
+        <Grid x:Name="MainPanelContent" Background="Transparent" AllowDrop="True" PreviewMouseWheel="MainPanelViewMouseWheel" MouseLeave="MainPanelViewMouseLeave" PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
           <Grid>
             <DataGrid x:Name="FileGrid" UseLayoutRounding="True" SnapsToDevicePixels="True" ContextMenuOpening="FileContextOpening" FontSize="{DynamicResource UIFontFileList}" RowHeight="{DynamicResource UIFileRowHeight}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True" ColumnReordered="FileGridColumnReordered" CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalGridLinesBrush="{StaticResource Line}" EnableRowVirtualization="True" EnableColumnVirtualization="True" ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" MouseDoubleClick="FileGridMouseDoubleClick" SelectionChanged="FileGridSelectionChanged" Sorting="FileGridSorting" PreviewMouseRightButtonDown="FileGridRightClick" PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
                       IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" PreviewKeyDown="FileGridPreviewKeyDown" LostMouseCapture="FileGridLostMouseCapture">
@@ -682,6 +732,33 @@
                 </DataGridTextColumn>
               </DataGrid.Columns>
             </DataGrid>
+
+            <ListBox x:Name="FileTiles" Visibility="Collapsed" SelectionMode="Extended" FontSize="{DynamicResource UIFontFileList}"
+                Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                VirtualizingPanel.IsVirtualizing="True" KeyboardNavigation.DirectionalNavigation="Contained"
+                SelectionChanged="FileTilesSelectionChanged" PreviewKeyDown="FileTilesKeyDown"
+                ContextMenuOpening="FileContextOpening" MouseDoubleClick="FileGridMouseDoubleClick" PreviewMouseRightButtonDown="FileGridRightClick"
+                PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
+                IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" LostMouseCapture="FileGridLostMouseCapture">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><controls:FileTilePanel /></ItemsPanelTemplate></ListBox.ItemsPanel>
+              <ListBox.ContextMenu><ContextMenu /></ListBox.ContextMenu>
+              <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="VerticalContentAlignment" Value="Stretch" />
+                <Setter Property="ToolTip" Value="{Binding FullPath}" />
+                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="Surface" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{StaticResource SurfaceHover}" /></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="Surface" Property="Background" Value="{StaticResource Accent}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
+                    <DataTrigger Binding="{Binding IsCut}" Value="True"><Setter Property="Opacity" Value="0.5" /></DataTrigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value></Setter>
+              </Style></ListBox.ItemContainerStyle>
+            </ListBox>
             <controls:FileListGridLines x:Name="FileGridLines" GridOwner="{Binding ElementName=FileGrid}" Visibility="Collapsed" />
             <Canvas IsHitTestVisible="False" ClipToBounds="True"><Border x:Name="FileSelectionRectangle" Visibility="Collapsed" BorderBrush="{StaticResource Accent}" BorderThickness="1" Background="#2278B8E8" /></Canvas>
             <Canvas IsHitTestVisible="False" ClipToBounds="True"><Border x:Name="FileDropTargetHighlight" Visibility="Collapsed" BorderBrush="{StaticResource Accent}" BorderThickness="2" Background="#1878B8E8" /></Canvas>
@@ -784,11 +861,7 @@
             <ProgressBar x:Name="DriveUsageBar" Width="64" Height="10" Minimum="0" Maximum="100" Margin="10,0,0,0" VerticalAlignment="Center"
                          Foreground="{StaticResource DriveUsageLow}" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource NeutralIndicator}" BorderThickness="1"
                          Focusable="False" IsTabStop="False" AutomationProperties.Name="{DynamicResource TextDriveCapacity}">
-              <ProgressBar.Template><ControlTemplate TargetType="ProgressBar">
-                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="1" CornerRadius="0">
-                  <Grid x:Name="PART_Track"><Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" HorizontalAlignment="Left" CornerRadius="0" /></Grid>
-                </Border>
-              </ControlTemplate></ProgressBar.Template>
+              <ProgressBar.Template><StaticResource ResourceKey="DriveUsageBarTemplate" /></ProgressBar.Template>
             </ProgressBar>
             <TextBlock x:Name="DriveUsagePercentageText" Margin="6,0,0,0" Foreground="{StaticResource Ink}" FontSize="{DynamicResource UIFontStatusBar}" TextAlignment="Right" VerticalAlignment="Center" Visibility="Collapsed" />
           </StackPanel>

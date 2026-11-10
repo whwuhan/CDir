@@ -1,4 +1,4 @@
-﻿using CDir.UI.Dialogs;
+using CDir.UI.Dialogs;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -83,6 +83,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyShortcutHints();
         this.ApplyUIFonts();
         this.RestoreColumnLayout(this.Settings.ColumnOrder, this.Settings.HiddenColumns);
+        this.ApplyFileView();
         AppMain.RecordSmokeProgress("Initializing window state");
         this.InitializeVersionControl();
         this.InitializeSidebarCategories();
@@ -276,6 +277,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             });
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
             this.CurrentPath = Result.Path;
+            this.ApplyRememberedFolderView(this.HostWindow.FolderViewFor(this.CurrentPath));
             this.CloseRecycleBinView();
             this.NotifyTabHeader();
             this.QueueDriveUsageRefresh(this.CurrentPath);
@@ -306,7 +308,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             if (Computer) this.SelectSidebarNode(null);
             else if (SyncNavigationTree)
                 await this.SyncNavigationTreeAsync(TreeKey, this.CurrentPath, Version,
-                    Reveal: RevealTree && (RecordHistory || HistoryIndex.HasValue || this.FileGrid.IsKeyboardFocusWithin));
+                    Reveal: RevealTree && (RecordHistory || HistoryIndex.HasValue || this.ActiveFileControl.IsKeyboardFocusWithin));
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
             this.ScheduleVersionRefresh();
             this.QueueSearch(Debounce: false, Selection: SelectPath is null ? SearchSelection : [SelectPath]);
@@ -479,12 +481,12 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     private async void GoClick(object Sender, RoutedEventArgs E)
     {
-        if (await this.NavigateAsync(this.AddressBox.Text)) this.FileGrid.Focus();
+        if (await this.NavigateAsync(this.AddressBox.Text)) this.ActiveFileControl.Focus();
         else if (this.AddressEditing) this.AddressBox.Focus();
     }
     private async void AddressBoxKeyDown(object Sender, KeyEventArgs E)
     {
-        if (E.Key == System.Windows.Input.Key.Enter) { E.Handled = true; if (await this.NavigateAsync(this.AddressBox.Text)) this.FileGrid.Focus(); }
+        if (E.Key == System.Windows.Input.Key.Enter) { E.Handled = true; if (await this.NavigateAsync(this.AddressBox.Text)) this.ActiveFileControl.Focus(); }
         else if (E.Key == System.Windows.Input.Key.Escape) { this.CancelAddressEdit(); E.Handled = true; }
     }
     private async void BackClick(object Sender, RoutedEventArgs E) => await this.BackAsync();
@@ -543,15 +545,29 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.View is null) return;
         using (this.View.DeferRefresh())
         {
+            if (this.View is ListCollectionView List) List.CustomSort = null;
+            this.View.GroupDescriptions.Clear();
             this.View.SortDescriptions.Clear();
             this.View.SortDescriptions.Add(new(nameof(FileEntry.IsDirectory), ListSortDirection.Descending));
-            this.View.SortDescriptions.Add(new(this.SortProperty, this.SortDirection));
-            if (this.SortProperty != nameof(FileEntry.Name)) this.View.SortDescriptions.Add(new(nameof(FileEntry.Name), ListSortDirection.Ascending));
+            this.View.SortDescriptions.Add(new(this.IsComputer ? nameof(FileEntry.FullPath) : this.SortProperty, this.IsComputer ? ListSortDirection.Ascending : this.SortDirection));
+            if (!this.IsComputer && this.SortProperty != nameof(FileEntry.Name)) this.View.SortDescriptions.Add(new(nameof(FileEntry.Name), ListSortDirection.Ascending));
+            this.ApplyFileGroups();
+        }
+    }
+    private void UpdateComputerSorting()
+    {
+        this.FileGrid.CanUserSortColumns = !this.IsComputer;
+        foreach (var Column in this.FileGrid.Columns)
+        {
+            Column.CanUserSort = !this.IsComputer;
+            Column.SortDirection = this.IsComputer ? (Column.SortMemberPath == nameof(FileEntry.Name) ? ListSortDirection.Ascending : null)
+                : Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
         }
     }
     private void FileGridSorting(object Sender, DataGridSortingEventArgs E)
     {
         E.Handled = true;
+        if (this.IsComputer) return;
         this.SortProperty = E.Column.SortMemberPath;
         this.SortDirection = E.Column.SortDirection == ListSortDirection.Descending ? ListSortDirection.Ascending : ListSortDirection.Descending;
         foreach (var Column in this.FileGrid.Columns) Column.SortDirection = null;
@@ -602,6 +618,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
 
     private void FileGridSelectionChanged(object Sender, SelectionChangedEventArgs E)
     {
+        this.SyncTileSelection();
         if (!this.ApplyingSearchSelection) this.PendingSearchSelection.Clear();
         if (this.ApplyingMarqueeSelection) return;
         this.UpdateActions();
@@ -631,9 +648,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyingSearchSelection = true;
         try
         {
-            if (!Append) this.FileGrid.SelectedItems.Clear();
+            if (!Append) { this.FileGrid.SelectedItems.Clear(); this.FileGrid.CurrentItem = Entry; }
             if (!this.FileGrid.SelectedItems.Contains(Entry)) this.FileGrid.SelectedItems.Add(Entry);
-            this.FileGrid.ScrollIntoView(Entry);
+            this.RevealFile(Entry);
         }
         finally { this.ApplyingSearchSelection = false; }
     }
@@ -649,7 +666,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     {
         if (FindAncestor<TextBoxBase>(E.OriginalSource as DependencyObject) is not null) return;
         if (E.ChangedButton != MouseButton.Left || FindAncestor<ButtonBase>(E.OriginalSource as DependencyObject) is not null
-            || FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject) is null) return;
+            || this.FileItemContainer(E.OriginalSource as DependencyObject) is null) return;
         E.Handled = true;
         await this.OpenSelectedAsync();
     }
@@ -848,7 +865,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         {
             this.DismissFileDragFeedback();
             var InFiles = E.OriginalSource is DependencyObject Origin
-                ? FindAncestor<DataGrid>(Origin) == this.FileGrid : this.FileGrid.IsKeyboardFocusWithin;
+                ? this.IsFileInput(Origin) : this.ActiveFileControl.IsKeyboardFocusWithin;
             var Editing = this.AddressEditing;
             var Tips = this.SearchTips.Visibility == Visibility.Visible;
             if (Editing) this.CancelAddressEdit();
@@ -878,7 +895,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             : FindAncestor<CDir.Controls.EmbeddedTerminalControl>(InputSource) is { } Terminal && ReferenceEquals(Terminal, this.TerminalSurface);
         if (InTerminal && Shortcut?.Id is not ("ToggleTerminal" or "ToggleSidebar" or "Search" or "NewWindow" or "SelectAll" or "Preferences")) return;
         var InText = InputSource is null ? Keyboard.FocusedElement is TextBoxBase : FindAncestor<TextBoxBase>(InputSource) is not null;
-        var InFileList = InputSource is null ? this.FileGrid.IsKeyboardFocusWithin : FindAncestor<DataGrid>(InputSource) == this.FileGrid;
+        var InFileList = this.IsFileInput(InputSource);
         if (!CanHandleShortcut(Shortcut, Key, Modifiers, InText, InFileList)) return;
         E.Handled = true;
         await this.HandleShortcutAsync(Key, Modifiers, InText, InFileList);
@@ -957,6 +974,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.Watcher?.Dispose();
         this.RefreshTimer.Stop();
         this.DriveUsageTimer.Stop();
+        this.FileViewSaveTimer?.Stop();
         this.StopVersionControl();
     }
 

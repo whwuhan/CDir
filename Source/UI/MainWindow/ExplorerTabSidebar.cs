@@ -49,6 +49,20 @@ public partial class ExplorerTab
         });
     }
 
+    private bool CategoryLayoutUpdateQueued;
+    private void CategoryScrollChanged(object Sender, ScrollChangedEventArgs E)
+    {
+        if (!ReferenceEquals(Sender, E.OriginalSource) || this.CategoryLayoutUpdateQueued) return;
+        // Path toggles and selection can change the extent and clamp the offset
+        // during layout. Copy the final row positions into the pinned overlay.
+        this.CategoryLayoutUpdateQueued = true;
+        this.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, () =>
+        {
+            this.CategoryLayoutUpdateQueued = false;
+            this.UpdateStickySidebar();
+        });
+    }
+
     private void ContentPanelsSizeChanged(object Sender, SizeChangedEventArgs E)
         => this.UpdateSidebarMaximumWidth();
 

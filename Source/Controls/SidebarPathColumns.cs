@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Runtime.CompilerServices;
 
 namespace CDir.Controls;
 
@@ -17,6 +18,31 @@ public static class SidebarPathColumns
         typeof(SidebarPathColumns), new PropertyMetadata(1));
     public static int GetNameColumn(DependencyObject Target) => (int)Target.GetValue(NameColumnProperty);
     public static void SetNameColumn(DependencyObject Target, int Value) => Target.SetValue(NameColumnProperty, Value);
+
+    public static readonly DependencyProperty ReferenceScrollProperty = DependencyProperty.RegisterAttached("ReferenceScroll", typeof(ScrollViewer),
+        typeof(SidebarPathColumns), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
+    public static ScrollViewer? GetReferenceScroll(DependencyObject Target) => (ScrollViewer?)Target.GetValue(ReferenceScrollProperty);
+    public static void SetReferenceScroll(DependencyObject Target, ScrollViewer? Value) => Target.SetValue(ReferenceScrollProperty, Value);
+
+    private static readonly ConditionalWeakTable<ScrollViewer, ColumnGroup> Groups = new();
+    private sealed class ColumnGroup
+    {
+        private readonly Dictionary<LayoutState, double> Rows = [];
+        internal double Maximum { get; private set; }
+        internal void Report(LayoutState State, double? Right)
+        {
+            var Previous = this.Maximum;
+            if (Right is { } Value)
+            {
+                this.Rows.TryGetValue(State, out var Old);
+                this.Rows[State] = Value;
+                this.Maximum = Value >= this.Maximum ? Value : Old >= this.Maximum ? this.Rows.Values.Max() : this.Maximum;
+            }
+            else if (this.Rows.Remove(State)) this.Maximum = this.Rows.Count == 0 ? 0 : this.Rows.Values.Max();
+            if (Math.Abs(Previous - this.Maximum) > .25)
+                foreach (var Row in this.Rows.Keys) Row.Invalidate();
+        }
+    }
 
     private static readonly DependencyProperty StateProperty = DependencyProperty.RegisterAttached("State", typeof(LayoutState), typeof(SidebarPathColumns));
     private static void Changed(DependencyObject Target, DependencyPropertyChangedEventArgs E)
@@ -37,6 +63,11 @@ public static class SidebarPathColumns
         private GridLength OriginalPathWidth;
         private bool Listening;
         private ScrollViewer? Viewport;
+        private ColumnGroup? Group;
+        private (string Text, Typeface Font, double Size, FlowDirection Direction, double Dpi, Thickness Margin)? MeasuredName;
+        private double NaturalNameWidth;
+
+        internal void Invalidate() => this.Row.InvalidateMeasure();
 
         internal LayoutState(Grid Row)
         {
@@ -71,7 +102,44 @@ public static class SidebarPathColumns
             var Index = GetNameColumn(this.Row);
             var Prefix = this.Row.ColumnDefinitions.Take(Index).Sum(Column => Column.ActualWidth);
             var Origin = this.Row.TranslatePoint(new Point(), Viewport).X + Prefix;
-            var Width = Math.Clamp(Viewport.ViewportWidth / 2 + 20 - Origin, 0, Math.Max(0, this.Row.ActualWidth - Prefix));
+            // Keep column widths in content coordinates. Otherwise scrolling left
+            // enlarges the name column by the same amount and pins the metadata.
+            ScrollViewer? Category = null;
+            for (DependencyObject? Parent = this.Row; Parent is not null && Parent != Viewport; Parent = VisualTreeHelper.GetParent(Parent))
+                if (Parent is ScrollViewer Scroll)
+                {
+                    Origin += Scroll.HorizontalOffset;
+                    if (Scroll.Name == "CategoryScroll" && Scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto) Category = Scroll;
+                }
+            var Reference = GetReferenceScroll(this.Row);
+            if (Category is null && Reference is { HorizontalScrollBarVisibility: ScrollBarVisibility.Auto })
+            {
+                Category = Reference;
+                Origin += Reference.HorizontalOffset;
+            }
+            var Group = Category is null ? null : Groups.GetOrCreateValue(Category);
+            if (!ReferenceEquals(Group, this.Group)) { this.Group?.Report(this, null); this.Group = Group; }
+            if (Group is not null && Reference is null)
+            {
+                // Measure the full name, including deeply indented descendants, so
+                // scrolling can reveal every character without moving the path column per row.
+                var Label = this.Row.Children.OfType<TextBlock>().FirstOrDefault(Text => Grid.GetColumn(Text) == Index);
+                if (Label is not null)
+                {
+                    var Signature = (Label.Text, new Typeface(Label.FontFamily, Label.FontStyle, Label.FontWeight, Label.FontStretch),
+                        Label.FontSize, Label.FlowDirection, VisualTreeHelper.GetDpi(Label).PixelsPerDip, Label.Margin);
+                    if (this.MeasuredName is not { } Measured || !Measured.Equals(Signature))
+                    {
+                        this.MeasuredName = Signature;
+                        this.NaturalNameWidth = new FormattedText(Label.Text, System.Globalization.CultureInfo.CurrentUICulture,
+                            Label.FlowDirection, Signature.Item2, Label.FontSize, Label.Foreground, Signature.Item5).WidthIncludingTrailingWhitespace
+                            + Label.Margin.Left + Label.Margin.Right;
+                    }
+                }
+                Group.Report(this, this.Row.IsVisible ? Origin + (Label is null ? 0 : this.NaturalNameWidth) : null);
+            }
+            var Column = Math.Max(Viewport.ViewportWidth / 2 + 20, Group?.Maximum ?? 0);
+            var Width = Math.Max(0, Column - Origin);
             var Name = this.Row.ColumnDefinitions[Index];
             if (!Name.Width.IsAbsolute || Math.Abs(Name.Width.Value - Width) > .25) Name.Width = new GridLength(Width);
             var Path = this.Row.ColumnDefinitions[Index + 1];
@@ -80,6 +148,8 @@ public static class SidebarPathColumns
 
         private void Stop()
         {
+            this.Group?.Report(this, null);
+            this.Group = null;
             if (this.Listening) { this.Row.LayoutUpdated -= this.LayoutUpdated; this.Listening = false; }
             if (this.OriginalNameWidth is { } Width)
             {

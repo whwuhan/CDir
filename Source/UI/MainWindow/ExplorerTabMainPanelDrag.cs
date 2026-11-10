@@ -20,12 +20,11 @@ public partial class ExplorerTab
         this.MainPanelDragCandidate = null;
         this.MainPanelDeferredSelection = null;
         if (this.OperationBusy || this.Loading || ClickCount != 1
-            || FindAncestor<DataGridRow>(Source) is not { Item: FileEntry Entry } Row
-            || !ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(Row), this.FileGrid)) return false;
+            || this.FileItemContainer(Source) is not { DataContext: FileEntry Entry }) return false;
         this.MainPanelDragCandidate = Entry;
         this.MainPanelDragOrigin = Origin;
         // Keep a selected group intact until we know whether this is a click or a drag.
-        if (Row.IsSelected && this.FileGrid.SelectedItems.Count > 1 && Modifiers == ModifierKeys.None)
+        if (this.FileGrid.SelectedItems.Contains(Entry) && this.FileGrid.SelectedItems.Count > 1 && Modifiers == ModifierKeys.None)
         {
             this.MainPanelDeferredSelection = Entry;
             return true;
@@ -44,22 +43,22 @@ public partial class ExplorerTab
     private void FileGridDragMouseDown(object Sender, MouseButtonEventArgs E)
     {
         if (FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(E.OriginalSource as DependencyObject) is not null) return;
-        if (this.PrepareMarqueeSelection(E.OriginalSource as DependencyObject, E.GetPosition(this.FileGrid), Keyboard.Modifiers, E.ClickCount))
+        if (this.PrepareMarqueeSelection(E.OriginalSource as DependencyObject, E.GetPosition(this.ActiveFileControl), Keyboard.Modifiers, E.ClickCount))
         {
-            if (!AppMain.SmokeTest) this.FileGrid.Focus();
+            if (!AppMain.SmokeTest) this.ActiveFileControl.Focus();
             E.Handled = true;
             return;
         }
-        if (this.PrepareMainPanelFolderDrag(E.OriginalSource as DependencyObject, E.GetPosition(this.FileGrid), Keyboard.Modifiers, E.ClickCount))
+        if (this.PrepareMainPanelFolderDrag(E.OriginalSource as DependencyObject, E.GetPosition(this.ActiveFileControl), Keyboard.Modifiers, E.ClickCount))
         {
             // Handling a press on an existing multi-selection bypasses DataGrid's
             // default focus transfer. Clipboard keys must still reach the file list.
-            if (!AppMain.SmokeTest) this.FileGrid.Focus();
+            if (!AppMain.SmokeTest) this.ActiveFileControl.Focus();
             E.Handled = true;
         }
-        else if (E.ClickCount == 1 && FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject) is { Item: FileEntry Entry })
+        else if (E.ClickCount == 1 && this.FileItemContainer(E.OriginalSource as DependencyObject) is { DataContext: FileEntry Entry })
         {
-            if (!AppMain.SmokeTest) this.FileGrid.Focus();
+            if (!AppMain.SmokeTest) this.ActiveFileControl.Focus();
             this.SelectFileByClick(Entry, Keyboard.Modifiers);
             E.Handled = true;
         }
@@ -71,7 +70,7 @@ public partial class ExplorerTab
         var Deferred = this.MainPanelDeferredSelection;
         this.MainPanelDragCandidate = null;
         this.MainPanelDeferredSelection = null;
-        if (Deferred is not null && FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject)?.Item == Deferred)
+        if (Deferred is not null && this.FileItemContainer(E.OriginalSource as DependencyObject)?.DataContext == Deferred)
         {
             this.SelectFileByClick(Deferred, ModifierKeys.None);
             E.Handled = true;
@@ -84,9 +83,9 @@ public partial class ExplorerTab
         if (this.MarqueeOrigin is not null)
         {
             if (E.LeftButton != MouseButtonState.Pressed) this.EndMarqueeSelection();
-            else if (this.UpdateMarqueeSelection(E.GetPosition(this.FileGrid)))
+            else if (this.UpdateMarqueeSelection(E.GetPosition(this.ActiveFileControl)))
             {
-                if (!this.FileGrid.IsMouseCaptured) this.StartMarqueeTracking();
+                if (!this.ActiveFileControl.IsMouseCaptured) this.StartMarqueeTracking();
                 E.Handled = true;
             }
             return;
@@ -99,7 +98,7 @@ public partial class ExplorerTab
             return;
         }
         if (this.MainPanelDragCandidate is null || this.MainPanelFileDragActive || this.ActiveMainPanelFolderDrag is not null) return;
-        var Position = E.GetPosition(this.FileGrid);
+        var Position = E.GetPosition(this.ActiveFileControl);
         if (Math.Abs(Position.X - this.MainPanelDragOrigin.X) < SystemParameters.MinimumHorizontalDragDistance
             && Math.Abs(Position.Y - this.MainPanelDragOrigin.Y) < SystemParameters.MinimumVerticalDragDistance) return;
         var Payload = this.CreateMainPanelFolderDrag();
@@ -108,13 +107,12 @@ public partial class ExplorerTab
         if (!this.FileGrid.SelectedItems.Contains(Candidate) || this.OperationBusy || this.Loading) return;
         this.MainPanelDeferredSelection = null;
         E.Handled = true;
-        if (Mouse.Captured is UIElement Captured && (ReferenceEquals(Captured, this.FileGrid)
-            || ReferenceEquals(FindAncestor<DataGrid>(Captured), this.FileGrid))) Captured.ReleaseMouseCapture();
+        if (Mouse.Captured is UIElement Captured && this.IsFileInput(Captured)) Captured.ReleaseMouseCapture();
         var Data = CreateFileTransferData(this.SelectedEntries());
         if (Payload is not null) Data.SetData(MainPanelFolderDragFormat, Payload);
         this.ActiveMainPanelFolderDrag = Payload;
         this.MainPanelFileDragActive = true;
-        try { DragDrop.DoDragDrop(this.FileGrid, Data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link); }
+        try { DragDrop.DoDragDrop(this.ActiveFileControl, Data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link); }
         finally { this.CompleteMainPanelFileDrag(); }
     }
 

@@ -251,6 +251,30 @@ public partial class ExplorerTab
             ScrollInteraction.HandleWheel(FindVisualChild<ScrollContentPresenter>(Inner), 120, ModifierKeys.Shift);
             await Settle();
             Check(Inner.HorizontalOffset == 0, "Shift wheel up moves the hovered tree left");
+            // Exercise the actual native-message route at a tree row without moving
+            // the user's pointer or injecting input into any desktop window.
+            var NativeRow = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Root);
+            NativeRow.BringIntoView(new Rect(0, 0, 100, 24));
+            await Settle();
+            var Screen = NativeRow.PointToScreen(new Point(70, 10));
+            var PackedPoint = (IntPtr)unchecked((int)(((uint)(ushort)(short)Screen.Y << 16) | (ushort)(short)Screen.X));
+            bool NativeWheel(int Delta)
+            {
+                var Handled = false;
+                this.HostWindow.BrowserAppCommand(IntPtr.Zero, 0x020E,
+                    (IntPtr)unchecked((int)((uint)(ushort)(short)Delta << 16)), PackedPoint, ref Handled);
+                return Handled;
+            }
+            var NativeVertical = this.SidebarScroll.VerticalOffset;
+            Check(NativeWheel(60), "The native horizontal wheel message routes to the tree under its screen coordinates");
+            await Settle();
+            Check(Inner.HorizontalOffset > 0 && Inner.HorizontalOffset <= 24 && this.SidebarScroll.VerticalOffset == NativeVertical,
+                "A partial native wheel delta moves the hovered tree right without vertical scrolling");
+            Check(NativeWheel(-60), "Native horizontal wheel input also routes left");
+            await Settle();
+            Check(Inner.HorizontalOffset == 0 && !NativeWheel(0), "Native horizontal wheel input returns to the left edge and ignores zero deltas");
+            this.SidebarScroll.ScrollToTop();
+            await Settle();
             ScrollInteraction.HandleWheel(Inner, 120, ModifierKeys.Shift);
             await Settle();
             Check(Inner.HorizontalOffset == 0 && this.SidebarScroll.VerticalOffset == InitialVertical,

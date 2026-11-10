@@ -25,6 +25,7 @@ public sealed class FileEntry : INotifyPropertyChanged
         set { if (this.CurrentVersionStatus == value) return; this.CurrentVersionStatus = value; PropertyChanged?.Invoke(this, new(nameof(VersionStatus))); }
     }
     private string OriginalTypeName = string.Empty;
+    public string ViewGroup { get; set; } = "";
     public string Name { get; init; } = string.Empty;
     public string FullPath { get; init; } = string.Empty;
     public bool IsDirectory { get; init; }

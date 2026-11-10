@@ -94,9 +94,13 @@ public partial class ExplorerTab
             }
             async Task TipQuery(string Text)
             {
+                // Simulate typing into this owned field without activating its window.
+                FocusManager.SetFocusedElement(this, this.SearchBox);
                 this.SearchBox.Text = Text;
                 this.SearchBox.CaretIndex = Text.Length;
                 await this.WaitForSearchSmokeAsync();
+                FocusManager.SetFocusedElement(this, this.SearchBox);
+                this.UpdateSearchTips();
             }
             void ClickSurface(UIElement Surface)
             {

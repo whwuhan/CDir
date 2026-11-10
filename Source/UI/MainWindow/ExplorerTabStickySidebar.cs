@@ -25,6 +25,7 @@ public partial class ExplorerTab
                 && Item.TranslatePoint(new Point(0, Item.ActualHeight), this.SidebarScroll).Y > 0);
         if (Section is null)
         {
+            SidebarPathColumns.SetReferenceScroll(this.StickyFolderRows, null);
             this.StickySidebar.Visibility = Visibility.Collapsed;
             this.StickySidebarRoot.DataContext = null;
             this.StickySidebarAncestors.ItemsSource = null;
@@ -33,6 +34,7 @@ public partial class ExplorerTab
             this.StickyRowLayouts.Clear();
             return;
         }
+        SidebarPathColumns.SetReferenceScroll(this.StickyFolderRows, Section.Template.FindName("CategoryScroll", Section) as ScrollViewer);
         if (!ReferenceEquals(Section, this.StickySectionTarget))
         {
             this.StickySectionTarget = Section;

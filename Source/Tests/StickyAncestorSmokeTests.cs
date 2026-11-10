@@ -164,11 +164,20 @@ public partial class ExplorerTab
             var FirstX = PinnedIconX(First);
             var ParentX = PinnedIconX(Parent);
             var CurrentX = PinnedIconX(CurrentNode);
+            if (AppMain.ScreenshotPath is { } DiagnosticOutput)
+            {
+                var DiagnosticBitmap = new RenderTargetBitmap((int)this.HostWindow.ActualWidth, (int)this.HostWindow.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                DiagnosticBitmap.Render(this.HostWindow);
+                var DiagnosticEncoder = new PngBitmapEncoder(); DiagnosticEncoder.Frames.Add(BitmapFrame.Create(DiagnosticBitmap));
+                using var DiagnosticStream = File.Create(Path.Combine(Path.GetDirectoryName(DiagnosticOutput)!, "StickyHorizontalLayout.png"));
+                DiagnosticEncoder.Save(DiagnosticStream);
+            }
             Check(FirstX > FindVisualChild<CDir.Controls.ShellIcon>(this.StickySidebarRoot)!.TranslatePoint(new Point(), this.StickySidebar).X
                 && ParentX > FirstX && CurrentX > ParentX
                 && Math.Abs((ParentX - FirstX) - (HeaderX(ParentItem) - HeaderX(FirstItem))) < 1
                 && Math.Abs((CurrentX - ParentX) - (HeaderX(CurrentItem) - HeaderX(ParentItem))) < 1,
-                "Pinned folder icons preserve the original tree's increasing indentation at every ancestor level");
+                "Pinned folder icons preserve the original tree's increasing indentation at every ancestor level"
+                + $"; pinned={FirstX},{ParentX},{CurrentX}; source={HeaderX(FirstItem)},{HeaderX(ParentItem)},{HeaderX(CurrentItem)}; root={FindVisualChild<CDir.Controls.ShellIcon>(this.StickySidebarRoot)!.TranslatePoint(new Point(), this.StickySidebar).X}; root button={this.StickySidebarRoot.TranslatePoint(new Point(), this.StickySidebar)}, width={this.StickySidebarRoot.ActualWidth}, margin={this.StickySidebarRoot.Margin}; source root={BookmarkHeader.TranslatePoint(new Point(), this.SidebarScroll)}; category offset={((ScrollViewer)Section.Template.FindName("CategoryScroll", Section)).HorizontalOffset}");
             CDir.Controls.TreeBranchLines PinnedGuides(FolderNode Node) => FindVisualChild<CDir.Controls.TreeBranchLines>(
                 this.StickySidebarAncestors.ItemContainerGenerator.ContainerFromItem(Node))!;
             static IEnumerable<GeometryDrawing> Strokes(Drawing Drawing) => Drawing switch

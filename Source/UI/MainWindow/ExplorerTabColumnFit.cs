@@ -29,18 +29,20 @@ public partial class ExplorerTab
 
     private void AutoFitColumns()
     {
-        if (this.WindowClosed) return;
+        if (this.WindowClosed || !this.IsDetailsView) return;
         this.FitVisibleColumns();
         this.HostWindow.PersistWorkspaceNow();
     }
 
     private void FitVisibleColumns()
     {
+        if (!this.IsDetailsView) return;
         foreach (var Column in this.FileGrid.Columns.Where(Item => Item.Visibility == Visibility.Visible).ToArray()) this.AutoFitColumn(Column);
     }
 
     private async Task FitVisibleColumnsAsync(int Version)
     {
+        if (!this.IsDetailsView) return;
         var Entries = this.FileGrid.Items.OfType<FileEntry>().ToArray();
         var Typeface = new Typeface(this.FileGrid.FontFamily, this.FileGrid.FontStyle, this.FileGrid.FontWeight, this.FileGrid.FontStretch);
         var Dpi = VisualTreeHelper.GetDpi(this.FileGrid).PixelsPerDip;
@@ -56,7 +58,7 @@ public partial class ExplorerTab
             var Measured = new Dictionary<string, double>(StringComparer.Ordinal);
             foreach (var Entry in Entries)
             {
-                if (Version != this.NavigationVersion || this.WindowClosed) return;
+                if (Version != this.NavigationVersion || this.WindowClosed || !this.IsDetailsView) return;
                 var Text = ColumnText(Entry, Column.SortMemberPath);
                 if (!Measured.TryGetValue(Text, out var TextWidth)) Measured[Text] = TextWidth = Measure(Text, FontSize);
                 Width = Math.Max(Width, TextWidth + (Column.SortMemberPath == nameof(FileEntry.Name) ? 43 : 21));
@@ -64,7 +66,7 @@ public partial class ExplorerTab
                 await Dispatcher.Yield(DispatcherPriority.Background);
                 Slice.Restart();
             }
-            if (Version != this.NavigationVersion || this.WindowClosed) return;
+            if (Version != this.NavigationVersion || this.WindowClosed || !this.IsDetailsView) return;
             Column.MinWidth = 0;
             Column.Width = new DataGridLength(Math.Min(Column.MaxWidth, Math.Ceiling(Width)));
         }

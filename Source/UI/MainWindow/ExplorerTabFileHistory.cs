@@ -32,7 +32,7 @@ public partial class ExplorerTab
     internal void FocusMainFilePanel()
     {
         if (this.WindowClosed || !this.IsTabSelected) return;
-        var Target = this.FileGrid;
+        var Target = this.ActiveFileControl;
         FocusManager.SetFocusedElement(this, Target);
         Target.Focus();
     }

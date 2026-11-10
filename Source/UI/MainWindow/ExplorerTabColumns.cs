@@ -25,6 +25,31 @@ public partial class ExplorerTab
             Menu.Items.Add(Item);
         }
         Menu.Items.Add(new Separator());
+        foreach (var Mode in Enum.GetValues<FileViewMode>())
+        {
+            var Item = new MenuItem { Tag = Mode, IsCheckable = true, IsChecked = Mode == this.Settings.FileView,
+                StaysOpenOnClick = true, Style = (Style)this.FindResource("ColumnToggleMenuItem") };
+            Item.SetResourceReference(HeaderedItemsControl.HeaderProperty, "TextView" + Mode);
+            Item.Click += (_, Args) => { Args.Handled = true; this.ChangeFileView(Mode); };
+            Menu.Items.Add(Item);
+        }
+        Menu.Items.Add(new Separator());
+        foreach (var Reset in new[] { false, true })
+        {
+            var Action = new MenuItem { Tag = Reset ? "ResetFolderViews" : "ApplyViewToSubfolders", IsEnabled = !this.IsVirtualLocation,
+                Style = (Style)this.FindResource("ColumnToggleMenuItem") };
+            Action.SetResourceReference(HeaderedItemsControl.HeaderProperty, Reset ? "TextResetFolderViews" : "TextApplyViewToSubfolders");
+            Action.Click += (_, Args) =>
+            {
+                Args.Handled = true;
+                this.HostWindow.ApplyFolderViewRecursively(this.CurrentPath, Reset ? FileViewMode.Details : this.Settings.FileView,
+                    Reset ? 0 : this.Settings.FileViewIconSize);
+                if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+                else this.ShowNotice(LanguageService.Text(Reset ? "FolderViewsReset" : "FolderViewApplied"));
+            };
+            Menu.Items.Add(Action);
+        }
+        Menu.Items.Add(new Separator());
         var HiddenItems = new MenuItem { Tag = "ShowHidden", IsCheckable = true, IsChecked = this.Settings.ShowHidden,
             StaysOpenOnClick = true, Style = (Style)this.FindResource("ColumnToggleMenuItem") };
         HiddenItems.SetResourceReference(HeaderedItemsControl.HeaderProperty, "TextHiddenItems");
@@ -42,6 +67,7 @@ public partial class ExplorerTab
         };
         Menu.Items.Add(HiddenItems);
         this.ColumnMenuButton.ContextMenu = Menu;
+        this.UpdateFileViewMenu();
         Menu.IsOpen = true;
     }
 

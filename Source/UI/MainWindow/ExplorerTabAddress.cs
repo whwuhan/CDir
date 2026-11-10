@@ -77,10 +77,10 @@ public partial class ExplorerTab
     {
         this.CancelAddressNavigation();
         this.EndAddressEdit();
-        FocusManager.SetFocusedElement(this, this.FileGrid);
+        FocusManager.SetFocusedElement(this, this.ActiveFileControl);
         // Clear the real window focus scope as well as the page's saved focus.
         // Non-focusable blank surfaces must not leave the collapsed editor selected.
-        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(this.AddressBox), this.FileGrid);
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(this.AddressBox), this.ActiveFileControl);
     }
 
     internal void AddressEditPreviewMouseDown(MouseButtonEventArgs E)
@@ -142,7 +142,7 @@ public partial class ExplorerTab
                 if (ReferenceEquals(this.AddressNavigationDelay, Delay)) this.AddressNavigationDelay = null;
             }
         }
-        if (!this.WindowClosed && !this.AddressEditing && await this.NavigateAsync(Path, TreeKey: TreeKey)) this.FileGrid.Focus();
+        if (!this.WindowClosed && !this.AddressEditing && await this.NavigateAsync(Path, TreeKey: TreeKey)) this.ActiveFileControl.Focus();
     }
 
     private void AddressOverflowClick(object Sender, RoutedEventArgs E)
