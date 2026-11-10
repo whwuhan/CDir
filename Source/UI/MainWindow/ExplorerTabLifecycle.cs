@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -79,7 +79,7 @@ public partial class ExplorerTab
             try
             {
                 if (this.SavedFocus is UIElement { IsVisible: true, IsEnabled: true } Element) Element.Focus();
-                else this.FileGrid.Focus();
+                else this.ActiveFileControl.Focus();
             }
             finally { this.RestoringTabFocus = false; }
         });

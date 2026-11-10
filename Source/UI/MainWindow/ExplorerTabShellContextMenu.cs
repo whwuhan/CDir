@@ -20,6 +20,12 @@ public partial class ExplorerTab
 
     private FileEntry[] FileContextEntries(DependencyObject? Source)
     {
+        if (!this.IsDetailsView)
+        {
+            if (this.FileItemContainer(Source)?.DataContext is not FileEntry Tile) return [];
+            var Selected = this.SelectedEntries();
+            return Selected.Contains(Tile) ? Selected : [Tile];
+        }
         // The unused area beyond the actual cells is folder background even
         // when WPF stretches a DataGridRow across it.
         if (FindAncestor<DataGridCell>(Source) is null
@@ -45,18 +51,19 @@ public partial class ExplorerTab
         try
         {
             var Entries = this.TakeFileContextEntries(E.CursorLeft < 0 || E.CursorTop < 0,
-                this.FileGrid.InputHitTest(Mouse.GetPosition(this.FileGrid)) as DependencyObject);
+                this.ActiveFileControl.InputHitTest(Mouse.GetPosition(this.ActiveFileControl)) as DependencyObject);
             var Paths = Entries.Select(Entry => Entry.FullPath).ToArray();
             var Source = HwndSource.FromHwnd(new WindowInteropHelper(this.HostWindow).Handle);
             if (Source is null) return;
             Point Position;
-            if (E.CursorLeft >= 0 && E.CursorTop >= 0) Position = this.FileGrid.PointToScreen(Mouse.GetPosition(this.FileGrid));
-            else if (this.FileGrid.ItemContainerGenerator.ContainerFromItem(this.FileGrid.SelectedItem) is FrameworkElement Row)
+            if (E.CursorLeft >= 0 && E.CursorTop >= 0) Position = this.ActiveFileControl.PointToScreen(Mouse.GetPosition(this.ActiveFileControl));
+            else if (this.ActiveFileItems.ItemContainerGenerator.ContainerFromItem(this.FileGrid.SelectedItem) is FrameworkElement Row)
                 Position = Row.PointToScreen(new Point(Math.Min(80, Row.ActualWidth), Row.ActualHeight));
-            else Position = this.FileGrid.PointToScreen(new Point(16, 32));
+            else Position = this.ActiveFileControl.PointToScreen(new Point(16, 32));
             using var Menu = new ShellContextMenu(Source.Handle, this.IsRecycleBin ? this.RecycleBinViewTarget : this.CurrentPath, Paths,
                 Extended: (Keyboard.Modifiers & ModifierKeys.Shift) != 0,
-                ShellItemIds: this.IsRecycleBin ? Entries.Select(Entry => Entry.ShellId!).ToArray() : null);
+                ShellItemIds: this.IsRecycleBin ? Entries.Select(Entry => Entry.ShellId!).ToArray() : null,
+                ViewSettings: new(this.Settings.FileView, this.SortProperty, this.SortDirection == ListSortDirection.Descending, this.FileGroupProperty, this.FileGroupDescending, !this.IsComputer, this.CanPasteBackground()));
             var Id = Menu.Show(Source, Position);
             if (Id == 0) this.FocusMainFilePanel();
             await this.ExecuteShellCommandAsync(Menu, Id);
@@ -72,6 +79,7 @@ public partial class ExplorerTab
     {
         if (Id == 0 || Id == uint.MaxValue) return;
         var Verb = Menu.DescribeCommand(Id) ?? "ShellCommand";
+        if (await this.ExecuteBackgroundCommandAsync(Verb)) return;
         if (this.IsRecycleBin)
         {
             if (Verb is "delete" or "undelete") await this.ExecuteRecycleSelectionAsync(Verb);

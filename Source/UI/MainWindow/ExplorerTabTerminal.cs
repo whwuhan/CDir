@@ -147,7 +147,7 @@ public partial class ExplorerTab
         this.TerminalToggleButton.ClearValue(Control.ForegroundProperty);
         this.TerminalToggleButton.SetValue(System.Windows.Automation.AutomationProperties.ItemStatusProperty, LanguageService.Text("TerminalHidden"));
         if (this.TerminalReturnFocus is UIElement { IsVisible: true } Previous) Previous.Focus();
-        else this.FileGrid.Focus();
+        else this.ActiveFileControl.Focus();
     }
 
     private async void RestartTerminalClick(object Sender, RoutedEventArgs E)

@@ -22,25 +22,28 @@ public partial class ExplorerTab
 
     private (ScrollViewer Viewer, Rect Bounds, double RowHeight, double Offset)? MarqueeViewport()
     {
-        var Viewer = FindVisualChild<ScrollViewer>(this.FileGrid);
+        var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
         var Presenter = Viewer is null ? null : FindVisualChild<ScrollContentPresenter>(Viewer);
         if (Viewer is null || Presenter is null || Presenter.ActualWidth <= 0 || Presenter.ActualHeight <= 0) return null;
+        if (!this.IsDetailsView && FindVisualChild<CDir.Controls.FileTilePanel>(this.FileTiles) is { } Tiles)
+            return (Viewer, new Rect(Presenter.TranslatePoint(new Point(), this.ActiveFileControl), Presenter.RenderSize), Tiles.CellHeight, Tiles.VerticalOffset);
         var FirstRow = FindVisualChild<DataGridRow>(this.FileGrid);
         var Height = FirstRow is { ActualHeight: > 0 } ? FirstRow.ActualHeight : this.FileGrid.RowHeight;
         if (!double.IsFinite(Height) || Height <= 0) return null;
-        var Bounds = new Rect(Presenter.TranslatePoint(new Point(), this.FileGrid), Presenter.RenderSize);
+        var Bounds = new Rect(Presenter.TranslatePoint(new Point(), this.ActiveFileControl), Presenter.RenderSize);
         // Use a realized row to account for both item and pixel scrolling, including DPI rounding.
         var Offset = FirstRow is null ? 0 : this.FileGrid.ItemContainerGenerator.IndexFromContainer(FirstRow) * Height
-            - (FirstRow.TranslatePoint(new Point(), this.FileGrid).Y - Bounds.Top);
+            - (FirstRow.TranslatePoint(new Point(), this.ActiveFileControl).Y - Bounds.Top);
         return (Viewer, Bounds, Height, Offset);
     }
 
     private bool CanStartMarqueeSelection(DependencyObject? Source, Point Origin, ModifierKeys Modifiers, int ClickCount)
     {
         if (this.Loading || this.OperationBusy || ClickCount != 1 || (Modifiers & (ModifierKeys.Alt | ModifierKeys.Windows)) != 0
-            || FindAncestor<DataGrid>(Source) != this.FileGrid || FindAncestor<ScrollBar>(Source) is not null
+            || !this.IsFileInput(Source) || FindAncestor<ScrollBar>(Source) is not null
             || FindAncestor<DataGridColumnHeader>(Source) is not null || this.MarqueeViewport() is not { } Viewport
             || !Viewport.Bounds.Contains(Origin)) return false;
+        if (!this.IsDetailsView) return this.FileItemContainer(Source) is null;
         if (FindAncestor<DataGridRow>(Source) is not null)
         {
             // A drag on the icon or text keeps the existing click/open/folder-drag behavior.
@@ -49,7 +52,7 @@ public partial class ExplorerTab
             var Measure = new FormattedText(Text.Text, System.Globalization.CultureInfo.GetCultureInfo(Text.Language.IetfLanguageTag),
                 Text.FlowDirection, new Typeface(Text.FontFamily, Text.FontStyle, Text.FontWeight, Text.FontStretch),
                 Text.FontSize, Text.Foreground, VisualTreeHelper.GetDpi(Text).PixelsPerDip);
-            if (Origin.X <= Text.TranslatePoint(new Point(), this.FileGrid).X + Math.Min(Text.ActualWidth, Measure.WidthIncludingTrailingWhitespace) + 4) return false;
+            if (Origin.X <= Text.TranslatePoint(new Point(), this.ActiveFileControl).X + Math.Min(Text.ActualWidth, Measure.WidthIncludingTrailingWhitespace) + 4) return false;
         }
         return true;
     }
@@ -58,7 +61,7 @@ public partial class ExplorerTab
     {
         if (!this.CanStartMarqueeSelection(Source, Origin, Modifiers, ClickCount) || this.MarqueeViewport() is not { } Viewport) return false;
         this.EndMarqueeSelection();
-        this.MarqueeClickEntry = FindAncestor<DataGridRow>(Source)?.Item as FileEntry;
+        this.MarqueeClickEntry = this.FileItemContainer(Source)?.DataContext as FileEntry;
         this.MarqueeInitialSelection = this.SelectedEntries().ToHashSet();
         this.MarqueeModifiers = Modifiers;
         this.MarqueeOrigin = Origin;
@@ -84,7 +87,18 @@ public partial class ExplorerTab
         var Selection = new Rect(this.MarqueeDocumentOrigin, DocumentPoint);
         var Desired = this.MarqueeModifiers == ModifierKeys.None ? new HashSet<FileEntry>() : new(this.MarqueeInitialSelection);
         var ContentRight = Viewport.Bounds.Left + this.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible).Sum(Column => Column.ActualWidth);
-        if (Selection.Width > 0 && Selection.Height > 0 && Selection.Right > Viewport.Bounds.Left && Selection.Left < ContentRight)
+        if (!this.IsDetailsView && FindVisualChild<CDir.Controls.FileTilePanel>(this.FileTiles) is { } Tiles)
+        {
+            var TileSelection = Selection;
+            TileSelection.Offset(-Viewport.Bounds.Left, 0);
+            for (var Index = 0; Index < this.FileTiles.Items.Count; Index++)
+            {
+                if (!TileSelection.IntersectsWith(Tiles.ItemBounds(Index)) || this.FileTiles.Items[Index] is not FileEntry Entry) continue;
+                if (this.MarqueeModifiers.HasFlag(ModifierKeys.Control) && this.MarqueeInitialSelection.Contains(Entry)) Desired.Remove(Entry);
+                else Desired.Add(Entry);
+            }
+        }
+        else if (Selection.Width > 0 && Selection.Height > 0 && Selection.Right > Viewport.Bounds.Left && Selection.Left < ContentRight)
         {
             var First = Math.Max(0, (int)Math.Floor(Selection.Top / Viewport.RowHeight));
             var Last = Math.Min(this.FileGrid.Items.Count - 1, (int)Math.Ceiling(Selection.Bottom / Viewport.RowHeight) - 1);
@@ -129,9 +143,14 @@ public partial class ExplorerTab
     private void ScrollMarqueeSelection()
     {
         if (!this.MarqueeActive || this.MarqueeViewport() is not { } Viewport) return;
-        if (this.MarqueePointer.Y <= Viewport.Bounds.Top + 20) Viewport.Viewer.LineUp();
+        if (!this.IsDetailsView && this.Settings.FileView == FileViewMode.List)
+        {
+            if (this.MarqueePointer.X <= Viewport.Bounds.Left + 20) Viewport.Viewer.LineLeft();
+            else if (this.MarqueePointer.X >= Viewport.Bounds.Right - 20) Viewport.Viewer.LineRight();
+        }
+        else if (this.MarqueePointer.Y <= Viewport.Bounds.Top + 20) Viewport.Viewer.LineUp();
         else if (this.MarqueePointer.Y >= Viewport.Bounds.Bottom - 20) Viewport.Viewer.LineDown();
-        this.FileGrid.UpdateLayout();
+        this.ActiveFileControl.UpdateLayout();
         this.UpdateMarqueeSelection(this.MarqueePointer);
     }
 
@@ -144,7 +163,7 @@ public partial class ExplorerTab
         this.MarqueeClickEntry = null;
         this.MarqueeActive = false;
         this.FileSelectionRectangle.Visibility = Visibility.Collapsed;
-        if (this.FileGrid.IsMouseCaptured) this.FileGrid.ReleaseMouseCapture();
+        if (this.ActiveFileControl.IsMouseCaptured) this.ActiveFileControl.ReleaseMouseCapture();
         if (Cancel) this.ApplyMarqueeSelection(this.MarqueeInitialSelection);
         else if (Click is not null) this.SelectFileByClick(Click, this.MarqueeModifiers);
         this.MarqueeInitialSelection = [];
@@ -152,12 +171,12 @@ public partial class ExplorerTab
 
     private void FileGridLostMouseCapture(object Sender, MouseEventArgs E)
     {
-        if (!this.FileGrid.IsMouseCaptured) this.EndMarqueeSelection();
+        if (!this.ActiveFileControl.IsMouseCaptured) this.EndMarqueeSelection();
     }
 
     private void StartMarqueeTracking()
     {
-        if (!this.FileGrid.CaptureMouse()) { this.EndMarqueeSelection(Cancel: true); return; }
+        if (!this.ActiveFileControl.CaptureMouse()) { this.EndMarqueeSelection(Cancel: true); return; }
         this.MarqueeScrollTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Input,
             (_, _) => this.ScrollMarqueeSelection(), this.Dispatcher);
         this.MarqueeScrollTimer.Start();

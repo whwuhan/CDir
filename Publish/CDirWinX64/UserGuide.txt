@@ -1,4 +1,11 @@
-﻿CDir File Manager
+CDir File Manager
+
+File views
+Hold Ctrl and turn the mouse wheel over the main file pane to change the view and icon size. Up enlarges the view; down moves toward Content. Intermediate icon sizes are remembered per folder and included when applying a view recursively. Search uses the same view. Ordinary scrolling and terminal font zoom keep their existing behavior.
+
+Open the dropdown to the right of search. Above Show Hidden Items, choose Extra Large Icons, Large Icons, Medium Icons, Small Icons, List, Details, Tiles, or Content. The view dropdown also offers Apply View To All Subfolders and Reset Folder Views in a separate section. Apply replaces existing descendant choices at every depth, including folders not yet visited or created; Reset restores Details for the current folder and all descendants. A later individual folder choice overrides its inherited view.
+Each folder saves its own view; selection, navigation, search, rename and drag-and-drop work in every view. List fills downward before starting the next column; Content shows metadata across the panel. Returning to a folder restores its view; folders without a saved view start in Details. Tabs showing the same folder share its selected view. Restarting restores folder preferences, the open views and their scroll positions.
+Alt+E (Size All Columns To Fit) and automatic fitting on navigation work only in Details. Other views have no column widths to change. My Computer always shows drives in ascending drive-letter order, with C: before D: and later letters. Its light-gray ascending sort arrow does not respond to sorting clicks. Returning to a folder restores sortable headers. The directory-tree drive usage bars are slightly thicker for readability.
 
 Resize a restored window by dragging any outer edge or corner. Quick Access includes My Computer and Recycle Bin and uses the fixed order Home, Desktop, Documents, Downloads, Pictures, My Computer, Recycle Bin. My Computer shows drives in the current tab. Close Other Tabs preserves all pinned tabs and closes only the other unpinned tabs. Bulk close refreshes the tab strip and saves the final workspace once. Side-button presses and releases form one navigation gesture; rapid Back/Forward requests run in order.
 
@@ -73,7 +80,8 @@ In UI, toggle Name, Date Modified, Type, Size, and Absolute Path to change visib
 Column order and visibility are saved across restarts. Changing columns does not rerun search.
 
 System icons
-The file list, tree, Quick Access, and address bar use Windows Shell system icons.
+The file list, tree, Quick Access, and address bar use Windows Shell system icons. Medium and larger main-panel items request image and video thumbnails from Windows thumbnail providers, with the system icon as fallback for unsupported files. Explorer’s Always Show Icons, Never Thumbnails preference is respected. Thumbnail and icon caches are separate; changing a file refreshes its preview.
+Large items use high-resolution system icons. Images and videos show cached previews first; uncached previews load in the background while a sharp file-type icon remains visible. Pending preview requests are canceled when their items leave the visible view.
 Icons follow Windows file associations, application icons, shortcut icons, and custom folder icons.
 Shortcut arrows are preserved. Git/SVN badges come from direct workspace queries rather than cached third-party Shell overlays.
 A generic system icon is used when a location is inaccessible, an extension does not return an icon, or reading times out.
@@ -140,7 +148,7 @@ File operations
 New folders, F2, and single-item context-menu Rename edit the name in place. Enter confirms; Esc cancels naming (new folders keep their default name). File extensions are initially left outside the selection. Text shortcuts work inside the editor.
 Copy and move actions use Windows file operations throughout, including counting files and sizes, conflict prompts, progress, and cancellation. Windows decides when its progress dialogs appear. Completed items remain after cancellation. Current and other open tabs refresh after completion or cancellation.
 Double-click files to open their Windows default application. Context menus or shortcuts provide new-folder creation, cut, copy, paste, rename, and delete.
-Files, folders, and blank main-panel space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, icons, associations, and third-party extensions; CDir does not add its own items. Blank space always requests the folder-background menu, including when a previous file selection is restored while the menu opens. Shift+right-click shows extended commands. Multi-selection offers shared operations according to Windows rules. Shell rename supports numbered batch names.
+Files, folders, and blank main-panel space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, icons, associations, and third-party extensions; CDir supplies the Explorer-style View, Sort By, Group By, Refresh, Customize This Folder, and terminal actions while retaining the native file operations and installed Shell extensions. Blank space always requests the folder-background menu, including when a previous file selection is restored while the menu opens. Shift+right-click shows extended commands. Multi-selection offers shared operations according to Windows rules. Shell rename supports numbered batch names.
 Right-click blank main-panel space and choose New to create a folder or a file type registered with Windows in the current directory.
 Pasting copies into the same directory uses Windows copy naming and collision handling while preserving original files and extensions. Windows handles replacement, skipping, and folder merges.
 Batch operations may complete partially. Already completed items remain after a failure or cancellation.
@@ -168,6 +176,7 @@ Enable Exit CDir On Close in Preferences > General to make the Close button exit
 Scrollbars and horizontal scrolling
 Horizontal and vertical scrollbars are 12 logical pixels wide. Sidebar tree scrollbars normally hide, appearing while scrolling or after roughly 150 ms of continuous hover in their area. Continued scrolling keeps them visible; they hide about one second after scrolling stops unless hovered or dragged. Quick movement between the main panel and sidebar does not make them flash. Pressing or dragging shows them immediately. Main-panel scrollbars remain visible when content is scrollable. Thumbs are light-gray rectangles, darken slightly on hover, and turn blue while dragged.
 Shift+Wheel provides fixed horizontal scrolling in the area under the pointer: wheel down scrolls right and wheel up scrolls left. It is not customizable. The ordinary wheel scrolls vertically.
+Quick Access, My Computer, and each custom category support independent horizontal scrolling. Use Shift+Wheel, a horizontal wheel, or the horizontal scrollbar to view full names, paths, and drive capacity. Bookmark roots and expanded descendants move together while category titles stay fixed; the ordinary wheel continues to scroll vertically.
 
 Top menu
 The File menu separates Preferences and Exit with a divider. Exit closes CDir while retaining active-operation protections. Help, to the right of File, is currently a reserved menu label without an action.

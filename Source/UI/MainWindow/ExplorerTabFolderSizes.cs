@@ -64,8 +64,8 @@ public partial class ExplorerTab
                 await Task.Delay(200, Token);
             }
             // Sorting on every progress notification would make rows jump continuously.
-            if (Current() && this.SortProperty == nameof(FileEntry.Size))
-                await Dispatcher.InvokeAsync(() => { if (Current()) this.View?.Refresh(); }, DispatcherPriority.Background, Token);
+            if (Current() && (this.SortProperty == nameof(FileEntry.Size) || this.FileGroupProperty == nameof(FileEntry.Size)))
+                await Dispatcher.InvokeAsync(() => { if (Current()) this.ApplySort(); }, DispatcherPriority.Background, Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException) { }

@@ -84,8 +84,11 @@ public partial class ExplorerTab
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Input);
             Check(OffUi && !Pending.IsCompleted, "Slow recursive filesystem work runs off the UI thread while input continues");
             await this.RunPreferencesSmokeChecksAsync(Passed, CalculateFolderSizes: false);
-            Check(ScanToken.IsCancellationRequested && !Pending.IsCompleted,
-                "Unchecking the preference cancels a slow size scan without waiting for it");
+            // Preferences exercises column/UI settings too, which can replace the
+            // scan coordinator. Observe the blocked device operation itself rather
+            // than requiring a possibly superseded coordinator to remain pending.
+            Check(ScanToken.IsCancellationRequested && !Release.Task.IsCompleted,
+                $"Unchecking the preference cancels a slow size scan without waiting for it (cancelled={ScanToken.IsCancellationRequested}, device={Release.Task.Status}, coordinator={Pending.Status})");
             Release.SetResult(new(999999, true));
             AppMain.RecordSmokeProgress("Folder sizes: waiting for stale reader cancellation");
             await Pending.WaitAsync(TimeSpan.FromSeconds(5));

@@ -32,7 +32,8 @@ public partial class ExplorerTab
             this.SearchBox.Clear();
         if (this.Entries.FirstOrDefault(Entry => SamePath(Entry.FullPath, Path)) is not { } Target) return;
         this.SelectPath(Path);
-        this.FileGrid.ScrollIntoView(Target, this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.Name)));
+        if (this.IsDetailsView) this.FileGrid.ScrollIntoView(Target, this.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.Name)));
+        else this.RevealFile(Target);
         this.BeginInlineRename(Target);
     }
 

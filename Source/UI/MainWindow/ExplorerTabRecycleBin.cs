@@ -71,6 +71,7 @@ public partial class ExplorerTab
             this.RefreshTimer.Stop();
             this.VersionCancellation?.Cancel();
             this.CurrentPath = ShellLocations.RecycleBin;
+            this.ApplyRememberedFolderView(this.HostWindow.FolderViewFor(this.CurrentPath));
             this.RecycleBinLoaded = false;
             if (HistoryIndex.HasValue) this.HistoryIndex = HistoryIndex.Value;
             else if (RecordHistory)

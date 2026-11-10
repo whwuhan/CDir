@@ -1,4 +1,4 @@
-﻿namespace CDir.Models;
+namespace CDir.Models;
 
 internal sealed class WorkspaceState
 {
@@ -20,6 +20,8 @@ internal sealed class WorkspaceTabState
     public string Alias { get; set; } = "";
     public bool IsPinned { get; set; }
     public string Search { get; set; } = "";
+    public string Group { get; set; } = "";
+    public bool GroupDescending { get; set; }
     public string Sort { get; set; } = nameof(FileEntry.Name);
     public bool Descending { get; set; }
     public List<string> History { get; set; } = [];
@@ -28,6 +30,7 @@ internal sealed class WorkspaceTabState
     public Dictionary<string, double> ColumnWidths { get; set; } = [];
     public List<string> SelectedPaths { get; set; } = [];
     public double ScrollOffset { get; set; }
+    public double HorizontalScrollOffset { get; set; }
     public bool TerminalVisible { get; set; }
     public double TerminalHeight { get; set; } = 240;
 }

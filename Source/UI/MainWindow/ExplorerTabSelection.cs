@@ -52,9 +52,9 @@ public partial class ExplorerTab
     {
         if (E.Handled || E.ChangedButton != MouseButton.Left || this.FileGrid.SelectedItems.Count == 0) return;
         // Let the grid snapshot the selection before a blank press clears it, so Esc can restore it.
-        if (this.CanStartMarqueeSelection(E.OriginalSource as DependencyObject, E.GetPosition(this.FileGrid), Keyboard.Modifiers, E.ClickCount)) return;
+        if (this.CanStartMarqueeSelection(E.OriginalSource as DependencyObject, E.GetPosition(this.ActiveFileControl), Keyboard.Modifiers, E.ClickCount)) return;
         if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0
-            && FindAncestor<DataGrid>(E.OriginalSource as DependencyObject) == this.FileGrid) return;
+            && this.IsFileInput(E.OriginalSource as DependencyObject)) return;
         for (var Source = E.OriginalSource as DependencyObject; Source is not null;)
         {
             // Preserve selection while operating on items, editing fields, scrolling,

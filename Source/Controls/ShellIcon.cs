@@ -27,8 +27,12 @@ public sealed class ShellIcon : Image
         nameof(HideWhenEmpty), typeof(bool), typeof(ShellIcon), new PropertyMetadata(false, IconPropertyChanged));
     public static readonly DependencyProperty IconSizeProperty = DependencyProperty.Register(
         nameof(IconSize), typeof(int), typeof(ShellIcon), new PropertyMetadata(16, IconPropertyChanged),
-        Value => Value is int Size && Size is >= 8 and <= 64);
+        Value => Value is int Size && Size is >= 8 and <= 256);
 
+    public static readonly DependencyProperty ShowThumbnailsProperty = DependencyProperty.Register(nameof(ShowThumbnails), typeof(bool), typeof(ShellIcon), new PropertyMetadata(false, IconPropertyChanged));
+    public bool ShowThumbnails { get => (bool)GetValue(ShowThumbnailsProperty); set => SetValue(ShowThumbnailsProperty, value); }
+    public static readonly DependencyProperty ThumbnailStampProperty = DependencyProperty.Register(nameof(ThumbnailStamp), typeof(long), typeof(ShellIcon), new PropertyMetadata(0L, IconPropertyChanged));
+    public long ThumbnailStamp { get => (long)GetValue(ThumbnailStampProperty); set => SetValue(ThumbnailStampProperty, value); }
     public string? Path { get => (string?)GetValue(PathProperty); set => SetValue(PathProperty, value); }
     public bool IsDirectory { get => (bool)GetValue(IsDirectoryProperty); set => SetValue(IsDirectoryProperty, value); }
     public bool IsDrive { get => (bool)GetValue(IsDriveProperty); set => SetValue(IsDriveProperty, value); }
@@ -38,6 +42,7 @@ public sealed class ShellIcon : Image
 
     private CancellationTokenSource? PendingLoad;
     private int LoadVersion;
+    private bool RefreshQueued;
 
     public ShellIcon()
     {
@@ -51,7 +56,7 @@ public sealed class ShellIcon : Image
             ShellIconService.CacheInvalidated += this.CacheInvalidated;
             LanguageService.LanguageChanged -= this.VersionLanguageChanged;
             LanguageService.LanguageChanged += this.VersionLanguageChanged;
-            this.RefreshIcon();
+            this.QueueRefresh();
             this.UpdateVersionTooltip();
         };
         this.Unloaded += (_, _) =>
@@ -64,7 +69,7 @@ public sealed class ShellIcon : Image
 
     private static void IconPropertyChanged(DependencyObject Target, DependencyPropertyChangedEventArgs E)
     {
-        if (Target is ShellIcon { IsLoaded: true } Icon) { Icon.RefreshIcon(); Icon.UpdateVersionTooltip(); }
+        if (Target is ShellIcon { IsLoaded: true } Icon) { Icon.QueueRefresh(); Icon.UpdateVersionTooltip(); }
     }
 
     private static void VersionStatusChanged(DependencyObject Target, DependencyPropertyChangedEventArgs E) => ((ShellIcon)Target).UpdateVersionTooltip();
@@ -107,17 +112,29 @@ public sealed class ShellIcon : Image
     protected override void OnDpiChanged(DpiScale OldDpi, DpiScale NewDpi)
     {
         base.OnDpiChanged(OldDpi, NewDpi);
-        if (this.IsLoaded) this.RefreshIcon();
+        if (this.IsLoaded) this.QueueRefresh();
     }
 
     private void CacheInvalidated(object? Sender, EventArgs E)
     {
         if (this.Dispatcher.CheckAccess())
         {
-            if (this.IsLoaded) this.RefreshIcon();
+            if (this.IsLoaded) this.QueueRefresh();
         }
         else if (!this.Dispatcher.HasShutdownStarted)
-            this.Dispatcher.BeginInvoke(() => { if (this.IsLoaded) this.RefreshIcon(); });
+            this.Dispatcher.BeginInvoke(() => { if (this.IsLoaded) this.QueueRefresh(); });
+    }
+
+    private void QueueRefresh()
+    {
+        this.CancelLoad();
+        if (this.RefreshQueued) return;
+        this.RefreshQueued = true;
+        this.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            this.RefreshQueued = false;
+            if (this.IsLoaded) this.RefreshIcon();
+        });
     }
 
     private void CancelLoad()
@@ -137,17 +154,35 @@ public sealed class ShellIcon : Image
             return;
         }
         var Version = this.LoadVersion;
-        var PixelSize = Math.Clamp((int)Math.Ceiling(this.IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 64);
+        var PixelSize = Math.Clamp((int)Math.Ceiling(this.IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256);
         var Fallback = this.IsDrive
             ? ShellIconService.GetDriveFallbackIcon(PixelSize)
             : ShellIconService.GetFallbackIcon(this.IsDirectory, PixelSize);
-        this.Source = Fallback;
         var Cancellation = new CancellationTokenSource();
         this.PendingLoad = Cancellation;
         try
         {
-            var Icon = await ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder)
-                .WaitAsync(Cancellation.Token);
+            var Thumbnails = this.ShowThumbnails && !this.IsDirectory && PixelSize > 32 && this.IconSize > 16;
+            var Pending = ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, Thumbnails, this.ThumbnailStamp, Cancellation.Token);
+            // A cache hit paints immediately, without flashing a generic icon.
+            if (Pending.IsCompletedSuccessfully)
+            {
+                if (this.IsLoaded && Version == this.LoadVersion) this.Source = Pending.Result ?? Fallback;
+                return;
+            }
+            this.Source = Fallback;
+            if (Thumbnails)
+            {
+                // The fast icon lane provides a sharp associated-type icon while
+                // the independent preview workers wait for a media provider.
+                var Default = ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, CancellationToken: Cancellation.Token);
+                if (await Task.WhenAny(Pending, Default) == Default)
+                {
+                    var IconSource = await Default;
+                    if (this.IsLoaded && Version == this.LoadVersion) this.Source = IconSource ?? Fallback;
+                }
+            }
+            var Icon = await Pending;
             if (this.IsLoaded && Version == this.LoadVersion) this.Source = Icon ?? Fallback;
         }
         catch (OperationCanceledException) { }

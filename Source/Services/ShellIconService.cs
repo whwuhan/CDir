@@ -9,70 +9,108 @@ using System.Windows.Media.Imaging;
 namespace CDir.Services;
 
 /// <summary>
-/// Retrieves owned Windows Shell icons on one background COM STA thread. Returned images are
+/// Retrieves owned Windows Shell icons on bounded background COM STA workers. Returned images are
 /// frozen; callers may display them on any dispatcher. Size is in physical pixels, not DIPs.
 /// </summary>
 public static class ShellIconService
 {
     internal const int CacheCapacity = 1024;
-    internal const int PendingCapacity = 129;
-    private const int QueueCapacity = PendingCapacity - 1;
+    internal const int ThumbnailWorkerCount = 2;
+    internal const int PendingCapacity = 128 + 1 + ThumbnailWorkerCount;
+    private const int QueueCapacity = 128;
     private const int RequestTimeoutMilliseconds = 2000;
     private const long CacheLifetimeMilliseconds = 300000;
     private const long FailureLifetimeMilliseconds = 10000;
     private static readonly object Sync = new();
     private static readonly AutoResetEvent WorkAvailable = new(false);
+    private static readonly SemaphoreSlim ThumbnailWorkAvailable = new(0);
     private static readonly Queue<IconRequest> Queue = new();
+    private static readonly Queue<IconRequest> ThumbnailQueue = new();
     private static readonly Dictionary<IconKey, IconRequest> Pending = new();
     private static readonly Dictionary<IconKey, LinkedListNode<CacheEntry>> Cache = new();
     private static readonly LinkedList<CacheEntry> Recent = new();
-    // Four stock kinds and 57 allowed pixel sizes bound this separate, never-evicted fallback cache.
+    // Four stock kinds and 249 allowed pixel sizes bound this separate, never-evicted fallback cache.
     private static readonly Dictionary<StockKey, BitmapSource> StockCache = new();
     private static bool Stopping;
     private static long NativeRequestCount;
     private static long Generation;
+    // Only the explicit, isolated smoke-test process may install a scheduling probe.
+    internal static Action<string>? BeforeThumbnailReadForTests;
     public static event EventHandler? CacheInvalidated;
 
     static ShellIconService()
     {
-        var Worker = new Thread(WorkerMain) { IsBackground = true, Name = "CDir.ShellIcons" };
-        Worker.SetApartmentState(ApartmentState.STA);
-        Worker.Start();
+        StartWorker(false, 0);
+        for (var Index = 0; Index < ThumbnailWorkerCount; Index++) StartWorker(true, Index);
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             lock (Sync) Stopping = true;
             WorkAvailable.Set();
+            ThumbnailWorkAvailable.Release(ThumbnailWorkerCount);
         };
     }
 
-    public static Task<ImageSource?> GetIconAsync(string? Path, bool IsDirectory, int Size = 16, bool OpenFolder = false)
+    private static void StartWorker(bool Thumbnails, int Index)
     {
+        var Worker = new Thread(() => WorkerMain(Thumbnails)) { IsBackground = true, Name = Thumbnails ? "CDir.Thumbnails." + Index : "CDir.ShellIcons" };
+        Worker.SetApartmentState(ApartmentState.STA);
+        Worker.Start();
+    }
+
+    public static Task<ImageSource?> GetIconAsync(string? Path, bool IsDirectory, int Size = 16, bool OpenFolder = false, bool ShowThumbnails = false, long ThumbnailStamp = 0, CancellationToken CancellationToken = default)
+    {
+        if (CancellationToken.IsCancellationRequested) return Task.FromCanceled<ImageSource?>(CancellationToken);
         var Pixels = NormalizeSize(Size);
         var Normalized = NormalizePath(Path);
         var Kind = GetStockKind(Normalized, IsDirectory, OpenFolder);
         // A null path deliberately requests the system fallback, also through the STA queue.
-        var Key = new IconKey(Normalized ?? string.Empty, IsDirectory, Pixels, OpenFolder && IsDirectory);
+        var Key = new IconKey(Normalized ?? string.Empty, IsDirectory, Pixels, OpenFolder && IsDirectory, ShowThumbnails && !IsDirectory && Pixels > 32, ShowThumbnails && !IsDirectory && Pixels > 32 ? ThumbnailStamp : 0);
         lock (Sync)
         {
             if (TryGetCached(Key, out var Cached)) return Task.FromResult<ImageSource?>(Cached);
             if (Normalized is null && GetCachedStock(Kind, Pixels, false) is { } Stock)
                 return Task.FromResult<ImageSource?>(Stock);
-            if (Pending.TryGetValue(Key, out var Existing)) return Existing.Result;
+            if (Pending.TryGetValue(Key, out var Existing) && !Existing.Abandoned) return Subscribe(Existing, CancellationToken);
             if (Stopping) return Task.FromResult<ImageSource?>(GetCachedStock(Kind, Pixels));
 
-            // Prefer newly-visible rows to old requests accumulated during rapid virtualized scrolling.
-            if (Queue.Count >= QueueCapacity)
-            {
-                var Dropped = Queue.Dequeue();
-                Pending.Remove(Dropped.Key);
-                Dropped.Completion.TrySetResult(GetCachedStock(Dropped.Kind, Dropped.Key.Size));
-            }
             var Request = new IconRequest(Key, Kind, Generation);
             Request.Result = WaitForResultAsync(Request);
-            Pending.Add(Key, Request);
-            Queue.Enqueue(Request);
-            WorkAvailable.Set();
-            return Request.Result;
+            Pending[Key] = Request;
+            // Cached thumbnails are cheap to probe on the icon lane; only a cache
+            // miss is handed to the extraction lanes that can wait on codecs.
+            Enqueue(Request, false);
+            return Subscribe(Request, CancellationToken);
+        }
+    }
+
+    private static void Enqueue(IconRequest Request, bool ExtractThumbnail)
+    {
+        // Called under Sync. Prefer newly-visible rows during virtualized scrolling.
+        if (Queue.Count + ThumbnailQueue.Count >= QueueCapacity)
+        {
+            var OldQueue = ThumbnailQueue.Count > 0 && (Queue.Count == 0 || ThumbnailQueue.Peek().CreatedAt <= Queue.Peek().CreatedAt) ? ThumbnailQueue : Queue;
+            var Dropped = OldQueue.Dequeue();
+            if (Pending.TryGetValue(Dropped.Key, out var Current) && ReferenceEquals(Current, Dropped)) Pending.Remove(Dropped.Key);
+            Dropped.Completion.TrySetResult(GetCachedStock(Dropped.Kind, Dropped.Key.Size));
+        }
+        if (ExtractThumbnail) { ThumbnailQueue.Enqueue(Request); ThumbnailWorkAvailable.Release(); }
+        else { Queue.Enqueue(Request); WorkAvailable.Set(); }
+    }
+
+    // Cancellation belongs to a caller, not a shared native request. Recycled rows
+    // abandon queued work only after its last subscriber has left.
+    private static Task<ImageSource?> Subscribe(IconRequest Request, CancellationToken Cancellation)
+    {
+        Request.Consumers++;
+        return Wait();
+        async Task<ImageSource?> Wait()
+        {
+            try { return await Request.Result.WaitAsync(Cancellation).ConfigureAwait(false); }
+            finally
+            {
+                lock (Sync)
+                    if (--Request.Consumers == 0 && !Request.Started) Request.Abandoned = true;
+            }
         }
     }
 
@@ -84,10 +122,10 @@ public static class ShellIconService
         lock (Sync)
         {
             var Cached = GetCachedStock(Kind, Pixels);
-            if (Cached is not null) return Cached;
+            if (GetCachedStock(Kind, Pixels, false) is not null) return Cached;
         }
         _ = GetIconAsync(null, IsDirectory, Pixels);
-        return null;
+        lock (Sync) return GetCachedStock(Kind, Pixels);
     }
 
     /// <summary>Returns a previously-loaded generic system drive icon without performing filesystem I/O.</summary>
@@ -109,6 +147,7 @@ public static class ShellIconService
                 Request.Completion.TrySetResult(GetCachedStock(Request.Kind, Request.Key.Size));
             Pending.Clear();
             Queue.Clear();
+            ThumbnailQueue.Clear();
         }
         // Subscribers may immediately enqueue fresh requests; never invoke them under the cache lock.
         CacheInvalidated?.Invoke(null, EventArgs.Empty);
@@ -116,14 +155,17 @@ public static class ShellIconService
 
     internal static ShellIconDiagnostics GetDiagnostics()
     {
-        lock (Sync) return new(Cache.Count, Pending.Count, Queue.Count, Interlocked.Read(ref NativeRequestCount), StockCache.Count);
+        lock (Sync) return new(Cache.Count, Pending.Count, Queue.Count + ThumbnailQueue.Count, Interlocked.Read(ref NativeRequestCount), StockCache.Count);
     }
 
     private static async Task<ImageSource?> WaitForResultAsync(IconRequest Request)
     {
         try
         {
-            return await Request.Completion.Task.WaitAsync(TimeSpan.FromMilliseconds(RequestTimeoutMilliseconds)).ConfigureAwait(false);
+            // A slow installed video provider must not leave a still-visible item
+            // permanently showing a fallback after an arbitrary ten-second cutoff.
+            return Request.Key.Thumbnail ? await Request.Completion.Task.ConfigureAwait(false)
+                : await Request.Completion.Task.WaitAsync(TimeSpan.FromMilliseconds(RequestTimeoutMilliseconds)).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -133,34 +175,44 @@ public static class ShellIconService
         }
     }
 
-    private static void WorkerMain()
+    private static void WorkerMain(bool Thumbnails)
     {
         var ComResult = CoInitializeEx(IntPtr.Zero, 0x2); // COINIT_APARTMENTTHREADED
         try
         {
             if (ComResult < 0) return;
-            foreach (var Pixels in new[] { 16, 32 })
+            if (!Thumbnails) foreach (var Pixels in new[] { 16, 32, 256 })
                 foreach (var Kind in new[] { StockIconId.Document, StockIconId.Folder, StockIconId.OpenFolder, StockIconId.FixedDrive })
                     LoadStockIcon(Kind, Pixels);
 
             while (true)
             {
+                if (Thumbnails) ThumbnailWorkAvailable.Wait();
                 IconRequest? Request;
                 lock (Sync)
                 {
                     if (Stopping) break;
-                    Request = Queue.Count > 0 ? Queue.Dequeue() : null;
+                    var Requests = Thumbnails ? ThumbnailQueue : Queue;
+                    Request = Requests.Count > 0 ? Requests.Dequeue() : null;
+                    if (Request is not null) Request.Started = true;
                 }
-                if (Request is null) { WorkAvailable.WaitOne(); continue; }
+                if (Request is null) { if (!Thumbnails) WorkAvailable.WaitOne(); continue; }
                 BitmapSource? Icon = null;
                 var Succeeded = false;
+                var NeedsExtraction = false;
                 try
                 {
-                    if (Environment.TickCount64 - Request.CreatedAt <= RequestTimeoutMilliseconds)
+                    if (!Request.Abandoned && (Request.Key.Thumbnail || Environment.TickCount64 - Request.CreatedAt <= RequestTimeoutMilliseconds))
                     {
-                        if (Request.Key.Path.Length > 0) Icon = ReadPathIcon(Request.Key);
+                        if (Thumbnails && AppMain.SmokeTest) Volatile.Read(ref BeforeThumbnailReadForTests)?.Invoke(Request.Key.Path);
+                        if (Request.Key.Thumbnail && !Thumbnails)
+                        {
+                            Icon = ReadLargeIcon(Request.Key, CacheOnly: true);
+                            NeedsExtraction = Icon is null;
+                        }
+                        else if (Request.Key.Path.Length > 0) Icon = ReadPathIcon(Request.Key);
                         Succeeded = Icon is not null;
-                        Icon ??= LoadStockIcon(Request.Kind, Request.Key.Size);
+                        if (!NeedsExtraction) Icon ??= LoadStockIcon(Request.Kind, Request.Key.Size);
                     }
                     else
                     {
@@ -174,9 +226,16 @@ public static class ShellIconService
                 }
                 lock (Sync)
                 {
+                    if (NeedsExtraction && Request.Consumers == 0) Request.Abandoned = true;
+                    if (NeedsExtraction && Request.Consumers > 0 && Request.Generation == Generation && !Stopping)
+                    {
+                        Request.Started = false;
+                        Enqueue(Request, true);
+                        continue;
+                    }
                     if (Pending.TryGetValue(Request.Key, out var Current) && ReferenceEquals(Current, Request))
                         Pending.Remove(Request.Key);
-                    if (Request.Key.Path.Length > 0 && Request.Generation == Generation)
+                    if (!Request.Abandoned && Request.Key.Path.Length > 0 && Request.Generation == Generation)
                         AddCached(Request.Key, Icon, Succeeded ? CacheLifetimeMilliseconds : FailureLifetimeMilliseconds);
                 }
                 Request.Completion.TrySetResult(Icon);
@@ -188,14 +247,17 @@ public static class ShellIconService
         }
         finally
         {
+            // If COM initialization or a lane itself fails, finish every waiter
+            // with a fallback rather than leave visible previews waiting forever.
             lock (Sync)
             {
                 Stopping = true;
                 foreach (var Request in Pending.Values)
                     Request.Completion.TrySetResult(GetCachedStock(Request.Kind, Request.Key.Size));
-                Pending.Clear();
-                Queue.Clear();
+                Pending.Clear(); Queue.Clear(); ThumbnailQueue.Clear();
             }
+            WorkAvailable.Set();
+            ThumbnailWorkAvailable.Release(ThumbnailWorkerCount);
             if (ComResult >= 0) CoUninitialize();
         }
     }
@@ -226,6 +288,7 @@ public static class ShellIconService
         {
             return null;
         }
+        if (Key.Size > 32 && ReadLargeIcon(Key) is { } Large) return Large;
         var Info = new ShellFileInfo { DisplayName = string.Empty, TypeName = string.Empty };
         // Version-control and sync overlays belong to external Shell extensions and may be stale.
         // We do not verify their status, so request the base icon; add only shortcut arrows below.
@@ -250,12 +313,12 @@ public static class ShellIconService
         lock (Sync)
             if (GetCachedStock(Kind, Size, false) is { } Cached) return Cached;
         var Info = new StockIconInfo { Size = (uint)Marshal.SizeOf<StockIconInfo>(), Path = string.Empty };
-        var Flags = StockIconFlags.Icon | (Size <= 16 ? StockIconFlags.SmallIcon : StockIconFlags.LargeIcon);
+        var Flags = StockIconFlags.Icon | StockIconFlags.SystemImageIndex | (Size <= 16 ? StockIconFlags.SmallIcon : StockIconFlags.LargeIcon);
         try
         {
             Interlocked.Increment(ref NativeRequestCount);
             if (SHGetStockIconInfo(Kind, Flags, ref Info) < 0 || Info.Icon == IntPtr.Zero) return null;
-            var Bitmap = CopyIcon(Info.Icon, Size);
+            var Bitmap = (Size > 32 ? ReadSystemIcon(Info.SystemImageIndex, Size) : null) ?? CopyIcon(Info.Icon, Size);
             lock (Sync) StockCache[new StockKey(Kind, Size)] = Bitmap;
             return Bitmap;
         }
@@ -264,6 +327,86 @@ public static class ShellIconService
             if (Info.Icon != IntPtr.Zero) DestroyIcon(Info.Icon);
         }
     }
+
+    private static BitmapSource? ReadLargeIcon(IconKey Key, bool CacheOnly = false)
+    {
+        object? Item = null;
+        IntPtr Bitmap = IntPtr.Zero;
+        try
+        {
+            var Id = typeof(IShellItemImageFactory).GUID;
+            Interlocked.Increment(ref NativeRequestCount);
+            if (SHCreateItemFromParsingName(Key.Path, IntPtr.Zero, ref Id, out Item) < 0 || Item is not IShellItemImageFactory Factory) return null;
+            // RESIZETOFIT allows Windows' installed image/video thumbnail providers.
+            // Respect Explorer's global “Always show icons, never thumbnails” setting.
+            var Thumbnails = Key.Thumbnail;
+            if (Thumbnails)
+            {
+                using var Preferences = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+                Thumbnails = Preferences?.GetValue("IconsOnly") is not int IconsOnly || IconsOnly == 0;
+            }
+            // Let WPF downsample the original high-resolution bitmap rather than
+            // asking the Shell to resize it with a lower-quality GDI stretch.
+            var Flags = 1u | (Thumbnails ? CacheOnly ? 0x18u : 0u : 4u);
+            if (Factory.GetImage(new NativeIconSize { Width = Key.Size, Height = Key.Size }, Flags, out Bitmap) < 0 || Bitmap == IntPtr.Zero) return null;
+            var Image = Imaging.CreateBitmapSourceFromHBitmap(Bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            Image.Freeze();
+            return Image;
+        }
+        catch (COMException) { return null; }
+        finally
+        {
+            if (Bitmap != IntPtr.Zero) DeleteObject(Bitmap);
+            if (Item is not null && Marshal.IsComObject(Item)) Marshal.FinalReleaseComObject(Item);
+        }
+    }
+
+    private static BitmapSource? ReadSystemIcon(int Index, int Size)
+    {
+        IImageList? Images = null;
+        IntPtr Icon = IntPtr.Zero;
+        try
+        {
+            var Id = typeof(IImageList).GUID;
+            // Jumbo contains the native 256px artwork, not a stretched 32px HICON.
+            if (SHGetImageList(Size > 48 ? 4 : 2, ref Id, out Images) < 0 || Images is null
+                || Images.GetIcon(Index, 1, out Icon) < 0 || Icon == IntPtr.Zero) return null;
+            return CopyIcon(Icon, Size);
+        }
+        finally
+        {
+            if (Icon != IntPtr.Zero) DestroyIcon(Icon);
+            if (Images is not null) Marshal.FinalReleaseComObject(Images);
+        }
+    }
+
+    [ComImport, Guid("46EB5926-582E-4017-9FDF-E8998DAA0950"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IImageList
+    {
+        [PreserveSig] int Add(IntPtr Image, IntPtr Mask, out int Index);
+        [PreserveSig] int ReplaceIcon(int Index, IntPtr Icon, out int NewIndex);
+        [PreserveSig] int SetOverlayImage(int Image, int Overlay);
+        [PreserveSig] int Replace(int Index, IntPtr Image, IntPtr Mask);
+        [PreserveSig] int AddMasked(IntPtr Image, uint Color, out int Index);
+        [PreserveSig] int Draw(IntPtr Parameters);
+        [PreserveSig] int Remove(int Index);
+        [PreserveSig] int GetIcon(int Index, uint Flags, out IntPtr Icon);
+    }
+    [DllImport("shell32.dll", PreserveSig = true)]
+    private static extern int SHGetImageList(int ImageList, ref Guid InterfaceId, [MarshalAs(UnmanagedType.Interface)] out IImageList? Images);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeIconSize { public int Width; public int Height; }
+    [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemImageFactory
+    {
+        [PreserveSig] int GetImage(NativeIconSize Size, uint Flags, out IntPtr Bitmap);
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+    private static extern int SHCreateItemFromParsingName(string Path, IntPtr Context, ref Guid InterfaceId, [MarshalAs(UnmanagedType.Interface)] out object? Item);
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr Object);
 
     private static BitmapSource CopyIcon(IntPtr Icon, int Size)
     {
@@ -277,6 +420,11 @@ public static class ShellIconService
     {
         if (StockCache.TryGetValue(new StockKey(Kind, Size), out var Exact)) return Exact;
         if (!AllowOtherSize) return null;
+        BitmapSource? Larger = null;
+        var LargerSize = int.MaxValue;
+        foreach (var Entry in StockCache)
+            if (Entry.Key.Kind == Kind && Entry.Key.Size >= Size && Entry.Key.Size < LargerSize) { Larger = Entry.Value; LargerSize = Entry.Key.Size; }
+        if (Larger is not null) return Larger;
         if (StockCache.TryGetValue(new StockKey(Kind, Size <= 16 ? 16 : 32), out var Standard)) return Standard;
         return StockCache.TryGetValue(new StockKey(Kind, 16), out var Small) ? Small : null;
     }
@@ -309,7 +457,7 @@ public static class ShellIconService
         }
     }
 
-    private static int NormalizeSize(int Size) => Math.Clamp(Size, 8, 64);
+    private static int NormalizeSize(int Size) => Math.Clamp(Size, 8, 256);
 
     private static string? NormalizePath(string? Path)
     {
@@ -328,7 +476,7 @@ public static class ShellIconService
         return OpenFolder ? StockIconId.OpenFolder : StockIconId.Folder;
     }
 
-    private sealed record IconKey(string Path, bool IsDirectory, int Size, bool OpenFolder);
+    private sealed record IconKey(string Path, bool IsDirectory, int Size, bool OpenFolder, bool Thumbnail, long ThumbnailStamp);
     private sealed record StockKey(StockIconId Kind, int Size);
     private sealed record CacheEntry(IconKey Key, BitmapSource? Icon, long ExpiresAt);
     private sealed class IconRequest(IconKey Key, StockIconId Kind, long Generation)
@@ -337,6 +485,9 @@ public static class ShellIconService
         public StockIconId Kind { get; } = Kind;
         public long Generation { get; } = Generation;
         public long CreatedAt { get; } = Environment.TickCount64;
+        public int Consumers;
+        public bool Started;
+        public bool Abandoned;
         public TaskCompletionSource<ImageSource?> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task<ImageSource?> Result { get; set; } = Task.FromResult<ImageSource?>(null);
     }
@@ -346,7 +497,7 @@ public static class ShellIconService
     [Flags]
     private enum FileInfoFlags : uint { SmallIcon = 0x1, OpenIcon = 0x2, Icon = 0x100, LinkOverlay = 0x8000 }
     [Flags]
-    private enum StockIconFlags : uint { LargeIcon = 0, SmallIcon = 0x1, Icon = 0x100 }
+    private enum StockIconFlags : uint { LargeIcon = 0, SmallIcon = 0x1, Icon = 0x100, SystemImageIndex = 0x4000 }
     // Documented SHSTOCKICONID identifiers; these are not DLL resource indexes.
     private enum StockIconId : uint { Document = 0, Folder = 3, OpenFolder = 4, FixedDrive = 8 }
 

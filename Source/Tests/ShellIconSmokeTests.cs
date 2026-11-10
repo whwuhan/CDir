@@ -16,6 +16,7 @@ public partial class ExplorerTab
     private async Task RunShellIconSmokeChecksAsync(List<string> Passed)
     {
         if (!AppMain.SmokeTest) return;
+        await this.RunThumbnailSmokeAsync(Passed);
         var InitialPath = this.CurrentPath;
         var InitialSearch = this.SearchBox.Text;
         var FixtureId = Guid.NewGuid().ToString("N");

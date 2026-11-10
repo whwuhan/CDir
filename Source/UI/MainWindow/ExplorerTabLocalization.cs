@@ -56,6 +56,7 @@ public partial class ExplorerTab
                 }
         }
         LanguageService.SetLanguage(this.Settings.Language);
+        this.HostWindow.RegisterFolderViews(this.Settings);
         this.Settings.UpgradeShortcutDefaults();
         this.ShortcutBindings = KeyboardShortcut.Resolve(this.Settings.Shortcuts);
         this.ApplyLanguageResources();
@@ -121,7 +122,9 @@ public partial class ExplorerTab
         if (this.View is not null)
         {
             this.View.Culture = LanguageService.Culture;
-            this.View.Refresh();
+            if (this.FileGroupProperty.Length > 0) this.ApplySort();
+            else this.View.Refresh();
+            FindVisualChild<CDir.Controls.FileTilePanel>(this.FileTiles)?.InvalidateMeasure();
             this.FileGrid.SelectedItems.Clear();
             foreach (var Entry in Selected)
                 if (this.View.Contains(Entry)) this.FileGrid.SelectedItems.Add(Entry);
@@ -188,10 +191,16 @@ public partial class ExplorerTab
 
     internal AppSettings CaptureSaveSettings()
     {
-        var Bounds = this.HostWindow.WindowState == WindowState.Normal ? new Rect(this.HostWindow.Left, this.HostWindow.Top, this.HostWindow.Width, this.HostWindow.Height) : this.HostWindow.RestoreBounds;
+        var Bounds = this.HostWindow.CapturePersistenceBounds();
         return new AppSettings
         {
             LastPath = string.IsNullOrEmpty(this.CurrentPath) ? this.Settings.LastPath : this.CurrentPath,
+            FileView = this.Settings.FileView,
+            FileViewIconSize = this.Settings.FileViewIconSize,
+            FolderViews = this.HostWindow.CaptureFolderViews(),
+            FolderViewDefaults = this.HostWindow.CaptureFolderViewDefaults(),
+            FolderViewIconSizes = this.HostWindow.CaptureFolderIconSizes(),
+            FolderViewDefaultIconSizes = this.HostWindow.CaptureFolderDefaultIconSizes(),
             ShowHidden = this.Settings.ShowHidden,
             ShowSidebar = this.Settings.ShowSidebar,
             SidebarWidth = this.Settings.ShowSidebar ? this.SidebarColumn.Width.Value : this.ExpandedSidebarWidth.Value,
@@ -220,7 +229,7 @@ public partial class ExplorerTab
             DirectoryTreeExpanded = this.DirectoryTreeSection.IsExpanded,
             Width = Bounds.Width,
             Height = Bounds.Height,
-            Maximized = this.HostWindow.WindowState == WindowState.Maximized,
+            Maximized = this.HostWindow.PersistenceMaximized,
             Language = LanguageService.CurrentLanguage,
             CustomCategories = this.CustomCategories.Select(Category => Category.Clone()).ToList(),
             SidebarOrder = this.SidebarSections.Select(this.SidebarSectionKey).ToList()

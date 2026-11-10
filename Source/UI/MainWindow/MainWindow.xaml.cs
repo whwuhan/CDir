@@ -131,11 +131,12 @@ public partial class MainWindow : Window
         };
         Closed += (_, _) =>
         {
-            this.PersistWorkspaceNow();
-            if (!this.SessionIsEnding) this.SessionStore?.Discard();
+            // Closing already saved the live controls. RestoreBounds is empty
+            // after WmDestroy for maximized/minimized windows and cannot be serialized.
             this.WorkspaceClosed = true;
-            this.InstanceService?.Dispose();
             this.WorkspaceTimer?.Stop();
+            if (!this.SessionIsEnding) this.SessionStore?.Discard();
+            this.InstanceService?.Dispose();
             this.TrayIcon?.Dispose();
             this.WorkAreaBounds?.Dispose();
             foreach (var Page in this.Tabs) Page.DisposePage();
@@ -439,6 +440,13 @@ public partial class MainWindow : Window
     }
     internal IntPtr BrowserAppCommand(IntPtr Window, int Message, IntPtr WParam, IntPtr LParam, ref bool Handled)
     {
+        if (Message == 0x020E) // WM_MOUSEHWHEEL is not exposed as a WPF wheel event.
+        {
+            var Position = new Point((short)(LParam.ToInt64() & 0xffff), (short)((LParam.ToInt64() >> 16) & 0xffff));
+            var Delta = (short)((WParam.ToInt64() >> 16) & 0xffff);
+            Handled = ScrollInteraction.HandleHorizontalWheel(this.InputHitTest(this.PointFromScreen(Position)) as DependencyObject, Delta);
+            return IntPtr.Zero;
+        }
         this.ActiveTab?.AddressWindowMouseMessage(Window, Message, WParam, LParam, ref Handled);
         // Consume both halves of the native gesture so DefWindowProc cannot
         // turn its release into a second browser command after navigation.

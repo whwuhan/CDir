@@ -7,7 +7,7 @@ using System.Windows.Interop;
 
 namespace CDir.Services;
 
-/// <summary>Hosts the complete Windows Shell menu without application menu entries.</summary>
+/// <summary>Hosts native Windows Shell menus and Explorer-style background view commands.</summary>
 internal sealed partial class ShellContextMenu : IDisposable
 {
     internal sealed record MenuEntry(uint Id, string Text, bool Enabled, bool HasIcon, bool IsSeparator, IReadOnlyList<MenuEntry> Children);
@@ -20,7 +20,7 @@ internal sealed partial class ShellContextMenu : IDisposable
     private uint CommandCount;
     private HwndSource? MessageSource;
 
-    internal ShellContextMenu(IntPtr Owner, string CurrentFolder, string[] Paths, bool Extended = false, byte[][]? ShellItemIds = null)
+    internal ShellContextMenu(IntPtr Owner, string CurrentFolder, string[] Paths, bool Extended = false, byte[][]? ShellItemIds = null, BackgroundViewSettings? ViewSettings = null)
     {
         if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA) throw new InvalidOperationException("Shell menus require an STA thread.");
         this.SelectionPaths = (string[])Paths.Clone();
@@ -98,6 +98,8 @@ internal sealed partial class ShellContextMenu : IDisposable
                 this.CommandCount = (uint)(Result & 0xffff);
             }
             finally { this.MessageSource.RemoveHook(this.MenuMessage); }
+            if (Paths.Length == 0 && !ShellLocations.IsRecycleBin(CurrentFolder))
+                this.AddBrowserCommands(ViewSettings ?? new(CDir.Models.FileViewMode.Details, "Name", false, "", false));
         }
         catch { this.Dispose(); throw; }
         finally
@@ -119,6 +121,7 @@ internal sealed partial class ShellContextMenu : IDisposable
     internal string? DescribeCommand(uint Id)
     {
         this.CheckAlive();
+        if (this.BrowserCommands.TryGetValue(Id, out var BrowserCommand)) return BrowserCommand;
         if (Id == 0 || Id - 1 >= this.CommandCount) return null;
         var Text = new StringBuilder(256);
         return this.NativeMenu!.GetCommandString((nuint)(Id - 1), 4, IntPtr.Zero, Text, (uint)Text.Capacity) >= 0 ? Text.ToString() : null;

@@ -70,6 +70,7 @@ public partial class ExplorerTab
         ApplyMenuFont(this.HostWindow.HelpMenu);
         ApplyMenuFont(this.FileGrid?.ContextMenu);
         if (this.AddressDisplay is not null) this.QueueAddressLayout();
+        if (this.FileTiles is not null && !this.IsDetailsView) this.ApplyFileView();
     }
 
     private static void ApplyMenuFont(ItemsControl? Menu)

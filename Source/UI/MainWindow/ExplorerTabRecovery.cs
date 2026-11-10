@@ -33,11 +33,13 @@ public partial class ExplorerTab
         return new WorkspaceTabState
         {
             Settings = Settings, Alias = this.TabAlias, IsPinned = this.IsTabPinned, Search = this.SearchBox.Text,
+            Group = this.FileGroupProperty, GroupDescending = this.FileGroupDescending,
             Sort = this.SortProperty, Descending = this.SortDirection == ListSortDirection.Descending,
             History = this.History.ToList(), HistoryTreeKeys = this.HistoryTreeKeys.ToList(), HistoryIndex = this.HistoryIndex,
             ColumnWidths = this.FileGrid.Columns.ToDictionary(Column => Column.SortMemberPath, Column => Column.ActualWidth),
             SelectedPaths = this.SelectedEntries().Select(Entry => Entry.FullPath).ToList(),
-            ScrollOffset = FindVisualChild<ScrollViewer>(this.FileGrid)?.VerticalOffset ?? 0,
+            HorizontalScrollOffset = FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.HorizontalOffset ?? 0,
+            ScrollOffset = FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.VerticalOffset ?? 0,
             TerminalVisible = this.TerminalPanel.Visibility == Visibility.Visible,
             TerminalHeight = this.TerminalPanel.Visibility == Visibility.Visible ? this.TerminalRow.ActualHeight : this.SavedTerminalHeight
         };
@@ -70,15 +72,20 @@ public partial class ExplorerTab
         if (this.Settings.AutoFitColumnsOnNavigation && !this.IsVirtualLocation)
             await this.FitVisibleColumnsAsync(this.InitialNavigationVersion);
         if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
+        this.FileGroupProperty = BackgroundSortKeys.Contains(State.Group) ? State.Group : "";
+        this.FileGroupDescending = State.GroupDescending;
+        this.AppliedFileView = null; this.ApplyFileView();
         if (ColumnKeys.Contains(State.Sort)) this.SortProperty = State.Sort;
         this.SortDirection = State.Descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         this.ApplySort();
-        foreach (var Column in this.FileGrid.Columns) Column.SortDirection = Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
+        this.UpdateComputerSorting();
         foreach (var Path in State.SelectedPaths ?? []) this.SelectPath(Path, Append: true);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
         if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
         if (double.IsFinite(State.ScrollOffset) && State.ScrollOffset >= 0)
-            FindVisualChild<ScrollViewer>(this.FileGrid)?.ScrollToVerticalOffset(State.ScrollOffset);
+            FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.ScrollToVerticalOffset(State.ScrollOffset);
+        if (double.IsFinite(State.HorizontalScrollOffset) && State.HorizontalScrollOffset >= 0)
+            FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.ScrollToHorizontalOffset(State.HorizontalScrollOffset);
         this.SavedTerminalHeight = double.IsFinite(State.TerminalHeight) ? Math.Clamp(State.TerminalHeight, 96, 2000) : 240;
         if (State.TerminalVisible) await this.ToggleTerminalAsync(RestoreFocus: false);
     }

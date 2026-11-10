@@ -63,6 +63,7 @@ public partial class ExplorerTab
         if (Group is "sidebar" or "all") await RunGroup("sidebar", () => this.RunSidebarSmokeChecksAsync(Passed));
         if (Group is "address" or "all") await RunGroup("address", () => this.RunAddressBreadcrumbSmokeChecksAsync(Passed));
         if (Group is "operations" or "all") await RunGroup("operations", () => this.RunExtendedSmokeChecksAsync(Passed));
+        if (Group is "view-zoom" or "all") await RunGroup("view-zoom", () => this.RunViewZoomSmokeAsync(Passed));
         if (Group is "columns" or "all") await RunGroup("columns", () => this.RunColumnsSmokeChecksAsync(Passed));
         if (Group is "fonts" or "all") await RunGroup("fonts", () => this.RunFontsSmokeChecksAsync(Passed));
         if (Group is "search" or "all") await RunGroup("search", () => this.RunSearchSmokeChecksAsync(Passed));
@@ -163,6 +164,7 @@ public partial class ExplorerTab
                 "expanding sidebar sections restores contents and the current directory selection");
             await this.RunTreeBranchSmokeChecksAsync(Passed);
             await this.RunSidebarScrollSmokeChecksAsync(Passed);
+            await this.RunCategoryHorizontalScrollSmokeChecksAsync(Passed);
             await this.RunStickyAncestorSmokeChecksAsync(Passed);
             await this.RunTreeMotionSmokeChecksAsync(Passed);
             await this.RunSidebarLayoutSmokeChecksAsync(Passed);
