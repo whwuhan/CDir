@@ -21,6 +21,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal CheckBox CalculateFolderSizesCheck { get; }
     internal CheckBox ShowBookmarkPathsCheck { get; }
     internal CheckBox ShowSidebarDriveUsageCheck { get; }
+    internal CheckBox AutoFitColumnsOnNavigationCheck { get; }
     internal CheckBox SeparatePinnedTabsCheck { get; }
     internal CheckBox StartOnLoginCheck { get; }
     internal ComboBox TimeFormatPicker { get; }
@@ -30,6 +31,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal ListBoxItem UICategory { get; }
     internal FrameworkElement GeneralPanel { get; }
     internal FrameworkElement UIPanel { get; }
+    internal TextBlock DirectoryTreeAndTabBarHeading { get; }
     internal IReadOnlyDictionary<string, CheckBox> ColumnChecks { get; }
     internal IReadOnlyDictionary<string, ComboBox> FontSizePickers { get; }
     internal IReadOnlyDictionary<string, TextBlock> FontSizeLabels { get; }
@@ -46,6 +48,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
         bool CalculateFolderSizes, Action<bool> OnCalculateFolderSizesChanged,
         bool ShowBookmarkPaths, Action<bool> OnShowBookmarkPathsChanged,
         bool ShowSidebarDriveUsage, Action<bool> OnShowSidebarDriveUsageChanged,
+        bool AutoFitColumnsOnNavigation, Action<bool> OnAutoFitColumnsOnNavigationChanged,
         bool SeparatePinnedTabs, Action<bool> OnSeparatePinnedTabsChanged,
         bool StartOnLogin, Func<bool, bool> OnStartOnLoginChanged)
     {
@@ -312,11 +315,26 @@ internal sealed partial class PreferencesWindow : DialogWindow
             };
         }
         UI.Children.Add(FontGrid);
+        this.DirectoryTreeAndTabBarHeading = new TextBlock
+        { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        this.DirectoryTreeAndTabBarHeading.SetResourceReference(TextBlock.TextProperty, "TextDirectoryTreeAndTabBarUI");
+        UI.Children.Add(this.DirectoryTreeAndTabBarHeading);
         this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 12);
         UI.Children.Add(this.GridLinesCheck);
         this.ShowBookmarkPathsCheck.Margin = new Thickness(0, 0, 0, 12);
         UI.Children.Add(this.ShowBookmarkPathsCheck);
         UI.Children.Add(this.ShowSidebarDriveUsageCheck);
+        this.AutoFitColumnsOnNavigationCheck = new CheckBox
+        {
+            Name = "AutoFitColumnsOnNavigationCheck", IsChecked = AutoFitColumnsOnNavigation,
+            Margin = new Thickness(0, 0, 0, 12), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.AutoFitColumnsOnNavigationCheck.SetResourceReference(ContentControl.ContentProperty, "TextAutoFitColumnsOnNavigation");
+        this.AutoFitColumnsOnNavigationCheck.SetResourceReference(AutomationProperties.NameProperty, "TextAutoFitColumnsOnNavigation");
+        this.AutoFitColumnsOnNavigationCheck.SetResourceReference(ToolTipProperty, "TextAutoFitColumnsOnNavigationTooltip");
+        this.AutoFitColumnsOnNavigationCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnAutoFitColumnsOnNavigationChanged(true); };
+        this.AutoFitColumnsOnNavigationCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnAutoFitColumnsOnNavigationChanged(false); };
+        UI.Children.Add(this.AutoFitColumnsOnNavigationCheck);
         this.SeparatePinnedTabsCheck = new CheckBox
         {
             Name = "SeparatePinnedTabsCheck", IsChecked = SeparatePinnedTabs,
@@ -461,6 +479,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
                 {
                     this.ShowBookmarkPathsCheck.IsChecked = Defaults.ShowBookmarkPaths;
                     this.ShowSidebarDriveUsageCheck.IsChecked = Defaults.ShowSidebarDriveUsage;
+                    this.AutoFitColumnsOnNavigationCheck.IsChecked = Defaults.AutoFitColumnsOnNavigation;
                     this.SeparatePinnedTabsCheck.IsChecked = Defaults.SeparatePinnedTabs;
                     this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
                     foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;

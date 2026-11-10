@@ -55,7 +55,7 @@ public partial class ExplorerTab
         void CheckPersistentScrollBar(ScrollBar Bar, Track Track)
         {
             CheckScrollBarStyle(Bar, Track);
-            Check(!ScrollBarReveal.GetIsEnabled(Bar) && Track.Opacity == 1,
+            Check(!ScrollBarReveal.GetIsEnabled(Bar) && !ScrollBarReveal.GetRevealOnScroll(Bar) && Track.Opacity == 1,
                 "The main panel scrollbar remains visible and does not inherit the sidebar hover policy: " + Bar.Orientation);
             foreach (var Event in new[] { Mouse.MouseEnterEvent, Mouse.MouseLeaveEvent })
             {
@@ -76,6 +76,7 @@ public partial class ExplorerTab
                 // Keep these routed input checks independent of the user's desktop pointer.
                 Bar.IsHitTestVisible = false;
                 await Settle();
+                Bar.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
                 Hover(false);
                 Check(ScrollBarReveal.GetIsEnabled(Bar) && Track.Opacity == 0,
                     "The sidebar scrollbar is hidden before deliberate hover: " + Bar.Orientation);
@@ -122,6 +123,62 @@ public partial class ExplorerTab
                 Hover(false);
                 Bar.IsHitTestVisible = HitTestVisible;
                 await Settle();
+            }
+        }
+        async Task CheckScrollReveal(ScrollViewer Viewer, ScrollBar Bar, Track Track)
+        {
+            var HitTestVisible = Bar.IsHitTestVisible;
+            var Horizontal = Bar.Orientation == Orientation.Horizontal;
+            var Original = Horizontal ? Viewer.HorizontalOffset : Viewer.VerticalOffset;
+            bool RevealedDuringScroll = false;
+            void Changed(object Sender, ScrollChangedEventArgs E)
+            {
+                if (ReferenceEquals(E.OriginalSource, Viewer) && (Horizontal ? E.HorizontalChange : E.VerticalChange) != 0)
+                    RevealedDuringScroll |= ScrollBarReveal.GetIsRevealed(Bar) && Track.Opacity == 1;
+            }
+            void Move()
+            {
+                var Current = Horizontal ? Viewer.HorizontalOffset : Viewer.VerticalOffset;
+                var Maximum = Horizontal ? Viewer.ScrollableWidth : Viewer.ScrollableHeight;
+                var Target = Current < Maximum / 2 ? Math.Min(Maximum, Current + 24) : Math.Max(0, Current - 24);
+                if (Horizontal) Viewer.ScrollToHorizontalOffset(Target); else Viewer.ScrollToVerticalOffset(Target);
+            }
+            try
+            {
+                Bar.IsHitTestVisible = false;
+                Bar.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+                Viewer.ScrollChanged += Changed;
+                Move(); await Settle();
+                Check(ScrollBarReveal.GetRevealOnScroll(Viewer) && RevealedDuringScroll,
+                    "Scrolling the tree reveals its scrollbar without hovering over the track: " + Bar.Orientation);
+                Move(); Viewer.UpdateLayout();
+                await Task.Delay(TimeSpan.FromTicks(ScrollBarReveal.ScrollDisplayDuration.Ticks * 2 / 3));
+                Move(); Viewer.UpdateLayout();
+                await Task.Delay(TimeSpan.FromTicks(ScrollBarReveal.ScrollDisplayDuration.Ticks * 2 / 3));
+                Check(Track.Opacity == 1 && ScrollBarReveal.GetIsRevealed(Bar),
+                    "Continued tree scrolling renews the visibility interval: " + Bar.Orientation);
+                var Deadline = Environment.TickCount64 + 5000;
+                while (ScrollBarReveal.GetIsRevealed(Bar) && Environment.TickCount64 < Deadline) await Task.Delay(20);
+                Check(!ScrollBarReveal.GetIsRevealed(Bar) && Track.Opacity == 0,
+                    "The scrollbar hides after scrolling stops outside the track: " + Bar.Orientation);
+                Move(); Viewer.UpdateLayout();
+                Track.Thumb!.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+                await Task.Delay(ScrollBarReveal.ScrollDisplayDuration + TimeSpan.FromMilliseconds(50));
+                Check(Track.Opacity == 1, "The scroll timeout cannot hide a scrollbar while it is dragged: " + Bar.Orientation);
+                Track.Thumb.RaiseEvent(new DragCompletedEventArgs(0, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+                Check(Track.Opacity == 0, "A completed drag respects the expired scroll interval: " + Bar.Orientation);
+                Move(); Viewer.UpdateLayout();
+                Bar.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+                Check(!ScrollBarReveal.GetIsRevealed(Bar) && Track.Opacity == 0,
+                    "Unloading clears active scroll visibility and its timer: " + Bar.Orientation);
+            }
+            finally
+            {
+                Viewer.ScrollChanged -= Changed;
+                if (Horizontal) Viewer.ScrollToHorizontalOffset(Original); else Viewer.ScrollToVerticalOffset(Original);
+                await Settle();
+                Bar.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
+                Bar.IsHitTestVisible = HitTestVisible;
             }
         }
         try
@@ -180,6 +237,7 @@ public partial class ExplorerTab
                 Thumb.RaiseEvent(new DragCompletedEventArgs(Vertical ? 0 : 8, Vertical ? 8 : 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
                 await Settle();
                 Check(Bar.Value > InitialValue, "Dragging the expanded thumb scrolls the sidebar: " + Bar.Orientation);
+                await CheckScrollReveal(Vertical ? this.SidebarScroll : Inner, Bar, Track);
             }
             this.SidebarScroll.ScrollToTop();
             Inner.ScrollToLeftEnd();

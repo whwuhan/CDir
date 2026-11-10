@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using CDir.Localization;
 using CDir.Services;
 using CDir.UI.Dialogs;
+using CDir.Models;
 
 namespace CDir.UI;
 
@@ -14,6 +15,28 @@ public partial class ExplorerTab
 {
     private Action<string[], bool> DeleteShellItems = ShellContextMenu.Delete;
     private bool ShellMenuOpen;
+    private FileEntry[]? PendingFileContextEntries;
+    private int PendingFileContextNavigation;
+
+    private FileEntry[] FileContextEntries(DependencyObject? Source)
+    {
+        // The unused area beyond the actual cells is folder background even
+        // when WPF stretches a DataGridRow across it.
+        if (FindAncestor<DataGridCell>(Source) is null
+            || FindAncestor<DataGridRow>(Source) is not { Item: FileEntry Entry } Row
+            || !ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(Row), this.FileGrid)) return [];
+        var Selection = this.SelectedEntries();
+        return Selection.Contains(Entry) ? Selection : [Entry];
+    }
+
+    private FileEntry[] TakeFileContextEntries(bool Keyboard, DependencyObject? MouseSource)
+    {
+        var Pending = this.PendingFileContextEntries;
+        this.PendingFileContextEntries = null;
+        if (Keyboard) return this.SelectedEntries();
+        return Pending is not null && this.PendingFileContextNavigation == this.NavigationVersion
+            ? Pending : this.FileContextEntries(MouseSource);
+    }
     private async void FileContextOpening(object Sender, ContextMenuEventArgs E)
     {
         E.Handled = true;
@@ -21,7 +44,9 @@ public partial class ExplorerTab
         this.ShellMenuOpen = true;
         try
         {
-            var Paths = this.SelectedEntries().Select(Entry => Entry.FullPath).ToArray();
+            var Entries = this.TakeFileContextEntries(E.CursorLeft < 0 || E.CursorTop < 0,
+                this.FileGrid.InputHitTest(Mouse.GetPosition(this.FileGrid)) as DependencyObject);
+            var Paths = Entries.Select(Entry => Entry.FullPath).ToArray();
             var Source = HwndSource.FromHwnd(new WindowInteropHelper(this.HostWindow).Handle);
             if (Source is null) return;
             Point Position;
@@ -31,7 +56,7 @@ public partial class ExplorerTab
             else Position = this.FileGrid.PointToScreen(new Point(16, 32));
             using var Menu = new ShellContextMenu(Source.Handle, this.IsRecycleBin ? this.RecycleBinViewTarget : this.CurrentPath, Paths,
                 Extended: (Keyboard.Modifiers & ModifierKeys.Shift) != 0,
-                ShellItemIds: this.IsRecycleBin ? this.SelectedEntries().Select(Entry => Entry.ShellId!).ToArray() : null);
+                ShellItemIds: this.IsRecycleBin ? Entries.Select(Entry => Entry.ShellId!).ToArray() : null);
             var Id = Menu.Show(Source, Position);
             if (Id == 0) this.FocusMainFilePanel();
             await this.ExecuteShellCommandAsync(Menu, Id);

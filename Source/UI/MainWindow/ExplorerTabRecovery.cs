@@ -46,6 +46,8 @@ public partial class ExplorerTab
     internal async Task RestoreWorkspaceTabAsync(WorkspaceTabState State)
     {
         await this.WaitUntilReadyAsync();
+        // Early interaction may already have navigated away from the saved view.
+        if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
         this.SetTabAlias(State.Alias ?? "");
         this.HostWindow.SetTabPinned(this, State.IsPinned);
         if (State.History is { Count: > 0 } History && State.HistoryTreeKeys?.Count == History.Count
@@ -59,17 +61,25 @@ public partial class ExplorerTab
         }
         foreach (var Column in this.FileGrid.Columns)
             if (State.ColumnWidths?.TryGetValue(Column.SortMemberPath, out var Width) == true && double.IsFinite(Width) && Width >= 24 && Width <= 10000)
+            {
+                if (Width < Column.MinWidth) Column.MinWidth = 0;
                 Column.Width = new DataGridLength(Width);
+            }
         if (!string.IsNullOrEmpty(State.Search)) { this.SearchBox.Text = State.Search; await this.SearchTask; }
+        // An enabled automatic fit takes precedence over saved widths when reopening a folder.
+        if (this.Settings.AutoFitColumnsOnNavigation && !this.IsVirtualLocation)
+            await this.FitVisibleColumnsAsync(this.InitialNavigationVersion);
+        if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
         if (ColumnKeys.Contains(State.Sort)) this.SortProperty = State.Sort;
         this.SortDirection = State.Descending ? ListSortDirection.Descending : ListSortDirection.Ascending;
         this.ApplySort();
         foreach (var Column in this.FileGrid.Columns) Column.SortDirection = Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
         foreach (var Path in State.SelectedPaths ?? []) this.SelectPath(Path, Append: true);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+        if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
         if (double.IsFinite(State.ScrollOffset) && State.ScrollOffset >= 0)
             FindVisualChild<ScrollViewer>(this.FileGrid)?.ScrollToVerticalOffset(State.ScrollOffset);
         this.SavedTerminalHeight = double.IsFinite(State.TerminalHeight) ? Math.Clamp(State.TerminalHeight, 96, 2000) : 240;
-        if (State.TerminalVisible) await this.ToggleTerminalAsync();
+        if (State.TerminalVisible) await this.ToggleTerminalAsync(RestoreFocus: false);
     }
 }

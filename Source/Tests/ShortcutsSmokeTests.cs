@@ -19,17 +19,34 @@ public partial class ExplorerTab
         await this.RunFileClipboardSmokeChecksAsync(Passed);
         await this.RunNewWindowShortcutSmokeChecksAsync(Passed);
         await this.RunSidebarAndSearchShortcutSmokeChecksAsync(Passed);
+        await this.RunPreferencesShortcutSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
             if (!Condition) throw new InvalidOperationException("Shortcuts UI smoke test failed: " + Name);
             Passed.Add(Name);
         }
-        Check(KeyboardShortcut.All.Count == 31 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
-            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 31,
-            "All thirty-one bindings have valid unique defaults including fixed new-window copy and paste gestures");
-        Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+1" }) is var Migrated
-            && Migrated["Search"] == "Alt+1" && Migrated["ToggleSidebar"] == "",
-            "An existing personal Alt+1 binding is preserved when adding the new sidebar command");
+        Check(KeyboardShortcut.All.Count == 34 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
+            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 34,
+            "All thirty-four bindings have valid unique defaults including customizable Preferences");
+        Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+Q" }) is var Migrated
+            && Migrated["Search"] == "Alt+Q" && Migrated["ToggleSidebar"] == "",
+            "An existing personal Alt+Q binding is preserved when adding the new sidebar command");
+        var LegacySidebar = new AppSettings { Shortcuts = new() { ["ToggleSidebar"] = "Alt+1", ["Search"] = "Ctrl+Shift+F" } };
+        LegacySidebar.UpgradeShortcutDefaults();
+        Check(LegacySidebar.Shortcuts!["ToggleSidebar"] == "Alt+Q" && LegacySidebar.Shortcuts["Search"] == "Ctrl+Shift+F",
+            "The previous sidebar default upgrades once without changing other personal shortcuts");
+        LegacySidebar.Shortcuts["ToggleSidebar"] = "Alt+1"; LegacySidebar.UpgradeShortcutDefaults();
+        Check(LegacySidebar.Shortcuts["ToggleSidebar"] == "Alt+1", "A later personal Alt+1 sidebar binding survives reloads");
+        var Conflict = new AppSettings { Shortcuts = new() { ["ToggleSidebar"] = "Alt+1", ["Search"] = "Alt+Q" } };
+        Conflict.UpgradeShortcutDefaults();
+        Check(Conflict.Shortcuts!["ToggleSidebar"] == "Alt+1" && Conflict.Shortcuts["Search"] == "Alt+Q",
+            "Upgrading the sidebar default preserves an existing personal Alt+Q command");
+        Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+E" }) is var ExistingFit
+            && ExistingFit["Search"] == "Alt+E" && ExistingFit["AutoFitColumns"] == "",
+            "The new fit shortcut cannot take over an existing personal Alt+E binding");
+        Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+R" }) is var ExistingDistribution
+            && ExistingDistribution["Search"] == "Alt+R" && ExistingDistribution["DistributePanesEvenly"] == "",
+            "The distribution default cannot take over an existing personal Alt+R binding");
         Check(new[] { "Ctrl+", "Win+R", "Alt+F4", "Escape", "A", "Ctrl+Ctrl+A", "9999" }
             .All(Value => !KeyboardShortcut.TryParse(Value, out _, out _)), "Reserved, incomplete, and typing keys are rejected");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "invalid", ["Cut"] = "", ["Copy"] = "", ["Paste"] = "F8", ["NewWindow"] = "F9" }) is var Loaded
@@ -62,8 +79,8 @@ public partial class ExplorerTab
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
                 Dialog.UpdateLayout();
                 Check(Dialog.ShortcutsPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
-                    && Dialog.ShortcutEditors.Count == 22 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
-                    "The keyboard shortcuts page lists the twenty-two customizable bindings");
+                    && Dialog.ShortcutEditors.Count == 25 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
+                    "The keyboard shortcuts page lists the twenty-five customizable bindings");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
@@ -88,7 +105,7 @@ public partial class ExplorerTab
                     "An unmatched search shows the empty-state hint");
                 Dialog.ShortcutSearch.Text = "";
                 Dialog.UpdateLayout();
-                Check(Dialog.ShortcutEditors.ContainsKey("ToggleSidebar") && Dialog.ShortcutEditors.ContainsKey("Search")
+                Check(Dialog.ShortcutEditors.ContainsKey("DistributePanesEvenly") && Dialog.ShortcutEditors.ContainsKey("AutoFitColumns") && Dialog.ShortcutEditors.ContainsKey("ToggleSidebar") && Dialog.ShortcutEditors.ContainsKey("Search")
                     && Dialog.SetShortcut("ToggleSidebar", "Ctrl+Shift+B")
                     && this.ShortcutBindings["ToggleSidebar"] == "Ctrl+Shift+B"
                     && Application.Current.Resources["TextHideSidebarTooltip"].ToString()!.Contains("Ctrl+Shift+B"),
@@ -96,7 +113,7 @@ public partial class ExplorerTab
                 Dialog.ShortcutClearButtons["ToggleSidebar"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(this.ShortcutBindings["ToggleSidebar"] == "", "The sidebar shortcut can be unassigned");
                 Dialog.ShortcutResetButtons["ToggleSidebar"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Check(this.ShortcutBindings["ToggleSidebar"] == "Alt+1", "Reset restores the sidebar shortcut to Alt+1");
+                Check(this.ShortcutBindings["ToggleSidebar"] == "Alt+Q", "Reset restores the sidebar shortcut to Alt+Q");
                 foreach (var Id in new[] { "Copy", "Cut", "Paste", "NewWindow", "TerminalFontIncreaseWheel", "TerminalFontDecreaseWheel" })
                 {
                     Check(!Dialog.ShortcutRows.ContainsKey(Id) && !Dialog.ShortcutEditors.ContainsKey(Id)
@@ -217,7 +234,7 @@ public partial class ExplorerTab
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(this.Settings.Shortcuts is null && KeyboardShortcut.All.All(Item => this.ShortcutBindings[Item.Id] == Item.DefaultGesture)
                     && KeyboardShortcut.All.Where(Item => !Item.IsFixed).All(Item => Dialog.ShortcutEditors[Item.Id].Text == Item.DefaultGesture)
-                    && Dialog.ShortcutEditors.Count == 22, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
+                    && Dialog.ShortcutEditors.Count == 25, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
                 Check(Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop,
                     "Restore Default Settings turns drag-copy mode on");
             });

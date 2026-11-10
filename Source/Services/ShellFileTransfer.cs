@@ -9,7 +9,7 @@ internal sealed partial class ShellContextMenu
     // Let the Shell own preflight enumeration, conflict decisions, progress and undo.
     // Quiet checks never add records to the user's global Explorer undo stack.
     internal static uint TransferOperationFlags(bool SuppressPrompts, bool RenameOnCollision = false, bool RecordUndo = true) =>
-        (SuppressPrompts ? 0x10u | 0x200u | 0x400u | 0x00100000u | 0x4u : 0x200u | (RecordUndo ? 0x20000000u : 0u))
+        (SuppressPrompts ? 0x10u | 0x200u | 0x400u | 0x00100000u | 0x4u : 0x200u | (RecordUndo ? 0x20000000u | 0x40u : 0u))
         | (RenameOnCollision ? 0x8u : 0u);
 
     internal static bool IsShellCancellation(int Result) => Result is unchecked((int)0x80004004)

@@ -1,4 +1,4 @@
-using CDir.UI;
+﻿using CDir.UI;
 using CDir.Services;
 using System.IO;
 using System.ComponentModel;
@@ -48,7 +48,7 @@ public partial class AppMain : Application
                 else if (!E.Args[I].StartsWith("--")) StartupPath = E.Args[I];
             }
             if (GroupSpecified && !SmokeTest) throw new ArgumentException("--smoke-group requires --smoke-test");
-            if (SmokeGroup is not ("transfer" or "selection" or "lifecycle" or "tabs" or "navigation" or "sidebar" or "address" or "operations" or "columns" or "fonts" or "search" or "language" or "shortcuts" or "shell-icons" or "version-control" or "terminal" or "all"))
+            if (SmokeGroup is not ("transfer" or "selection" or "lifecycle" or "tabs" or "panes" or "navigation" or "sidebar" or "address" or "operations" or "columns" or "fonts" or "search" or "language" or "shortcuts" or "shell-icons" or "version-control" or "terminal" or "all"))
                 throw new ArgumentException("Unknown smoke group: " + SmokeGroup);
             if (!SmokeTest && ScreenshotPath is null && StartupPath is null)
             {

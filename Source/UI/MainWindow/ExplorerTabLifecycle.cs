@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -15,6 +15,7 @@ public partial class ExplorerTab
     private readonly bool RunStartupChecks;
     private readonly AppSettings? InheritedSettings;
     private readonly FolderNode[]? InitialRoots;
+    private readonly bool RefreshInheritedRoots;
     private bool PageLoaded;
     private IInputElement? SavedFocus;
     private bool RestoringTabFocus;
@@ -35,7 +36,11 @@ public partial class ExplorerTab
     internal bool IsOperationBusy => this.OperationBusy;
     internal AppSettings PageSettings => this.Settings;
     internal bool IsInitialLayoutReady => this.InitialLayoutReady.Task.IsCompletedSuccessfully;
+    internal bool IsInitialContentReady { get; private set; }
+    private int InitialNavigationVersion;
+    private bool StartupInteraction;
     internal FolderNode[] CloneRootNodes() => this.Roots.Select(Node => Node.CloneLoadedTree()).ToArray();
+    internal FolderNode[] CloneRootEntries() => this.Roots.Select(Node => Node.CloneRootEntry()).ToArray();
 
     internal void SetTabAlias(string Alias)
     {
@@ -66,10 +71,10 @@ public partial class ExplorerTab
 
     internal void RestoreTabFocus()
     {
-        if (!this.InitialLayoutReady.Task.IsCompletedSuccessfully) return;
+        if (!this.IsInitialContentReady) return;
         Dispatcher.BeginInvoke(() =>
         {
-            if (!this.IsTabSelected || this.WindowClosed) return;
+            if (!this.IsTabSelected || this.WindowClosed || !ReferenceEquals(this.HostWindow.ActiveTab, this)) return;
             this.RestoringTabFocus = true;
             try
             {
@@ -79,6 +84,10 @@ public partial class ExplorerTab
             finally { this.RestoringTabFocus = false; }
         });
     }
+
+    internal Rect SplitDropBounds(UIElement RelativeTo)
+        => new(this.ContentPanels.TranslatePoint(new Point(), RelativeTo), this.ContentPanels.RenderSize);
+    internal void RefreshActiveActions() => this.UpdateActions();
 
     internal void DismissSearchTips() => this.SearchTips.Visibility = Visibility.Collapsed;
     internal void HandleWindowMouseDown(object Sender, MouseButtonEventArgs E) => this.WindowInputPreviewMouseDown(Sender, E);
@@ -95,34 +104,54 @@ public partial class ExplorerTab
         return Command is "NewTab" or "CloseTab" or "NextTab" or "PreviousTab" or "ToggleTabPin";
     }
 
+    internal AppSettings CaptureSharedUIPreferences() => new()
+    {
+        ShowGridLines = this.Settings.ShowGridLines,
+        ShowBookmarkPaths = this.Settings.ShowBookmarkPaths,
+        ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
+        AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
+        SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
+        FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
+        ColumnOrder = this.Settings.ColumnOrder?.ToList(), HiddenColumns = this.Settings.HiddenColumns?.ToList()
+    };
+
+    internal void ApplySharedUIPreferences(AppSettings Source)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.ShowGridLines = Source.ShowGridLines;
+        this.Settings.ShowBookmarkPaths = Source.ShowBookmarkPaths;
+        this.ShowBookmarkPaths = Source.ShowBookmarkPaths;
+        this.Settings.ShowSidebarDriveUsage = Source.ShowSidebarDriveUsage;
+        this.ShowSidebarDriveUsage = Source.ShowSidebarDriveUsage;
+        this.Settings.AutoFitColumnsOnNavigation = Source.AutoFitColumnsOnNavigation;
+        this.Settings.SeparatePinnedTabs = Source.SeparatePinnedTabs;
+        this.Settings.FontSizes = Source.FontSizes is null ? null : new(Source.FontSizes, StringComparer.Ordinal);
+        this.ApplyUIFonts();
+        this.ApplyGridLines();
+        this.RestoreColumnLayout(Source.ColumnOrder?.ToArray(), Source.HiddenColumns?.ToArray());
+        if (Source.ShowSidebarDriveUsage) this.QueueSidebarDriveUsageRefresh();
+    }
+
     internal async Task ApplySharedPreferencesAsync(AppSettings Source)
     {
         if (this.WindowClosed) return;
         var RefreshHidden = this.Settings.ShowHidden != Source.ShowHidden;
         var Shared = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(Source))!;
         this.Settings.ShowHidden = Shared.ShowHidden;
-        this.Settings.ShowGridLines = Shared.ShowGridLines;
         this.Settings.Use12HourClock = Shared.Use12HourClock;
         this.Settings.ExitOnClose = Shared.ExitOnClose;
         this.Settings.CopyOnDrop = Shared.CopyOnDrop;
         this.Settings.CalculateFolderSizes = Shared.CalculateFolderSizes;
-        this.Settings.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
-        this.ShowBookmarkPaths = Shared.ShowBookmarkPaths;
-        this.Settings.SeparatePinnedTabs = Shared.SeparatePinnedTabs;
+        this.ApplySharedUIPreferences(Shared);
         this.HostWindow.UpdatePinnedTabLayout(Shared.SeparatePinnedTabs);
-        this.Settings.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
-        this.ShowSidebarDriveUsage = Shared.ShowSidebarDriveUsage;
         this.UpdateHiddenItemsMenu();
-        this.Settings.FontSizes = Shared.FontSizes;
         this.Settings.Shortcuts = Shared.Shortcuts;
         this.Settings.TerminalFontSize = Shared.TerminalFontSize;
         this.Settings.TerminalBackgroundColor = Shared.TerminalBackgroundColor;
         this.Settings.TerminalForegroundColor = Shared.TerminalForegroundColor;
+        this.Settings.ShortcutDefaultsRevision = Source.ShortcutDefaultsRevision;
         this.ShortcutBindings = KeyboardShortcut.Resolve(this.Settings.Shortcuts);
-        this.ApplyUIFonts();
-        this.ApplyGridLines();
         this.ApplyTerminalTheme();
-        this.RestoreColumnLayout(Shared.ColumnOrder, Shared.HiddenColumns);
         foreach (var Entry in this.Entries) Entry.Use12HourClock = Shared.Use12HourClock;
         this.ChangeLanguage(Shared.Language ?? LanguageService.CurrentLanguage, Persist: false);
         if (RefreshHidden && this.CurrentPath.Length > 0) await this.RefreshAsync(true);

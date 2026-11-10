@@ -94,21 +94,39 @@ public partial class ExplorerTab
             File.WriteAllText(Original, "Original content");
             File.WriteAllText(Path.Combine(OriginalFolder, "Nested.txt"), "Original nested content");
             await this.NavigateAsync(SameFolder, RecordHistory: false);
+            await Settle();
             var Before = Directory.GetFileSystemEntries(SameFolder).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var SameData = new ExternalSidebarFileData([Original, OriginalFolder]);
-            var Duplicate = Route(this.FileGrid, SameData, DragDrop.PreviewDropEvent);
-            var Added = Directory.GetFileSystemEntries(SameFolder).Where(PathValue => !Before.Contains(PathValue)).ToArray();
-            Check(Duplicate.Effects == DragDropEffects.Copy && Added.Length == 2 && Added.Count(File.Exists) == 1
-                && Added.Count(Directory.Exists) == 1 && File.ReadAllText(Added.Single(File.Exists)) == "Original content"
-                && File.ReadAllText(Path.Combine(Added.Single(Directory.Exists), "Nested.txt")) == "Original nested content"
-                && File.Exists(Original) && Directory.Exists(OriginalFolder) && this.Entries.Count == 4,
-                "External copy drops back into the same folder create Windows-named file and folder duplicates without changing the originals");
-            this.ChangeCopyOnDrop(false);
-            var RejectedMove = Route(this.FileGrid, SameData, DragDrop.PreviewDropEvent);
-            var RejectedText = Route(this.FileGrid, new DataObject(DataFormats.Text, Original), DragDrop.PreviewDropEvent);
-            Check(RejectedMove.Effects == DragDropEffects.None && RejectedText.Effects == DragDropEffects.None
-                && Directory.GetFileSystemEntries(SameFolder).Length == 4 && !this.OperationBusy,
-                "Same-folder moves and plain text drops leave files unchanged");
+            var InternalData = CreateFileTransferData(this.Entries.Where(Entry => SamePath(Entry.FullPath, Original) || SamePath(Entry.FullPath, OriginalFolder)));
+            var DualData = new DataObject(DataFormats.FileDrop, new[] { Original, OriginalFolder });
+            DualData.SetData(CDir.Services.ShellDropData.Format, new MemoryStream(CDir.Services.ShellDropData.Create([[4, 0, 1, 2, 0, 0]])));
+            var TransferAdapter = this.TransferShellItems;
+            var SameFolderCalls = 0;
+            this.TransferShellItems = Request => { SameFolderCalls++; TransferAdapter(Request); };
+            try
+            {
+                foreach (var Copy in new[] { true, false })
+                foreach (var Data in new IDataObject[] { new ExternalSidebarFileData([Original]), new ExternalSidebarFileData([OriginalFolder]), SameData, InternalData, DualData })
+                {
+                    this.ChangeCopyOnDrop(Copy);
+                    var Over = Route(this.FileGrid, Data, DragDrop.PreviewDragOverEvent);
+                    var Drop = Route(this.FileGrid, Data, DragDrop.PreviewDropEvent);
+                    Check(Over.Handled && Drop.Handled && Over.Effects == DragDropEffects.None && Drop.Effects == DragDropEffects.None
+                        && Before.SetEquals(Directory.GetFileSystemEntries(SameFolder)) && SameFolderCalls == 0 && !this.OperationBusy
+                        && File.ReadAllText(Original) == "Original content" && File.ReadAllText(Path.Combine(OriginalFolder, "Nested.txt")) == "Original nested content"
+                        && this.FileDropHint.Visibility == Visibility.Collapsed && this.FileDropTargetHighlight.Visibility == Visibility.Collapsed,
+                        "Same-folder " + (Copy ? "copy" : "move") + " drops do nothing for single files, folders, mixed selections, internal tabs and Shell data");
+                }
+                var Row = (DataGridRow)this.FileGrid.ItemContainerGenerator.ContainerFromItem(this.Entries.Single(Entry => SamePath(Entry.FullPath, Original)));
+                this.ChangeCopyOnDrop(true);
+                var OntoFile = Route(FindVisualChild<TextBlock>(Row)!, SameData, DragDrop.PreviewDropEvent);
+                var RejectedText = Route(this.FileGrid, new DataObject(DataFormats.Text, Original), DragDrop.PreviewDropEvent);
+                Check(OntoFile.Effects == DragDropEffects.None && RejectedText.Effects == DragDropEffects.None && SameFolderCalls == 0
+                    && Before.SetEquals(Directory.GetFileSystemEntries(SameFolder)),
+                    "Dropping back onto an existing file row or plain text leaves the source directory unchanged");
+            }
+            finally { this.TransferShellItems = TransferAdapter; }
+
         }
         finally
         {

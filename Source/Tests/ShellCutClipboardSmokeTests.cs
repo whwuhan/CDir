@@ -47,9 +47,17 @@ public partial class ExplorerTab
                     && Data.GetData("Preferred DropEffect") is MemoryStream Effect && BitConverter.ToInt32(Effect.ToArray()) == 2
                     && this.Entries.All(Entry => Entry.IsCut == Paths.Contains(Entry.FullPath, StringComparer.OrdinalIgnoreCase))
                     && this.Entries.Where(Entry => Entry.IsCut).All(Entry =>
-                        this.FileGrid.ItemContainerGenerator.ContainerFromItem(Entry) is DataGridRow Row && Row.Opacity == 0.45)
+                        this.FileGrid.ItemContainerGenerator.ContainerFromItem(Entry) is not DataGridRow Row || Row.Opacity == 0.45)
                     && this.NavigationVersion == Navigation,
                     "The native Cut command fades its captured file/folder selection immediately without refreshing or cutting unrelated selected items: " + Paths.Length);
+                foreach (var Entry in this.Entries.Where(Entry => Entry.IsCut))
+                {
+                    this.FileGrid.ScrollIntoView(Entry);
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                    this.UpdateLayout();
+                    Check(this.FileGrid.ItemContainerGenerator.ContainerFromItem(Entry) is DataGridRow { Opacity: 0.45 },
+                        "A cut item keeps its faded appearance when scrolled back into view");
+                }
                 this.CaptureAddressBreadcrumbPreview("ShellCutClipboardPreview.png");
                 await this.RefreshAsync();
                 Check(this.Entries.All(Entry => Entry.IsCut == Paths.Contains(Entry.FullPath, StringComparer.OrdinalIgnoreCase)),

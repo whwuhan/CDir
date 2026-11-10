@@ -1,4 +1,4 @@
-using CDir.UI.Dialogs;
+﻿using CDir.UI.Dialogs;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -49,7 +49,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private Func<uint> ReadClipboardVersion = GetClipboardSequenceNumber;
     private static (uint Version, string Error)? FailedFileClipboard;
 
-    internal ExplorerTab(MainWindow HostWindow, string? LayoutSettingsFile = null, string? InitialPath = null, AppSettings? InitialSettings = null, bool RunStartupChecks = false, FolderNode[]? InitialRoots = null)
+    internal ExplorerTab(MainWindow HostWindow, string? LayoutSettingsFile = null, string? InitialPath = null, AppSettings? InitialSettings = null, bool RunStartupChecks = false, FolderNode[]? InitialRoots = null, bool RefreshInheritedRoots = true)
     {
         this.HostWindow = HostWindow;
         if (ShellLocations.IsRecycleBin(InitialPath) && HostWindow.ActiveTab is { } Previous)
@@ -62,6 +62,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.RunStartupChecks = RunStartupChecks;
         this.InheritedSettings = InitialSettings;
         this.InitialRoots = InitialRoots;
+        this.RefreshInheritedRoots = RefreshInheritedRoots;
         if (LayoutSettingsFile is not null && (!AppMain.SmokeTest || !AppMain.IsInsideSmokeScope(LayoutSettingsFile)))
             throw new InvalidOperationException("Layout checks require an owned test settings file.");
         this.LayoutProbeSettingsFile = LayoutSettingsFile;
@@ -70,6 +71,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyUIFonts();
         AppMain.RecordSmokeProgress("Loading window XAML");
         InitializeComponent();
+        this.PreviewMouseDown += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
+        this.PreviewMouseWheel += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
+        this.PreviewKeyDown += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
         this.ShowBookmarkPaths = this.Settings.ShowBookmarkPaths;
         this.ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage;
         CutClipboardChanged += this.RefreshCutFeedback;
@@ -101,31 +105,55 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     {
         if (this.PageLoaded) return;
         this.PageLoaded = true;
+        await this.HostWindow.InitialPageReadGate.WaitAsync();
+        try
+        {
+        if (this.WindowClosed) { this.InitialLayoutReady.TrySetResult(); return; }
         AppMain.RecordSmokeProgress("Loading initial test directory");
         var Home = AppMain.SmokeTest ? AppMain.SmokeRoot! : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        this.UpdateFavorites();
+        // Redirected known folders can also be on an unavailable network device.
+        var Favorites = Task.Run(this.ReadFavorites);
         if (this.InitialRoots is { Length: > 0 })
             foreach (var Root in this.InitialRoots) this.Roots.Add(Root);
         else if (AppMain.SmokeTest) this.Roots.Add(new FolderNode("Test Files", AppMain.SmokeRoot!));
-        else await this.RefreshRootsAsync();
+        // Disk labels/readiness can block for seconds on disconnected devices.
+        // The current folder does not depend on discovering every drive first.
         var Initial = this.InitialPath ?? (this.LayoutProbeSettingsFile is null ? AppMain.StartupPath : null) ?? this.Settings.LastPath ?? Home;
         var TreeKey = this.Settings.NavigationTreeKey;
         if (TreeKey is null || !this.SidebarSections.Any(Section => this.SidebarSectionKey(Section) == TreeKey)) TreeKey = "folder-tree";
         var TreeLayouts = this.Settings.SidebarTreeLayouts;
         var SidebarOffset = this.Settings.SidebarScrollOffset;
-        if (!await this.NavigateAsync(Initial, RevealTree: false, SyncNavigationTree: TreeLayouts is null, TreeKey: TreeKey)
+        if (!await this.NavigateAsync(Initial, RevealTree: false, SyncNavigationTree: false, TreeKey: TreeKey)
             && !AppMain.SmokeTest && !string.Equals(Initial, Home, StringComparison.OrdinalIgnoreCase))
-            await this.NavigateAsync(Home, RevealTree: false, SyncNavigationTree: TreeLayouts is null, TreeKey: TreeKey);
-        await this.RestoreSidebarTreeLayoutsAsync(TreeLayouts, this.NavigationVersion);
+            await this.NavigateAsync(Home, RevealTree: false, SyncNavigationTree: false, TreeKey: TreeKey);
+        this.InitialNavigationVersion = this.NavigationVersion;
+        this.IsInitialContentReady = true;
+        this.HostWindow.TabReady(this);
+        if (this.IsTabSelected) this.RestoreTabFocus();
+        // Paint and service input before optional device and sidebar restoration.
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+        var LoadedFavorites = await Favorites;
+        if (this.WindowClosed) { this.InitialLayoutReady.TrySetResult(); return; }
+        this.FavoritesList.ItemsSource = LoadedFavorites;
+        if (!AppMain.SmokeTest && this.InitialRoots is not { Length: > 0 }) await this.RefreshRootsAsync();
+        if (this.InitialNavigationVersion == this.NavigationVersion && !this.WindowClosed)
+        {
+            if (TreeLayouts is null && !this.IsVirtualLocation)
+                await this.SyncNavigationTreeAsync(TreeKey, this.CurrentPath, this.InitialNavigationVersion, Reveal: false);
+            else await this.RestoreSidebarTreeLayoutsAsync(TreeLayouts, this.InitialNavigationVersion);
+        }
         this.RestoringWindowLayout = false;
         this.UpdateLayout();
-        if (double.IsFinite(SidebarOffset) && SidebarOffset >= 0) this.SidebarScroll.ScrollToVerticalOffset(SidebarOffset);
+        if (this.InitialNavigationVersion == this.NavigationVersion && double.IsFinite(SidebarOffset) && SidebarOffset >= 0)
+            this.SidebarScroll.ScrollToVerticalOffset(SidebarOffset);
         this.HostWindow.TabReady(this);
         this.InitialLayoutReady.TrySetResult();
-        if (this.IsTabSelected) this.RestoreTabFocus();
+        if (this.IsTabSelected && !this.StartupInteraction) this.RestoreTabFocus();
         this.QueueSidebarDriveUsageRefresh();
         // New tabs can use known drive metadata immediately; discover device changes afterward.
-        if (this.InitialRoots is { Length: > 0 } && !AppMain.SmokeTest) _ = this.RefreshRootsAsync();
+        if (this.RefreshInheritedRoots && this.InitialRoots is { Length: > 0 } && !AppMain.SmokeTest) _ = this.RefreshRootsAsync();
+        }
+        finally { this.HostWindow.InitialPageReadGate.Release(); }
         if (!this.RunStartupChecks || this.LayoutProbeSettingsFile is not null) return;
         if (AppMain.ScreenshotPath is not null || AppMain.SmokeTest)
         {
@@ -269,6 +297,10 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.UpdateAddressPath(PreserveEditing: this.AddressEditing && !RecordHistory && PreserveFilter && SamePath(OldPath, this.CurrentPath));
             if (!PreserveFilter) this.SearchBox.Text = "";
             this.ShowEntries(this.FolderEntries, SearchSelection);
+            // Fit newly opened folders, while watcher/manual refreshes keep personal widths.
+            if (!Computer && !PreserveFilter && this.Settings.AutoFitColumnsOnNavigation)
+                await this.FitVisibleColumnsAsync(Version);
+            if (Version != this.NavigationVersion || this.WindowClosed) return false;
             if (SelectPath is not null) this.SelectPath(SelectPath);
             this.ConfigureWatcher();
             if (Computer) this.SelectSidebarNode(null);
@@ -307,7 +339,15 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
                 var Children = await Task.Run(() => this.Files.GetDirectories(Node.FullPath, ShowHidden));
                 if (LoadVersion != Node.LoadVersion || this.WindowClosed) return;
                 Node.Children.Clear();
-                foreach (var Child in Children) Node.Children.Add(new FolderNode(Child.Name, Child.FullPath));
+                var Slice = Stopwatch.StartNew();
+                foreach (var Child in Children)
+                {
+                    if (LoadVersion != Node.LoadVersion || this.WindowClosed) return;
+                    Node.Children.Add(new FolderNode(Child.Name, Child.FullPath));
+                    if (Slice.ElapsedMilliseconds < 8) continue;
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    Slice.Restart();
+                }
                 Node.IsLoaded = true;
                 this.ScheduleVersionRefresh();
             }
@@ -575,7 +615,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ForwardButton.IsEnabled = this.HistoryIndex >= 0 && this.HistoryIndex < this.History.Count - 1 && (!this.Loading || this.IsRecycleBin);
         this.UpButton.IsEnabled = HasPath && !this.IsVirtualLocation && this.Files.GetParent(this.CurrentPath) is not null && !this.Loading;
         this.LoadingBar.Visibility = this.Loading || this.OperationBusy || this.Searching ? Visibility.Visible : Visibility.Collapsed;
-        if (this.IsTabSelected && this.HostWindow.PreferencesMenuItem is not null)
+        if (ReferenceEquals(this.HostWindow.ActiveTab, this) && this.HostWindow.PreferencesMenuItem is not null)
             this.HostWindow.PreferencesMenuItem.IsEnabled = !this.Loading && !this.OperationBusy;
     }
     private void SelectPath(string Path, bool Append = false)
@@ -615,9 +655,14 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     private void FileGridRightClick(object Sender, MouseButtonEventArgs E)
     {
-        var Row = FindAncestor<DataGridRow>(E.OriginalSource as DependencyObject);
-        if (Row is null) this.FileGrid.SelectedItems.Clear();
-        else if (!Row.IsSelected) { this.FileGrid.SelectedItems.Clear(); Row.IsSelected = true; }
+        this.PendingFileContextEntries = null;
+        if (FindAncestor<DataGridColumnHeader>(E.OriginalSource as DependencyObject) is not null) return;
+        var Entries = this.FileContextEntries(E.OriginalSource as DependencyObject);
+        this.PendingFileContextEntries = Entries;
+        this.PendingFileContextNavigation = this.NavigationVersion;
+        if (Entries.Length == 0) this.ClearFileSelection();
+        else if (!this.FileGrid.SelectedItems.Contains(Entries[0]))
+        { this.FileGrid.SelectedItems.Clear(); this.FileGrid.SelectedItem = Entries[0]; }
     }
     private static TItem? FindAncestor<TItem>(DependencyObject? Item) where TItem : DependencyObject
     {
@@ -822,7 +867,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             return;
         }
         var Shortcut = KeyboardShortcut.Match(this.ShortcutBindings, Key, Modifiers);
-        if ((Shortcut?.Id is "NewWindow" or "ToggleSidebar") && E.IsRepeat) { E.Handled = true; return; }
+        if ((Shortcut?.Id is "NewWindow" or "ToggleSidebar" or "Preferences") && E.IsRepeat) { E.Handled = true; return; }
         if (Shortcut?.TerminalOnly == true)
         {
             E.Handled = this.HandleTerminalFontGesture(KeyboardShortcut.Format(Key, Modifiers));
@@ -831,7 +876,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         var InputSource = E.OriginalSource as DependencyObject;
         var InTerminal = InputSource is null ? this.TerminalSurface?.IsKeyboardFocusWithin == true
             : FindAncestor<CDir.Controls.EmbeddedTerminalControl>(InputSource) is { } Terminal && ReferenceEquals(Terminal, this.TerminalSurface);
-        if (InTerminal && Shortcut?.Id is not ("ToggleTerminal" or "ToggleSidebar" or "Search" or "NewWindow" or "SelectAll")) return;
+        if (InTerminal && Shortcut?.Id is not ("ToggleTerminal" or "ToggleSidebar" or "Search" or "NewWindow" or "SelectAll" or "Preferences")) return;
         var InText = InputSource is null ? Keyboard.FocusedElement is TextBoxBase : FindAncestor<TextBoxBase>(InputSource) is not null;
         var InFileList = InputSource is null ? this.FileGrid.IsKeyboardFocusWithin : FindAncestor<DataGrid>(InputSource) == this.FileGrid;
         if (!CanHandleShortcut(Shortcut, Key, Modifiers, InText, InFileList)) return;
@@ -868,20 +913,28 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     internal async void PreferencesClick(object Sender, RoutedEventArgs E)
     {
-        this.HostWindow.FileMenu.IsOpen = false;
         E.Handled = true;
+        await this.OpenPreferencesAsync();
+    }
+
+    private async Task OpenPreferencesAsync()
+    {
+        this.HostWindow.FileMenu.IsOpen = false;
         if (this.Loading || this.OperationBusy) return;
-        new PreferencesWindow(this.HostWindow, Code => this.ChangeLanguage(Code), this.Settings.ShowGridLines, this.ChangeGridLines,
+        new PreferencesWindow(this.HostWindow, Code => this.ChangeLanguage(Code), this.Settings.ShowGridLines,
+            Value => this.ChangeSharedUI(() => this.ChangeGridLines(Value)),
             this.Settings.ShowHidden, this.ChangeShowHiddenAsync, this.Settings.Use12HourClock, this.ChangeTimeFormat,
-            this.GetColumnPreferences(), this.ChangeColumnVisibility, this.GetFontOptions(), this.ChangeUIFontSize,
+            this.GetColumnPreferences(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeColumnVisibility(Key, Value)),
+            this.GetFontOptions(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeUIFontSize(Key, Value)),
             this.RestoreDefaultPreferencesAsync, this.ShortcutBindings, this.ChangeShortcut,
             this.GetTerminalFontSize(), this.GetTerminalBackgroundColor(), this.ChangeTerminalFontSize, this.ChangeTerminalBackgroundColor,
             this.GetTerminalForegroundColor(), this.ChangeTerminalForegroundColor,
             this.Settings.ExitOnClose, this.ChangeExitOnClose, this.Settings.CopyOnDrop, this.ChangeCopyOnDrop,
             this.Settings.CalculateFolderSizes, this.ChangeCalculateFolderSizes,
-            this.Settings.ShowBookmarkPaths, this.ChangeShowBookmarkPaths,
-            this.Settings.ShowSidebarDriveUsage, this.ChangeShowSidebarDriveUsage,
-            this.Settings.SeparatePinnedTabs, this.ChangeSeparatePinnedTabs,
+            this.Settings.ShowBookmarkPaths, Value => this.ChangeSharedUI(() => this.ChangeShowBookmarkPaths(Value)),
+            this.Settings.ShowSidebarDriveUsage, Value => this.ChangeSharedUI(() => this.ChangeShowSidebarDriveUsage(Value)),
+            this.Settings.AutoFitColumnsOnNavigation, Value => this.ChangeSharedUI(() => this.ChangeAutoFitColumnsOnNavigation(Value)),
+            this.Settings.SeparatePinnedTabs, Value => this.ChangeSharedUI(() => this.ChangeSeparatePinnedTabs(Value)),
             this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }

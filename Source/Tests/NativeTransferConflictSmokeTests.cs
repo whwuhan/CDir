@@ -19,9 +19,10 @@ public partial class ExplorerTab
         }
         try
         {
-            Check((ShellContextMenu.TransferOperationFlags(false) & 0x20000000u) != 0
+            Check((ShellContextMenu.TransferOperationFlags(false) & 0x20000040u) == 0x20000040u
                 && (ShellContextMenu.TransferOperationFlags(false) & (0x4u | 0x10u | 0x400u)) == 0
-                && (ShellContextMenu.TransferOperationFlags(true) & 0x20000000u) == 0,
+                && (ShellContextMenu.TransferOperationFlags(true) & 0x20000040u) == 0
+                && (ShellContextMenu.TransferOperationFlags(false, RecordUndo: false) & 0x20000040u) == 0,
                 "Production enables Windows progress confirmation and undo while quiet checks never modify the user's global undo stack");
             foreach (var Move in new[] { false, true })
             {

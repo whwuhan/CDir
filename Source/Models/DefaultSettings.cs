@@ -15,6 +15,7 @@ internal sealed class DefaultSettings
     public required bool ExitOnClose { get; init; }
     public required bool CopyOnDrop { get; init; }
     public required bool CalculateFolderSizes { get; init; }
+    public required bool AutoFitColumnsOnNavigation { get; init; }
     public required bool ShowSidebarDriveUsage { get; init; }
     public required bool SeparatePinnedTabs { get; init; }
     public required bool ShowBookmarkPaths { get; init; }

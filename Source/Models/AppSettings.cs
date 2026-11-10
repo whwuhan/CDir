@@ -3,6 +3,17 @@ namespace CDir.Models;
 internal sealed class AppSettings
 {
     public string? LastPath { get; set; }
+    public int ShortcutDefaultsRevision { get; set; }
+
+    internal void UpgradeShortcutDefaults()
+    {
+        if (this.ShortcutDefaultsRevision >= 1) return;
+        if (this.Shortcuts?.GetValueOrDefault("ToggleSidebar") == "Alt+1"
+            && !this.Shortcuts.Any(Item => Item.Key != "ToggleSidebar" && Item.Value == "Alt+Q"))
+            this.Shortcuts = new(this.Shortcuts, StringComparer.Ordinal) { ["ToggleSidebar"] = "Alt+Q" };
+        this.ShortcutDefaultsRevision = 1;
+    }
+
     public bool ShowHidden { get; set; } = DefaultSettings.Current.ShowHidden;
     public bool ShowSidebar { get; set; } = DefaultSettings.Current.ShowSidebar;
     public double SidebarWidth { get; set; } = DefaultSettings.Current.SidebarWidth;
@@ -14,6 +25,7 @@ internal sealed class AppSettings
     public bool ExitOnClose { get; set; } = DefaultSettings.Current.ExitOnClose;
     public bool CopyOnDrop { get; set; } = DefaultSettings.Current.CopyOnDrop;
     public bool CalculateFolderSizes { get; set; } = DefaultSettings.Current.CalculateFolderSizes;
+    public bool AutoFitColumnsOnNavigation { get; set; } = DefaultSettings.Current.AutoFitColumnsOnNavigation;
     public bool ShowSidebarDriveUsage { get; set; } = DefaultSettings.Current.ShowSidebarDriveUsage;
     public bool SeparatePinnedTabs { get; set; } = DefaultSettings.Current.SeparatePinnedTabs;
     public bool ShowBookmarkPaths { get; set; } = DefaultSettings.Current.ShowBookmarkPaths;

@@ -17,6 +17,7 @@ public partial class ExplorerTab
         await this.RunGridLinesSmokeChecksAsync(Passed);
         await this.RunFolderSizeSmokeChecksAsync(Passed);
         await this.RunHeaderSortSmokeChecksAsync(Passed);
+        await this.RunColumnFitSmokeChecksAsync(Passed);
         var InitialOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToArray();
         var InitialHidden = this.Settings.HiddenColumns?.ToArray() ?? [];
         var InitialSearch = this.SearchBox.Text;

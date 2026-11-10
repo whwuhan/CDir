@@ -65,6 +65,12 @@ public partial class ExplorerTab
         var Effect = this.Settings.CopyOnDrop ? DragDropEffects.Copy : DragDropEffects.Move;
         try
         {
+            var Target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Destination));
+            var Incoming = HasFileDrop(Data) ? Data.GetData(DataFormats.FileDrop, true) as string[] : null;
+            // A drop back into the source directory is a no-op in both copy and
+            // move modes, including Explorer data carrying both HDROP and CIDA.
+            if (Incoming is { Length: > 0 } && Incoming.All(Path.IsPathFullyQualified)
+                && Incoming.Any(Source => SamePath(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(Source))) ?? Source, Target))) return null;
             // Recycle Bin data must retain its Shell identity even if it also
             // advertises an internal $R backing path in CF_HDROP.
             if (ShellDropData.Read(Data) is { Length: > 0 } Ids)
@@ -78,17 +84,15 @@ public partial class ExplorerTab
                     if (!Copy || (Allowed & DragDropEffects.Move) == 0 || !ShellDropData.IsFromRecycleBin(Ids)) return null;
                     Copy = false;
                 }
-                return new([], Path.TrimEndingDirectorySeparator(Path.GetFullPath(Destination)), Copy, Ids);
+                return new([], Target, Copy, Ids);
             }
             if ((Allowed & Effect) == 0) return null;
-            if (!HasFileDrop(Data) || Data.GetData(DataFormats.FileDrop, true) is not string[] { Length: > 0 } Incoming
-                || Incoming.Any(Source => !Path.IsPathFullyQualified(Source))) return null;
+            if (Incoming is not { Length: > 0 } || Incoming.Any(Source => !Path.IsPathFullyQualified(Source))) return null;
             var Paths = Incoming.Select(Source => Path.TrimEndingDirectorySeparator(Path.GetFullPath(Source)))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            var Target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Destination));
             foreach (var Source in Paths)
             {
-                if (SamePath(Source, Target) || !this.Settings.CopyOnDrop && SamePath(Path.GetDirectoryName(Source) ?? Source, Target)
+                if (SamePath(Source, Target)
                     || Target.StartsWith(Source.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
             }
             return new(Paths, Target, this.Settings.CopyOnDrop);

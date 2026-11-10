@@ -58,6 +58,8 @@ public partial class ExplorerTab
         // A fixed sidebar column otherwise keeps its width when the window shrinks.
         var Maximum = Math.Max(this.SidebarColumn.MinWidth,
             this.ContentPanels.ActualWidth - this.ContentPanels.ColumnDefinitions[1].ActualWidth - this.MainPanelColumn.MinWidth);
+        if (this.HostWindow.Panes.Count > 1)
+            Maximum = Math.Min(Maximum, Math.Max(this.SidebarColumn.MinWidth, this.ContentPanels.ActualWidth * .6));
         this.SidebarColumn.MaxWidth = Maximum;
         if (this.SidebarColumn.Width.IsAbsolute && this.SidebarColumn.Width.Value > Maximum)
             this.SidebarColumn.Width = new GridLength(Maximum);

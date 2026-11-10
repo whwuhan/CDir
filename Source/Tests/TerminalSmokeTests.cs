@@ -184,12 +184,12 @@ public partial class ExplorerTab
             var SidebarBeforeShortcut = this.Settings.ShowSidebar;
             foreach (var Expected in new[] { !SidebarBeforeShortcut, SidebarBeforeShortcut })
             {
-                var SidebarKey = new KeyEventArgs(new SmokeKeyboardDevice(ModifierKeys.Alt), PresentationSource.FromVisual(this.TerminalSurface!), 0, Key.D1)
+                var SidebarKey = new KeyEventArgs(new SmokeKeyboardDevice(ModifierKeys.Alt), PresentationSource.FromVisual(this.TerminalSurface!), 0, Key.Q)
                     { RoutedEvent = Keyboard.PreviewKeyDownEvent };
                 this.TerminalSurface!.RaiseEvent(SidebarKey);
                 await Settle();
                 Check(SidebarKey.Handled && this.Settings.ShowSidebar == Expected && !Session!.HasExited,
-                    "Alt+1 toggles the sidebar from the live terminal while preserving its process");
+                    "Alt+Q toggles the sidebar from the live terminal while preserving its process");
             }
             var SearchKey = new KeyEventArgs(new SmokeKeyboardDevice(ModifierKeys.Control), PresentationSource.FromVisual(this.TerminalSurface!), 0, Key.F)
                 { RoutedEvent = Keyboard.PreviewKeyDownEvent };

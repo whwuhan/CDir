@@ -7,6 +7,19 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    private void ChangeSharedUI(Action Change)
+    {
+        Change();
+        this.HostWindow.SynchronizeUIPreferences(this);
+    }
+
+    private bool TryChangeSharedUI(Func<bool> Change)
+    {
+        if (!Change()) return false;
+        this.HostWindow.SynchronizeUIPreferences(this);
+        return true;
+    }
+
     public static readonly DependencyProperty ShowBookmarkPathsProperty = DependencyProperty.Register(
         nameof(ShowBookmarkPaths), typeof(bool), typeof(ExplorerTab), new PropertyMetadata(false));
     public bool ShowBookmarkPaths { get => (bool)GetValue(ShowBookmarkPathsProperty); private set => SetValue(ShowBookmarkPathsProperty, value); }
@@ -21,6 +34,13 @@ public partial class ExplorerTab
         this.Settings.ShowSidebarDriveUsage = Show;
         this.ShowSidebarDriveUsage = Show;
         if (Show) this.QueueSidebarDriveUsageRefresh();
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+    }
+
+    private void ChangeAutoFitColumnsOnNavigation(bool Fit)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.AutoFitColumnsOnNavigation = Fit;
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
@@ -59,6 +79,7 @@ public partial class ExplorerTab
         }
         if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI)
         {
+            this.Settings.AutoFitColumnsOnNavigation = Defaults.AutoFitColumnsOnNavigation;
             this.Settings.ShowGridLines = Defaults.ShowGridLines;
             this.Settings.SeparatePinnedTabs = Defaults.SeparatePinnedTabs;
             this.HostWindow.UpdatePinnedTabLayout(Defaults.SeparatePinnedTabs);
@@ -84,6 +105,7 @@ public partial class ExplorerTab
             this.ShortcutBindings = KeyboardShortcut.Resolve(null);
         }
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+        if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI) this.HostWindow.SynchronizeUIPreferences(this);
         if (RefreshHidden) await this.RefreshAsync(true);
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
