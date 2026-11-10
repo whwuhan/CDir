@@ -45,11 +45,11 @@ public partial class ExplorerTab
     private async Task RestoreSidebarTreeLayoutsAsync(Dictionary<string, SidebarTreeLayout>? Layouts, int Version)
     {
         if (Layouts is null) return;
-        this.SyncingTree = true;
         var WasSuppressed = this.SuppressTreeSelectionScroll;
         this.SuppressTreeSelectionScroll = true;
         try
         {
+            var Slice = System.Diagnostics.Stopwatch.StartNew();
             FolderNode? RestoredSelection = null;
             foreach (var (Key, Layout) in Layouts)
             {
@@ -65,6 +65,11 @@ public partial class ExplorerTab
 
                 async Task RestoreNodeAsync(FolderNode Node)
                 {
+                    if (Slice.ElapsedMilliseconds >= 8)
+                    {
+                        await Dispatcher.Yield(DispatcherPriority.Background);
+                        Slice.Restart();
+                    }
                     if (Version != this.NavigationVersion || this.WindowClosed || Node.IsPlaceholder) return;
                     var Path = PathKey(Node.FullPath);
                     var HasDescendants = Targets.Any(Target => Target.StartsWith(Path + "\\", StringComparison.OrdinalIgnoreCase));
@@ -74,10 +79,17 @@ public partial class ExplorerTab
                         if (Version != this.NavigationVersion || this.WindowClosed) return;
                         foreach (var Child in Node.Children.ToArray()) await RestoreNodeAsync(Child);
                     }
+                    if (Version != this.NavigationVersion || this.WindowClosed) return;
                     // Restore descendants before collapsing their parent, retaining the
                     // remembered expansion of branches hidden inside a collapsed folder.
-                    Node.IsExpanded = Expanded.Contains(Path);
-                    Node.IsSelected = false;
+                    var WasSyncing = this.SyncingTree;
+                    this.SyncingTree = true;
+                    try
+                    {
+                        Node.IsExpanded = Expanded.Contains(Path);
+                        Node.IsSelected = false;
+                    }
+                    finally { this.SyncingTree = WasSyncing; }
                     if (Key == this.NavigationTreeKey && Selected.Contains(Path)
                         && (RestoredSelection is null || SamePath(Node.FullPath, this.CurrentPath))) RestoredSelection = Node;
                 }
@@ -85,13 +97,18 @@ public partial class ExplorerTab
             if (Version == this.NavigationVersion && !this.WindowClosed)
             {
                 if (RestoredSelection is not null) await this.EnsureChildrenAsync(RestoredSelection);
-                if (Version == this.NavigationVersion && !this.WindowClosed) this.SelectSidebarNode(RestoredSelection);
+                if (Version == this.NavigationVersion && !this.WindowClosed)
+                {
+                    var WasSyncing = this.SyncingTree;
+                    this.SyncingTree = true;
+                    try { this.SelectSidebarNode(RestoredSelection); }
+                    finally { this.SyncingTree = WasSyncing; }
+                }
             }
         }
         finally
         {
             this.SuppressTreeSelectionScroll = WasSuppressed;
-            if (Version == this.NavigationVersion) this.SyncingTree = false;
         }
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
     }

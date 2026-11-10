@@ -136,7 +136,7 @@
                 <MenuItem x:Name="UndoMenuItem" Tag="Undo" Header="{DynamicResource TextUndo}" InputGestureText="Ctrl+Z" Style="{StaticResource FileMenuShortcutItem}" Click="UndoClick" />
                 <MenuItem x:Name="RedoMenuItem" Tag="Redo" Header="{DynamicResource TextRedo}" InputGestureText="Ctrl+Y" Style="{StaticResource FileMenuShortcutItem}" Click="RedoClick" />
                 <Separator x:Name="FileMenuSeparator" Style="{StaticResource {x:Type Separator}}" />
-                <MenuItem x:Name="PreferencesMenuItem" Tag="Preferences" Header="{DynamicResource TextPreferences}" Style="{StaticResource TabContextMenuItem}" Click="PreferencesClick" />
+                <MenuItem x:Name="PreferencesMenuItem" Tag="Preferences" Header="{DynamicResource TextPreferences}" Style="{StaticResource FileMenuShortcutItem}" Click="PreferencesClick" />
                 <Separator x:Name="FileMenuExitSeparator" Style="{StaticResource {x:Type Separator}}" />
                 <MenuItem x:Name="ExitMenuItem" Tag="TrayExit" Header="{DynamicResource TextTrayExit}" Style="{StaticResource TabContextMenuItem}" Click="ExitClick" />
               </ContextMenu>

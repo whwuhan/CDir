@@ -89,18 +89,19 @@ public sealed class FolderNode : INotifyPropertyChanged
     }
     public FolderNode(DriveEntry Drive) : this(Drive.Name, Drive.FullPath, true) => this.NameProvider = () => Drive.Name;
     // Reuse completed directory reads, keeping mutable nodes and in-flight loads independent.
-    private FolderNode(FolderNode Source) : this(Source.OriginalName, Source.FullPath, Source.IsDrive, Source.NameKey)
+    private FolderNode(FolderNode Source, bool CloneChildren = true) : this(Source.OriginalName, Source.FullPath, Source.IsDrive, Source.NameKey)
     {
         this.NameProvider = Source.NameProvider;
         this.VersionStatus = Source.VersionStatus;
         this.CurrentDriveUsage = Source.CurrentDriveUsage;
-        if (!Source.IsLoaded) return;
+        if (!CloneChildren || !Source.IsLoaded) return;
         this.Children.Clear();
         foreach (var Child in Source.Children) this.Children.Add(new FolderNode(Child));
         this.IsLoaded = true;
         this.IsExpanded = Source.IsExpanded;
     }
     internal FolderNode CloneLoadedTree() => new(this);
+    internal FolderNode CloneRootEntry() => new(this, CloneChildren: false);
     public void RefreshLanguage()
     {
         this.Changed(nameof(Name));

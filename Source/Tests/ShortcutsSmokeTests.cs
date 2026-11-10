@@ -19,14 +19,15 @@ public partial class ExplorerTab
         await this.RunFileClipboardSmokeChecksAsync(Passed);
         await this.RunNewWindowShortcutSmokeChecksAsync(Passed);
         await this.RunSidebarAndSearchShortcutSmokeChecksAsync(Passed);
+        await this.RunPreferencesShortcutSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
             if (!Condition) throw new InvalidOperationException("Shortcuts UI smoke test failed: " + Name);
             Passed.Add(Name);
         }
-        Check(KeyboardShortcut.All.Count == 33 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
-            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 33,
-            "All thirty-three bindings have valid unique defaults including fixed new-window copy and paste gestures");
+        Check(KeyboardShortcut.All.Count == 34 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
+            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 34,
+            "All thirty-four bindings have valid unique defaults including customizable Preferences");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+Q" }) is var Migrated
             && Migrated["Search"] == "Alt+Q" && Migrated["ToggleSidebar"] == "",
             "An existing personal Alt+Q binding is preserved when adding the new sidebar command");
@@ -78,8 +79,8 @@ public partial class ExplorerTab
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
                 Dialog.UpdateLayout();
                 Check(Dialog.ShortcutsPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
-                    && Dialog.ShortcutEditors.Count == 24 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
-                    "The keyboard shortcuts page lists the twenty-four customizable bindings");
+                    && Dialog.ShortcutEditors.Count == 25 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
+                    "The keyboard shortcuts page lists the twenty-five customizable bindings");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
@@ -233,7 +234,7 @@ public partial class ExplorerTab
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(this.Settings.Shortcuts is null && KeyboardShortcut.All.All(Item => this.ShortcutBindings[Item.Id] == Item.DefaultGesture)
                     && KeyboardShortcut.All.Where(Item => !Item.IsFixed).All(Item => Dialog.ShortcutEditors[Item.Id].Text == Item.DefaultGesture)
-                    && Dialog.ShortcutEditors.Count == 24, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
+                    && Dialog.ShortcutEditors.Count == 25, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
                 Check(Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop,
                     "Restore Default Settings turns drag-copy mode on");
             });

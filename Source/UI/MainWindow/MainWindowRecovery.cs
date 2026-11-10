@@ -123,6 +123,9 @@ public partial class MainWindow
     private string? LastWorkspaceJson;
     private DispatcherTimer? WorkspaceTimer;
     internal Task WorkspaceRestored { get; private set; } = Task.CompletedTask;
+    // Keep directory/tree restoration bounded while still allowing input and
+    // painting to proceed between the construction of individual workspaces.
+    internal readonly SemaphoreSlim InitialPageReadGate = new(3);
 
     private WorkspaceState? InitializeWorkspace(string? SettingsFile, bool Restore, WorkspaceState? InitialWorkspace)
     {
@@ -146,16 +149,92 @@ public partial class MainWindow
         {
             if (Saved is not null)
             {
-                await this.ActiveTab!.RestoreWorkspaceTabAsync(Saved.Tabs[0]);
-                foreach (var State in Saved.Tabs.Skip(1))
+                var ActiveIndex = Math.Clamp(Saved.ActiveTab, 0, Saved.Tabs.Count - 1);
+                var Initial = this.ActiveTab!;
+                var StateGate = new SemaphoreSlim(3);
+                async Task RestoreState(ExplorerTab Page, WorkspaceTabState State)
                 {
-                    if (this.WorkspaceClosed) return;
-                    var Page = new ExplorerTab(this, InitialPath: State.Settings.LastPath, InitialSettings: State.Settings);
-                    this.AttachTab(Page);
-                    await Page.RestoreWorkspaceTabAsync(State);
+                    await StateGate.WaitAsync();
+                    try { if (!this.WorkspaceClosed) await Page.RestoreWorkspaceTabAsync(State); }
+                    finally { StateGate.Release(); }
                 }
-                this.RestorePanes(Saved.Layout);
-                this.SelectTab(this.Tabs[Math.Clamp(Saved.ActiveTab, 0, this.Tabs.Count - 1)]);
+                var Pending = new List<Task> { RestoreState(Initial, Saved.Tabs[ActiveIndex]) };
+                await Initial.WaitUntilReadyAsync();
+                if (this.WorkspaceClosed) return;
+                var Roots = Initial.CloneRootEntries();
+                var Indices = new Dictionary<ExplorerTab, int> { [Initial] = ActiveIndex };
+                var Created = new Dictionary<int, ExplorerTab> { [ActiveIndex] = Initial };
+                var Visible = new List<int>();
+                var Owners = new Dictionary<int, int>();
+                var CanPreparePanes = Saved.Layout?.Split is not null && ValidPaneLayout(Saved.Layout, Saved.Tabs.Count);
+                var PanesPrepared = false;
+                void VisibleTabs(WorkspacePaneState? Node)
+                {
+                    if (Node is null) return;
+                    if (Node.Split is null)
+                    {
+                        if (Node.ActiveTab >= 0 && Node.ActiveTab < Saved.Tabs.Count) Visible.Add(Node.ActiveTab);
+                        if (CanPreparePanes) foreach (var Index in Node.Tabs) Owners[Index] = Node.ActiveTab;
+                        return;
+                    }
+                    VisibleTabs(Node.First); VisibleTabs(Node.Second);
+                }
+                VisibleTabs(Saved.Layout);
+                WorkspacePaneState ReadyLayout(WorkspacePaneState Node)
+                {
+                    if (Node.Split is null) return new WorkspacePaneState
+                    {
+                        Tabs = Node.Tabs.Where(Created.ContainsKey).Select(Index => this.Tabs.IndexOf(Created[Index])).ToList(),
+                        ActiveTab = this.Tabs.IndexOf(Created[Node.ActiveTab])
+                    };
+                    return new WorkspacePaneState { Split = Node.Split, Ratio = Node.Ratio,
+                        First = ReadyLayout(Node.First!), Second = ReadyLayout(Node.Second!) };
+                }
+                var Order = Visible.Concat(Enumerable.Range(0, Saved.Tabs.Count)).Distinct().Where(Index => Index != ActiveIndex);
+                foreach (var Index in Order)
+                {
+                    // A constructor touches WPF controls. Yield before the next
+                    // one instead of monopolizing the UI thread for a whole session.
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    if (this.WorkspaceClosed) return;
+                    var State = Saved.Tabs[Index];
+                    var Page = new ExplorerTab(this, InitialPath: State.Settings.LastPath, InitialSettings: State.Settings,
+                        InitialRoots: Roots.Select(Root => Root.CloneRootEntry()).ToArray(), RefreshInheritedRoots: false);
+                    this.ApplyCurrentUIPreferences(Page);
+                    Page.SetTabAlias(State.Alias ?? ""); Page.SetTabPinned(State.IsPinned);
+                    var Slot = this.Tabs.Count(Tab => Indices.TryGetValue(Tab, out var Position) && Position < Index);
+                    Indices[Page] = Index;
+                    Created[Index] = Page;
+                    var Owner = PanesPrepared ? Created[Owners[Index]] : null;
+                    var Destination = Owner is not null && this.Tabs.Contains(Owner) ? this.PaneFor(Owner) : null;
+                    this.AttachTab(Page, Activate: false, InsertAt: Slot, Destination: Destination);
+                    Pending.Add(RestoreState(Page, State));
+                    if (CanPreparePanes && !PanesPrepared && Visible.All(Created.ContainsKey))
+                    {
+                        // Build the saved pane layout using its selected tabs first.
+                        // Remaining tab headers can be inserted into their own panes
+                        // without dismantling and reparenting the finished layout.
+                        PanesPrepared = this.RestorePanes(ReadyLayout(Saved.Layout!));
+                        if (PanesPrepared)
+                        {
+                            this.SelectTab(Initial);
+                            // Let selected panes finish their first layout and
+                            // paint before allocating the inactive tab controls.
+                            await Task.WhenAll(Visible.Distinct().Select(VisibleIndex => Created[VisibleIndex].WaitUntilReadyAsync()));
+                            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                        }
+                    }
+                }
+                if (this.WorkspaceClosed) return;
+                // Pane topology and selected tabs can be shown before all of the
+                // independent directory reads have completed.
+                if (!PanesPrepared)
+                {
+                    this.RestorePanes(Saved.Layout);
+                    this.SelectTab(Initial);
+                }
+                await Task.WhenAll(Pending);
+                if (this.WorkspaceClosed) return;
                 this.ActiveTab!.ActivateRecoveredPreferences();
             }
             else if (this.ActiveTab is { } Initial) await Initial.WaitUntilReadyAsync();

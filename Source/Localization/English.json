@@ -274,6 +274,7 @@
   "VcsContains": "{0}: contains {1} items",
   "VcsStatus": "{0}: {1}",
   "PanelFontSizes": "Panel Font Sizes",
+  "DirectoryTreeAndTabBarUI": "Directory Tree, Tab Bar And Main Panel Display",
   "FontFileList": "File List",
   "FontHeaders": "Column Headers",
   "FontSidebar": "Sidebar",

@@ -16,8 +16,8 @@ public partial class ExplorerTab
 {
     private async Task RunLifecycleSmokeChecksAsync(List<string> Passed)
     {
-        await this.RunRuntimeSnapshotSmokeChecksAsync(Passed);
         await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
+        await this.RunWorkspaceStartupSmokeChecksAsync(Passed);
         await this.RunInstanceWorkspaceSmokeChecksAsync(Passed);
         await this.RunExitConflictSmokeChecksAsync(Passed);
         await this.RunSessionEndingSmokeChecksAsync(Passed);

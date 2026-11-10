@@ -63,8 +63,14 @@ public partial class MainWindow : Window
     {
         this.TrackInstances = LayoutSettingsFile is null && !AppMain.SmokeTest && AppMain.ScreenshotPath is null;
         var Workspace = this.InitializeWorkspace(LayoutSettingsFile, RestoreWorkspace, InitialWorkspace);
-        var Initial = new ExplorerTab(this, LayoutSettingsFile, InitialPath: Workspace?.Tabs[0].Settings.LastPath,
-            InitialSettings: Workspace?.Tabs[0].Settings, RunStartupChecks: LayoutSettingsFile is null);
+        var InitialState = Workspace?.Tabs[Math.Clamp(Workspace.ActiveTab, 0, Workspace.Tabs.Count - 1)];
+        var Initial = new ExplorerTab(this, LayoutSettingsFile, InitialPath: InitialState?.Settings.LastPath,
+            InitialSettings: InitialState?.Settings, RunStartupChecks: LayoutSettingsFile is null);
+        if (InitialState is not null)
+        {
+            Initial.SetTabAlias(InitialState.Alias ?? "");
+            Initial.SetTabPinned(InitialState.IsPinned);
+        }
         InitializeComponent();
         this.ActivePane = this.CreatePane();
         this.LayoutRoot = new PaneNode { Pane = this.ActivePane };
@@ -145,17 +151,18 @@ public partial class MainWindow : Window
         this.WindowFrame.BorderThickness = WindowState == WindowState.Maximized ? new Thickness(0) : new Thickness(1);
     }
 
-    private void AttachTab(ExplorerTab Page)
+    private void AttachTab(ExplorerTab Page, bool Activate = true, int? InsertAt = null, WorkspacePaneView? Destination = null)
     {
         // Keep the previous frame visible while the new workspace loads and lays out.
         Page.Opacity = 0;
         Page.IsHitTestVisible = false;
-        this.Tabs.Add(Page);
+        var Index = InsertAt ?? this.Tabs.Count;
+        this.Tabs.Insert(Index, Page);
         Page.PropertyChanged += (_, _) => this.PersistWorkspaceNow();
-        this.TabPages.Children.Add(Page);
-        this.Headers.Add(new TabHeader(Page));
+        (Destination ?? this.ActivePane).TabPages.Children.Add(Page);
+        this.Headers.Insert(Index, new TabHeader(Page));
         this.RefreshTabHeaders();
-        this.SelectTab(Page);
+        if (Activate) this.SelectTab(Page);
     }
 
     internal ExplorerTab AddTab()
@@ -172,9 +179,10 @@ public partial class MainWindow : Window
         this.ActiveTab?.DismissSearchTips();
         this.ActivatePane(this.PaneFor(Page));
         this.ActiveTab = Page;
+        this.PreferencesMenuItem.InputGestureText = Page.PreferencesGesture;
         this.ActivePane.Selected = Page;
         foreach (var Tab in this.PaneTabs(this.ActivePane)) Tab.SetTabSelected(ReferenceEquals(Tab, Page));
-        if (Page.IsInitialLayoutReady) this.PresentTab(Page);
+        if (Page.IsInitialContentReady) this.PresentTab(Page);
         else
         {
             Page.Visibility = Visibility.Visible;
@@ -209,7 +217,7 @@ public partial class MainWindow : Window
         foreach (var Other in this.PaneTabs(Pane).Where(Other => !ReferenceEquals(Other, Page)))
         {
             // Pending tabs still need a Loaded event to complete initialization.
-            if (Other.IsInitialLayoutReady) Other.Visibility = Visibility.Collapsed;
+            if (Other.IsInitialContentReady) Other.Visibility = Visibility.Collapsed;
             Other.Opacity = 0;
             Other.IsHitTestVisible = false;
         }
@@ -251,8 +259,25 @@ public partial class MainWindow : Window
 
     internal async Task SynchronizePreferencesAsync(ExplorerTab Source)
     {
+        this.SharedUIPreferences = Source.CaptureSharedUIPreferences();
         foreach (var Page in this.Tabs.ToArray())
             if (!ReferenceEquals(Page, Source)) await Page.ApplySharedPreferencesAsync(Source.PageSettings);
+    }
+
+    private CDir.Models.AppSettings? SharedUIPreferences;
+
+    internal void ApplyCurrentUIPreferences(ExplorerTab Page)
+    {
+        if (this.SharedUIPreferences is { } Shared) Page.ApplySharedUIPreferences(Shared);
+    }
+
+    internal void SynchronizeUIPreferences(ExplorerTab Source)
+    {
+        this.SharedUIPreferences = Source.CaptureSharedUIPreferences();
+        foreach (var Page in this.Tabs.ToArray())
+            if (!ReferenceEquals(Page, Source)) Page.ApplySharedUIPreferences(this.SharedUIPreferences);
+        this.UpdatePinnedTabLayout(Source.PageSettings.SeparatePinnedTabs);
+        this.PersistWorkspaceNow();
     }
 
     private void NewTabClick(object Sender, RoutedEventArgs E) => this.AddTab();
@@ -435,6 +460,7 @@ public partial class MainWindow : Window
     }
     private void FileMenuClick(object Sender, RoutedEventArgs E)
     {
+        this.PreferencesMenuItem.InputGestureText = this.ActiveTab?.PreferencesGesture ?? "";
         this.FileMenu.PlacementTarget = this.FileMenuButton;
         this.FileMenu.IsOpen = true;
         E.Handled = true;

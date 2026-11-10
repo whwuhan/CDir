@@ -274,6 +274,7 @@
   "VcsContains": "{0}: 하위에 {1} 항목이 있음",
   "VcsStatus": "{0}: {1}",
   "PanelFontSizes": "패널 글꼴 크기",
+  "DirectoryTreeAndTabBarUI": "디렉터리 트리, 탭 표시줄 및 기본 패널 표시",
   "FontFileList": "파일 목록",
   "FontHeaders": "열 머리글",
   "FontSidebar": "사이드바",

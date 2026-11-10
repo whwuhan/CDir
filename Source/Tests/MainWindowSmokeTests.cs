@@ -182,6 +182,7 @@ public partial class ExplorerTab
         await this.RunFileHistorySmokeChecksAsync(Passed);
         this.RunWindowAppearanceSmokeChecks(Passed);
         await this.RunShellContextMenuSmokeChecksAsync(Passed);
+        await this.RunSharedUIPreferencesSmokeChecksAsync(Passed);
         await this.RunPreferencesSmokeChecksAsync(Passed);
         await this.RunCustomCategorySmokeChecksAsync(Passed);
         await this.RunTimeFormatSmokeChecksAsync(Passed);

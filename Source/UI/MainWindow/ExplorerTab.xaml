@@ -446,7 +446,7 @@
       </Border>
       <Grid x:Name="ContentPanels" Grid.Row="1" SizeChanged="ContentPanelsSizeChanged">
         <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="238" MinWidth="190" /><ColumnDefinition Width="16" /><ColumnDefinition x:Name="MainPanelColumn" Width="*" MinWidth="10" /></Grid.ColumnDefinitions>
-        <Border x:Name="SidebarPanel" Background="{StaticResource SurfaceMiddle}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0" AllowDrop="True" services:ScrollBarReveal.IsEnabled="True"
+        <Border x:Name="SidebarPanel" Background="{StaticResource SurfaceMiddle}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0" AllowDrop="True" services:ScrollBarReveal.IsEnabled="True" services:ScrollBarReveal.RevealOnScroll="True"
                 PreviewMouseLeftButtonDown="SidebarDragMouseDown" PreviewMouseMove="SidebarDragMouseMove" PreviewMouseLeftButtonUp="SidebarDragMouseUp"
                 PreviewDragOver="SidebarDragOver" PreviewDragLeave="SidebarDragLeave" PreviewDrop="SidebarDrop">
           <Border.ContextMenu>
@@ -664,6 +664,11 @@
           <Grid>
             <DataGrid x:Name="FileGrid" UseLayoutRounding="True" SnapsToDevicePixels="True" ContextMenuOpening="FileContextOpening" FontSize="{DynamicResource UIFontFileList}" RowHeight="{DynamicResource UIFileRowHeight}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True" ColumnReordered="FileGridColumnReordered" CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalGridLinesBrush="{StaticResource Line}" EnableRowVirtualization="True" EnableColumnVirtualization="True" ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" MouseDoubleClick="FileGridMouseDoubleClick" SelectionChanged="FileGridSelectionChanged" Sorting="FileGridSorting" PreviewMouseRightButtonDown="FileGridRightClick" PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
                       IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" PreviewKeyDown="FileGridPreviewKeyDown" LostMouseCapture="FileGridLostMouseCapture">
+              <DataGrid.ItemsPanel><ItemsPanelTemplate><controls:FileListRowsPresenter /></ItemsPanelTemplate></DataGrid.ItemsPanel>
+              <DataGrid.Style><Style TargetType="DataGrid">
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Visible" />
+                <Style.Triggers><Trigger Property="HasItems" Value="False"><Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" /></Trigger></Style.Triggers>
+              </Style></DataGrid.Style>
               <DataGrid.ContextMenu><ContextMenu /></DataGrid.ContextMenu>
               <DataGrid.Columns>
                 <DataGridTemplateColumn Header="{DynamicResource TextNameColumn}" Width="*" MinWidth="230" SortMemberPath="Name" SortDirection="Ascending">

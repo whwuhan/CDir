@@ -12,6 +12,7 @@ public partial class ExplorerTab
 {
     private async Task RunMainPanelNavigationSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunFileListScrollTailSmokeChecksAsync(Passed);
         var Initial = this.CurrentPath;
         var Fixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "Main panel navigation " + Guid.NewGuid().ToString("N"))).FullName;
         var Child = Directory.CreateDirectory(Path.Combine(Fixture, "Child 中文")).FullName;

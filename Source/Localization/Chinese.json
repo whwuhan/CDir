@@ -274,6 +274,7 @@
   "VcsContains": "{0}：目录内包含{1}的项目",
   "VcsStatus": "{0}：{1}",
   "PanelFontSizes": "面板字体大小",
+  "DirectoryTreeAndTabBarUI": "目录树，标签栏和主面板显示",
   "FontFileList": "文件列表",
   "FontHeaders": "列表表头",
   "FontSidebar": "侧边栏",

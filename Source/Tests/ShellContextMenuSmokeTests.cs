@@ -68,7 +68,7 @@ public partial class ExplorerTab
         }
         try
         {
-            Check(this.FileGrid.ContextMenu.Items.Count == 0, "The file list contains no CDir application menu items or fallback menu");
+            Check(this.FileGrid.ContextMenu.Items.Count == 0, "The file list keeps the native menu host without a separate WPF fallback menu");
             var Cases = new (string Name, string Current, string[] Paths)[]
             {
                 ("File", Folder, [FilePath]), ("Folder", Fixture, [Folder]),
@@ -104,6 +104,33 @@ public partial class ExplorerTab
                 }
             }
             await this.NavigateAsync(Folder);
+            this.SelectPath(FilePath);
+            this.FileGrid.UpdateLayout();
+            var SelectedRow = (DataGridRow)this.FileGrid.ItemContainerGenerator.ContainerFromItem(this.FileGrid.SelectedItem);
+            Check(this.FileContextEntries(FindVisualChild<DataGridCell>(SelectedRow)).Select(Entry => Entry.FullPath).SequenceEqual([FilePath])
+                && this.FileContextEntries(SelectedRow).Length == 0,
+                "A file cell targets the selected file while unused row space targets the folder background");
+            this.FileGridRightClick(this.FileGrid, new System.Windows.Input.MouseButtonEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, System.Windows.Input.MouseButton.Right)
+                { RoutedEvent = System.Windows.Input.Mouse.PreviewMouseDownEvent, Source = this.FileGrid });
+            // Model a queued search/selection restoration between right-down and
+            // ContextMenuOpening. The background target must remain background.
+            this.FileGrid.SelectedItem = this.Entries.Single(Entry => Entry.FullPath == FilePath);
+            var BackgroundEntries = this.TakeFileContextEntries(Keyboard: false, MouseSource: this.FileGrid);
+            Check(BackgroundEntries.Length == 0, "A blank right-click keeps its native folder-background target even if selection is restored before the menu opens");
+            using (var Background = new ShellContextMenu(Source.Handle, Folder, BackgroundEntries.Select(Entry => Entry.FullPath).ToArray()))
+            {
+                var Verbs = Flatten(Background.ReadEntries(InitializeSubmenus: true)).Select(Entry => Background.DescribeCommand(Entry.Id)).ToArray();
+                Check(Verbs.Contains("NewFolder") && !Verbs.Contains("cut") && !Verbs.Contains("CDir.OpenTerminalHere"),
+                    "Blank-space routing requests the original native background menu without adding a CDir Terminal entry");
+                using var Reference = new ShellContextMenu(Source.Handle, Folder, []);
+                var NativeTerminal = Flatten(Reference.ReadEntries()).Where(Entry => Entry.Text.Contains("终端")
+                    || Entry.Text.Contains("Terminal", StringComparison.OrdinalIgnoreCase)).Select(Entry => Reference.DescribeCommand(Entry.Id)).ToArray();
+                Check(NativeTerminal.All(Verb => Verbs.Contains(Verb)),
+                    "Blank-space routing retains every Terminal command supplied by the native background menu");
+            }
+            Check(this.TakeFileContextEntries(Keyboard: true, MouseSource: this.FileGrid).Select(Entry => Entry.FullPath).SequenceEqual([FilePath]),
+                "Keyboard context menus retain the actual selected file target");
             await this.RunShellCutClipboardSmokeChecksAsync(Passed, Folder, [FilePath, SecondFile], Subfolder);
             this.FileGrid.SelectedItems.Clear();
             // Shell menu COM calls pump messages. A watcher tick queued by the cut

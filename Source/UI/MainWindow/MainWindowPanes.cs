@@ -305,18 +305,23 @@ public partial class MainWindow
             First = this.CapturePane(Node.First!), Second = this.CapturePane(Node.Second!) };
     }
 
-    private void RestorePanes(WorkspacePaneState? Saved)
+    private static bool ValidPaneLayout(WorkspacePaneState? Saved, int TabCount)
     {
-        if (Saved is null) return;
+        if (Saved is null) return false;
         var Seen = new HashSet<int>();
         bool Valid(WorkspacePaneState State, int Depth)
         {
             if (Depth > 16) return false;
-            if (State.Split is null) return State.Tabs is { Count: > 0 } && State.Tabs.All(Index => Index >= 0 && Index < this.Tabs.Count && Seen.Add(Index)) && State.Tabs.Contains(State.ActiveTab);
+            if (State.Split is null) return State.Tabs is { Count: > 0 } && State.Tabs.All(Index => Index >= 0 && Index < TabCount && Seen.Add(Index)) && State.Tabs.Contains(State.ActiveTab);
             return State.Split is "Horizontal" or "Vertical" && State.First is not null && State.Second is not null
                 && double.IsFinite(State.Ratio) && State.Ratio >= .05 && State.Ratio <= .95 && Valid(State.First, Depth + 1) && Valid(State.Second, Depth + 1);
         }
-        if (!Valid(Saved, 0) || Seen.Count != this.Tabs.Count) return;
+        return Valid(Saved, 0) && Seen.Count == TabCount;
+    }
+
+    private bool RestorePanes(WorkspacePaneState? Saved)
+    {
+        if (!ValidPaneLayout(Saved, this.Tabs.Count)) return false;
         foreach (var Pane in this.Panes) Pane.TabPages.Children.Clear();
         this.WorkspaceSurface.Children.Clear(); this.Panes.Clear();
         PaneNode Restore(WorkspacePaneState State)
@@ -333,10 +338,11 @@ public partial class MainWindow
             var Node = new PaneNode { Horizontal = State.Split == "Horizontal", Ratio = State.Ratio, First = Restore(State.First!), Second = Restore(State.Second!) };
             this.BuildBranch(Node); return Node;
         }
-        this.LayoutRoot = Restore(Saved);
+        this.LayoutRoot = Restore(Saved!);
         this.WorkspaceSurface.Children.Add(this.LayoutRoot.View);
         this.UpdatePaneMinimums();
         this.ActivePane = this.Panes[0]; this.ActiveTab = this.ActivePane.Selected;
         this.RefreshTabHeaders();
+        return true;
     }
 }

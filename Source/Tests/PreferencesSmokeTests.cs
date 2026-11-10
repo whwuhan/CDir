@@ -50,7 +50,9 @@ public partial class ExplorerTab
         await this.WaitForSearchSmokeAsync();
         Exception? Failure = null;
         var Inspected = false;
-        var Timeout = new DispatcherTimer(DispatcherPriority.Send, Dispatcher) { Interval = TimeSpan.FromSeconds(8) };
+        // Idle-priority desktop checks can be delayed by the user's foreground
+        // work. This is a deadline, not a delay on successful dialog checks.
+        var Timeout = new DispatcherTimer(DispatcherPriority.Send, Dispatcher) { Interval = TimeSpan.FromSeconds(30) };
         Timeout.Tick += (_, _) =>
         {
             Timeout.Stop();
@@ -212,6 +214,12 @@ public partial class ExplorerTab
                 Dialog.UpdateLayout();
                 Check(Dialog.UIPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.LanguagePicker.IsVisible,
                     "UI category opens its own page for grid lines and column checkboxes");
+                Check(Dialog.DirectoryTreeAndTabBarHeading.IsVisible
+                    && Dialog.DirectoryTreeAndTabBarHeading.Text == LanguageService.Text("DirectoryTreeAndTabBarUI")
+                    && Dialog.DirectoryTreeAndTabBarHeading.FontWeight == FontWeights.SemiBold
+                    && Dialog.DirectoryTreeAndTabBarHeading.TranslatePoint(new Point(0, Dialog.DirectoryTreeAndTabBarHeading.ActualHeight), Dialog.UIPanel).Y
+                        <= Dialog.GridLinesCheck.TranslatePoint(new Point(), Dialog.UIPanel).Y,
+                    "The localized directory tree and tab bar heading separates font sizes from UI options");
                 Check(Dialog.ColumnChecks.Count == this.FileGrid.Columns.Count
                     && this.GetColumnPreferences().All(Option => Dialog.ColumnChecks[Option.Key].IsVisible
                         && Dialog.ColumnChecks[Option.Key].IsChecked == Option.Visible

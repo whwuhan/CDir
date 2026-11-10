@@ -54,7 +54,7 @@ public partial class ExplorerTab
         await this.ToggleTerminalAsync();
     }
 
-    private async Task ToggleTerminalAsync()
+    private async Task ToggleTerminalAsync(bool RestoreFocus = true)
     {
         if (this.WindowClosed) return;
         if (this.TerminalPanel.Visibility == Visibility.Visible) { this.HideTerminal(); return; }
@@ -73,7 +73,7 @@ public partial class ExplorerTab
             if (this.TerminalStartupTask is not { IsCompleted: false }) this.TerminalStartupTask = this.StartTerminalAsync();
             await this.TerminalStartupTask;
         }
-        if (!this.WindowClosed && this.TerminalPanel.Visibility == Visibility.Visible) this.TerminalSurface?.Focus();
+        if (RestoreFocus && !this.WindowClosed && this.TerminalPanel.Visibility == Visibility.Visible) this.TerminalSurface?.Focus();
     }
 
     private async Task StartTerminalAsync()

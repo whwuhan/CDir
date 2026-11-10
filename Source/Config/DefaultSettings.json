@@ -43,6 +43,7 @@
   ],
   "Shortcuts": {
     "NewWindow": "Ctrl+N",
+    "Preferences": "Alt+S",
     "NewTab": "Ctrl+T",
     "ToggleTabPin": "Alt+W",
     "CloseTab": "Ctrl+W",

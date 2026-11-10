@@ -31,6 +31,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal ListBoxItem UICategory { get; }
     internal FrameworkElement GeneralPanel { get; }
     internal FrameworkElement UIPanel { get; }
+    internal TextBlock DirectoryTreeAndTabBarHeading { get; }
     internal IReadOnlyDictionary<string, CheckBox> ColumnChecks { get; }
     internal IReadOnlyDictionary<string, ComboBox> FontSizePickers { get; }
     internal IReadOnlyDictionary<string, TextBlock> FontSizeLabels { get; }
@@ -314,6 +315,10 @@ internal sealed partial class PreferencesWindow : DialogWindow
             };
         }
         UI.Children.Add(FontGrid);
+        this.DirectoryTreeAndTabBarHeading = new TextBlock
+        { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        this.DirectoryTreeAndTabBarHeading.SetResourceReference(TextBlock.TextProperty, "TextDirectoryTreeAndTabBarUI");
+        UI.Children.Add(this.DirectoryTreeAndTabBarHeading);
         this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 12);
         UI.Children.Add(this.GridLinesCheck);
         this.ShowBookmarkPathsCheck.Margin = new Thickness(0, 0, 0, 12);

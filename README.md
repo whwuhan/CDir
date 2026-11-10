@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v2.1.6 interface preview](Docs/Images/CDirPreview.png)
+![CDir v2.0.11 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -23,7 +23,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 
 ### Features
 
-- Opening CDir.exe runs a verified private copy outside the checkout, so switching Git branches can replace the published program files while existing windows stay open. An open window keeps its starting version; open CDir.exe again to use the selected branch's version.
+- Reopening a saved workspace shows the last active folder first. Other panes and tabs restore with bounded background reads, retain their saved order and layout, and reuse the initial drive list.
 - Press Alt+R to distribute all panes in the current window as evenly as their minimum sizes allow. Columns share the window width evenly, then rows share the height within each column; split directions, tabs and the active pane stay in place. Customize this shortcut in Keyboard Shortcuts.
 - Right-click any file-list header and choose Size All Columns To Fit, or press Alt+E in the current tab. Each displayed column fits the wider of its header and current file/folder values, including off-screen rows. Only that tab changes. Customize, clear, or reset the shortcut in Keyboard Shortcuts.
 - Drag a tab to the left, right, top, or bottom edge of a pane’s directory tree or file panel. A translucent preview shows the full workspace area before release. Each pane has its own tab strip, address bar, search, tree, file panel, status bar, and terminal. Split panes again, resize their dividers with live content updates, or move tabs between strips; empty panes merge automatically. Layout and selections restore on restart. Tab shortcuts and bulk-close commands act within the current pane.
@@ -44,7 +44,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - The list, tree, Quick Access, and address bar display Windows Shell icons, including associated applications, programs, shortcuts, and custom folder icons.
 - Git/SVN badges in the list, tree, and address bar come from actual workspace queries and distinguish unchanged, modified, added, deleted, renamed, conflicted, untracked, and ignored items. Commits and reverts trigger refresh.
 - Context menus and shortcuts support new folders, rename, copy, cut, paste, and recycling, with Windows file-clipboard interoperability.
-- Files, folders, and blank list space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, associations, and third-party extensions; CDir adds no application items. Right-click blank space and choose New to create a folder or a file type registered with the system. Category shortcuts support opening, reordering within a category, and removal. Their entries and order are saved without moving or deleting original folders.
+- Files, folders, and blank list space use complete native Windows Shell context menus, corresponding to Show More Options in Windows 11. Windows supplies commands, associations, and third-party extensions; CDir adds no application items. Blank space requests the current folder's background menu independently of any previous file selection. Right-click blank space and choose New to create a folder or a file type registered with the system. Category shortcuts support opening, reordering within a category, and removal. Their entries and order are saved without moving or deleting original folders.
 - Drag one or more folders from Windows Explorer, the desktop, another CDir window or tab, or the main panel onto a custom-category heading or blank content area to add shortcuts. Existing entries and files in mixed selections are skipped. Dropping files or folders onto a concrete sidebar folder copies them when the drag-copy preference is checked, or moves them when unchecked. Address-bar, My Computer and Quick Access folder drags support both destinations.
 - Dropping files or folders back into their source directory does nothing in both copy and move modes, including when another pane displays that same directory.
 - Ctrl+X in the main panel fades the selected files and folders until the cut is pasted, replaced, or canceled with Esc. Refreshing or switching tabs preserves the pending cut state.
@@ -67,7 +67,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - A Windows notification-area icon remains visible until CDir exits. By default, closing the window or its last tab (including Ctrl+W) hides it; double-click the icon to restore the same window and tabs. Right-click it to open or exit. Enable Exit CDir On Close in Preferences > General to make Close exit instead; the choice saves immediately.
 - Windows sign-in startup is off by default. Enable Start CDir When I Sign In To Windows in Preferences > General to register the current executable for your Windows user; unchecking or restoring defaults removes this copy’s entry. Cut (Ctrl+X) and terminal wheel zoom (Ctrl+wheel) are fixed and omitted from shortcut customization.
 - With a single instance, the current workspace is saved automatically about once per second. Multiple instances keep changes private. On exit, confirmation is needed only if another instance saved a different layout or configuration; otherwise the current state is saved automatically. Ctrl+N clones the current window’s full workspace and tree expansion; launching another instance from its icon clones the most recently active window. Preferences and workspace snapshots use flushed atomic writes with a previous-version backup. Startup restores tabs, active folder, tab names, navigation history, search, sorting, selection, column widths, sidebar layout, window bounds, and terminal panel state. After a crash or sudden power loss, recovery uses the latest completed save; terminal panels open fresh PowerShell sessions.
-- Horizontal and vertical scrollbars are 12 DIP. Scrollbars use hover/drag visibility where configured. Fixed `Shift+Wheel` horizontally scrolls the area beneath the pointer and is not customizable; the ordinary wheel scrolls vertically.
+- Horizontal and vertical scrollbars are 12 DIP. Sidebar tree scrollbars appear during scrolling, hover or dragging, then hide about one second after scrolling stops outside their area. Fixed `Shift+Wheel` horizontally scrolls the area beneath the pointer and is not customizable; the ordinary wheel scrolls vertically.
 - The column dropdown ends with Show Hidden Files And Folders, synchronized with Preferences > General. Turning off file-list grid lines also removes separators beneath file rows.
 - Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enable it to fit every displayed column to its header and folder contents whenever a folder opens; background refreshes preserve manual widths.
 - Preferences > UI > Show Drive Usage In My Computer is unchecked by default; enable it for capacity text and percentages beside drives, with a usage bar below each drive aligned to the drive content row, excluding the expander gutter and outer padding. Drive root paths are not repeated beside drive names.
@@ -85,6 +85,7 @@ In File > Preferences > Keyboard Shortcuts, search customizable shortcuts by act
 
 | Shortcut | Action |
 | --- | --- |
+| `Alt+S` | Open Preferences; customizable, with the current binding shown in the File menu |
 | `Ctrl+L` / `Alt+D` | Edit the address bar; press `Enter` after pasting to navigate |
 | `Ctrl+Shift+C` | Copy current folder path |
 | `Alt+Left` / `Alt+Right` / `Alt+Up` | Back / forward / parent directory |
@@ -144,7 +145,7 @@ CDir has no account system, telemetry, or update checks. Network behavior of sha
 
 Settings are stored in `%LOCALAPPDATA%\CDir\Settings.json`, including the interface language. First launch migrates old DocReader settings while preserving language, custom categories, and sidebar order. Existing CDir settings take precedence; the old file is retained. First use defaults to English, as do older settings without a language field. The bundled preferences in `Source/Config/DefaultSettings.json` exclude personal categories, folder paths, and navigation state; new users start with no custom categories. Use Restore Default Settings in Preferences to reset preference choices. Workspace recovery is stored separately in `Settings.json.workspace.json`; settings and workspace files also have `.bak` backups, so deleting only `Settings.json` does not fully reset saved state.
 
-Preferences > UI > Panel Font Sizes independently adjusts File List, Column Headers, Sidebar, Address And Search Bars, Menus, Status Bar, Title Bar, and Preferences (8–24). Changes apply and save immediately; input heights follow font sizes.
+Preferences > UI > Panel Font Sizes independently adjusts File List, Column Headers, Sidebar, Address And Search Bars, Menus, Status Bar, Title Bar, and Preferences (8–24). UI changes apply and save immediately across all tabs in the current window, including hidden tabs and other panes; new tabs inherit them. Input heights follow font sizes.
 
 ### Building From Source
 
@@ -253,7 +254,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v2.1.6 界面预览](Docs/Images/CDirPreview.png)
+![CDir v2.0.11 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -268,7 +269,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 ### 已有功能
 
-- 启动 CDir.exe 时会从仓库外经过校验的独立副本运行，窗口保持打开时也可切换 Git 分支并替换发布目录中的程序文件。已打开窗口保留启动时版本；重新打开 CDir.exe 使用当前分支版本。
+- 恢复工作区时优先显示上次活动文件夹；其余窗格和标签以受限并发恢复，保留顺序与布局，并复用首次读取的磁盘列表。
 - Alt+R 尽可能均匀分布当前窗口内的所有分割窗格，先按列均分宽度，再按每列的行数均分高度，兼容更多列、更多行及连续嵌套分割，并遵守最小尺寸，保留分割方向、Tab 和活动窗格。快捷键可在 Keyboard Shortcuts 自定义。
 - 右键任一文件列表表头，选择“调整所有列宽至合适大小”，或在当前 Tab 按 Alt+E，一次调整所有显示列；每列取表头和当前列表内容（含屏幕外项目）的最大宽度，仅影响当前 Tab。可在 Keyboard Shortcuts 修改、清除或恢复快捷键。
 - 将文件或文件夹拖回原目录时不执行任何操作，复制和移动模式均适用；另一个窗格显示同一目录时也不会生成副本。
@@ -297,7 +298,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 文件列表、目录树、常用位置和地址栏显示 Windows Shell 系统图标，包含默认关联程序、应用程序、快捷方式及自定义文件夹图标。
 - 文件列表、目录树和地址栏显示由 Git/SVN 实际工作区查询生成的状态徽标，区分未修改、修改、新增、删除、重命名、冲突、未跟踪与忽略；提交和还原后自动刷新。
 - 通过右键菜单或快捷键新建文件夹、重命名、复制、剪切、粘贴、移到回收站；与 Windows 文件剪贴板互通。
-- 文件列表的文件、文件夹及空白处使用 Windows Shell 原生完整右键菜单（Windows 11 中对应“显示更多选项”），由系统提供命令、文件关联和第三方扩展，不附加 CDir 菜单项；空白处右键的“新建”可创建文件夹或系统已注册的文件类型。类别中的快捷入口支持点击打开、同类别内拖动排序及移除，内容和顺序自动保存，不移动或删除原文件夹。
+- 文件列表的文件、文件夹及空白处使用 Windows Shell 原生完整右键菜单（Windows 11 中对应“显示更多选项”），由系统提供命令、文件关联和第三方扩展，不附加 CDir 菜单项；空白处始终请求当前文件夹的背景菜单，不受旧文件选择影响。“新建”可创建文件夹或系统已注册的文件类型。类别中的快捷入口支持点击打开、同类别内拖动排序及移除，内容和顺序自动保存，不移动或删除原文件夹。
 - 可从资源管理器、桌面、其他 CDir 窗口或标签页，以及主面板拖动文件夹到左侧自定义类别的标题或类别内空白处，添加快捷入口；支持多选，跳过已有条目及混合选择中的文件。将文件或文件夹拖到侧栏具体文件夹时，勾选“拖动时复制文件/文件夹”则复制，未勾选则移动；地址栏、My Computer 和 Quick Access 中拖出的文件夹也支持这两种目标。
 - 主面板按 Ctrl+X 剪切后，选中文件和文件夹淡化显示；按 Esc 取消剪切并恢复显示。刷新或切换标签页保留待剪切状态，复制新内容或完成剪切粘贴后自动恢复显示。
 - 右键菜单的“剪切”与 Ctrl+X 使用相同的淡化及 Esc 取消行为。Alt+Q 显示或隐藏整个左侧目录栏，可在 Keyboard Shortcuts 中自定义；Ctrl+F 聚焦搜索框后，Esc 退出焦点并保留搜索内容。Quick Access 的回收站在主面板内浏览，使用 Windows 默认图标和原生项目操作，支持前进、后退和刷新。
@@ -318,7 +319,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 可将文件和文件夹拖到地址栏中的某一级目录名称上，目标目录高亮后松开即可移入；勾选拖放复制时则复制到该目录，当前浏览位置保持不变。
 - 窗口最大化使用当前显示器工作区，保证底部状态栏可见；统一转发已配置快捷键，包括 Alt + X 显示/隐藏终端。
 - CDir 启动后持续显示 Windows 通知区域图标，直到退出进程；默认点击窗口关闭按钮或关闭最后一个标签（包括 Ctrl+W）时隐藏，双击 CDir 图标恢复原窗口和标签页；右键图标可打开或退出。在 Preferences → General 勾选 Exit CDir On Close 后，关闭窗口或最后一个标签改为直接退出，设置立即保存。
-- 横向和纵向滚动条统一为 12 DIP，平时隐藏，悬停在滚动条区域或拖动时显示。固定的 Shift + 滚轮用于鼠标所在区域的横向滚动，不支持自定义；普通滚轮保持纵向滚动。
+- 横向和纵向滚动条统一为 12 DIP。目录树滚动时显示滚动条，持续滚动、悬停或拖动时保持显示，停止约一秒后在未悬停时隐藏。固定的 Shift + 滚轮用于鼠标所在区域的横向滚动，不支持自定义；普通滚轮保持纵向滚动。
 - “偏好设置 → General → 开机自动启动 CDir”默认关闭，仅为当前 Windows 用户注册此位置的程序；取消勾选或恢复默认设置会移除此副本的启动项。剪切 Ctrl+X 与终端 Ctrl+滚轮均为固定快捷键，不列入自定义列表。
 - 单实例时工作区约每秒自动保存；多实例运行时各自保留更改；退出时仅当其他进程已保存不同的布局或配置才询问是否覆盖，否则自动保存退出。Ctrl+N 复制当前窗口的完整工作区和目录树展开状态，图标新开进程时复制最近活动窗口；配置和工作区使用刷盘后的原子写入，并保留上一版本备份。启动时恢复标签、活动目录、标签名称、前后导航历史、搜索、排序、选择、列宽、侧栏布局、窗口位置与终端面板状态。崩溃或突然断电后恢复最近一次完整保存的状态；终端面板会启动新的 PowerShell 会话。
 - “文件 → 偏好设置”左侧按 General（常规）、UI、Terminal Theme（终端主题）和 Keyboard Shortcuts（快捷键）分类。常规分类包含语言、12/24 小时制、隐藏项目、关闭窗口时退出、拖放时复制、后台计算文件夹大小和开机自动启动选项（默认关闭）；UI 分类包含面板字体大小、网格线、文件夹路径、磁盘用量和列显示开关；终端主题包含终端字号、背景色和预览。语言支持简体中文、日本語、한국어和 English，即时切换并记住选择；当前路径、筛选、排序和选中项目保持不变。
@@ -330,6 +331,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 | 快捷键 | 操作 |
 | --- | --- |
+| `Alt + S` | 打开 Preferences；可自定义，File 菜单同步显示当前按键 |
 | `Ctrl + L` / `Alt + D` | 编辑地址栏，粘贴后按 `Enter` 跳转 |
 | `Ctrl + Shift + C` | 复制当前文件夹路径 |
 | `Alt + ←` / `Alt + →` / `Alt + ↑` | 后退 / 前进 / 上一级 |
@@ -388,7 +390,7 @@ Git 使用 `status --porcelain=v1 -z` 和已跟踪文件清单，覆盖暂存区
 
 设置位于 `%LOCALAPPDATA%\CDir\Settings.json`，包含界面语言。首次启动 CDir 时会自动迁移旧 DocReader 设置，保留语言、自定义类别和侧栏顺序；已有 CDir 设置优先，旧文件保留。首次使用默认使用英语；旧版设置文件缺少语言字段时默认使用英语。内置偏好设置 `Source/Config/DefaultSettings.json` 不包含个人分类、目录路径或导航状态，新用户的自定义分类为空。重置偏好选项请使用偏好设置中的“恢复默认设置”。工作区另存于 `Settings.json.workspace.json`，设置和工作区文件均有 `.bak` 备份；仅删除 `Settings.json` 不能完全清除保存的状态。
 
-“偏好设置 → UI → 面板字体大小”可分别设置文件列表、列表表头、侧边栏、地址与搜索栏、菜单、状态栏、标题栏和偏好设置的字号（8–24）。修改即时生效并自动保存；输入框高度随字号调整。
+“偏好设置 → UI → 面板字体大小”可分别设置文件列表、列表表头、侧边栏、地址与搜索栏、菜单、状态栏、标题栏和偏好设置的字号（8–24）。UI 修改立即同步到当前窗口的全部标签页（包含隐藏标签和其他窗格）并保存，新标签继承这些设置；输入框高度随字号调整。
 
 ### 从源码构建
 

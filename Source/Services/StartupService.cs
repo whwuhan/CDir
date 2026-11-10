@@ -10,7 +10,7 @@ internal static class StartupService
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string TestParent = @"Software\CDir\StartupTests\";
     internal const string ValueName = "CDir";
-    internal static string Command => '"' + Runtime.RuntimeLocation.SourceExecutable + '"';
+    internal static string Command => '"' + Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "CDir.exe")) + '"';
 
     internal static string RegistryPath
     {
@@ -39,7 +39,7 @@ internal static class StartupService
         var Path = RegistryPath;
         if (Enabled)
         {
-            if (!File.Exists(Runtime.RuntimeLocation.SourceExecutable))
+            if (!File.Exists(System.IO.Path.Combine(AppContext.BaseDirectory, "CDir.exe")))
                 throw new FileNotFoundException("The application executable is unavailable.");
             using var Key = Registry.CurrentUser.CreateSubKey(Path, writable: true);
             if (AppMain.SmokeTest) Key.SetValue("TestOwner", AppMain.SmokeRoot!, RegistryValueKind.String);

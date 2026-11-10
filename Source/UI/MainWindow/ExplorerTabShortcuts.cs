@@ -11,6 +11,7 @@ namespace CDir.UI;
 public partial class ExplorerTab
 {
     private Dictionary<string, string> ShortcutBindings = KeyboardShortcut.Resolve(null);
+    internal string PreferencesGesture => this.ShortcutBindings["Preferences"];
 
     private bool ChangeShortcut(string Id, string Gesture)
     {
@@ -35,6 +36,8 @@ public partial class ExplorerTab
 
     private void ApplyShortcutHints()
     {
+        if (this.HostWindow.PreferencesMenuItem is { } Preferences
+            && ReferenceEquals(this.HostWindow.ActiveTab, this)) Preferences.InputGestureText = this.PreferencesGesture;
         var Tooltips = new Dictionary<string, string>
         {
             ["BackTooltip"] = "Back", ["ForwardTooltip"] = "Forward", ["UpTooltip"] = "Up", ["RefreshTooltip"] = "Refresh",
@@ -74,6 +77,7 @@ public partial class ExplorerTab
         switch (Shortcut!.Id)
         {
             case "NewWindow": this.OpenNewWindow(); break;
+            case "Preferences": await this.OpenPreferencesAsync(); break;
             case "NewTab": case "CloseTab": case "NextTab": case "PreviousTab": await this.HostWindow.ExecuteTabCommandAsync(Shortcut.Id); break;
             case "ToggleTerminal": await this.ToggleTerminalAsync(); break;
             case "DistributePanesEvenly": this.HostWindow.DistributePanesEvenly(); break;

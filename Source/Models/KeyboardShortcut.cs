@@ -10,6 +10,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
     internal static IReadOnlyList<KeyboardShortcut> All { get; } = Array.AsReadOnly<KeyboardShortcut>(
     [
         new("NewWindow", "NewWindow", true, FixedGesture: "Ctrl+N"),
+        new("Preferences", "Preferences", true),
         new("NewTab", "NewTab", true),
         new("ToggleTabPin", "ToggleTabPin", true),
         new("CloseTab", "CloseTab", true),
@@ -130,7 +131,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         }
         // Damaged or manually edited settings must not leave commands competing for a key.
         // A newly introduced default must not take over an existing personal binding.
-        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin", "AutoFitColumns", "DistributePanesEvenly" })
+        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin", "AutoFitColumns", "DistributePanesEvenly", "Preferences" })
             if (Overrides is not null && !Overrides.ContainsKey(NewCommand)
                 && Result.Any(Pair => Pair.Key != NewCommand && Pair.Value == Result[NewCommand]))
                 Result[NewCommand] = "";

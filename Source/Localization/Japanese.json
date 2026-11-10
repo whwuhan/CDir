@@ -274,6 +274,7 @@
   "VcsContains": "{0}: 配下に「{1}」の項目があります",
   "VcsStatus": "{0}: {1}",
   "PanelFontSizes": "パネルの文字サイズ",
+  "DirectoryTreeAndTabBarUI": "ディレクトリツリー、タブバーとメインパネルの表示",
   "FontFileList": "ファイル一覧",
   "FontHeaders": "列見出し",
   "FontSidebar": "サイドバー",

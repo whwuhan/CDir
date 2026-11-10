@@ -134,9 +134,12 @@ public partial class ExplorerTab
     }
 
     private void UpdateFavorites()
+        => this.FavoritesList.ItemsSource = this.ReadFavorites();
+
+    private FavoriteLocation[] ReadFavorites()
     {
         var Home = AppMain.SmokeTest ? AppMain.StartupPath ?? AppMain.SmokeRoot! : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        this.FavoritesList.ItemsSource = AppMain.SmokeTest ? CreateQuickAccess(Home, "", "", "", "")
+        return AppMain.SmokeTest ? CreateQuickAccess(Home, "", "", "", "")
             : CreateQuickAccess(Home, Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), GetDownloadsPath(Home),
                 Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));

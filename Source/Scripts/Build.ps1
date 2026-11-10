@@ -15,7 +15,6 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'QuietTools.ps1')
 . (Join-Path $PSScriptRoot 'ReleaseVersion.ps1')
 . (Join-Path $PSScriptRoot 'PublicationWorkspace.ps1')
-. (Join-Path $PSScriptRoot 'ApplicationLauncher.ps1')
 $SourceRoot = Split-Path -Path $PSScriptRoot -Parent
 $ProjectRoot = Split-Path -Path $SourceRoot -Parent
 $ProjectFile = Join-Path $SourceRoot 'CDir.csproj'
@@ -49,10 +48,6 @@ if ($Publish -or $Package) {
         '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:DebugType=None', '-p:DebugSymbols=false'
     ) -AdditionalArguments ($BuildArguments + $VersionArguments)
     Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent -Arguments @(
-        'build', (Join-Path $SourceRoot 'Launcher/CDirLauncher.csproj'), '-c', $Configuration, '--no-incremental', '-r', 'win-x64', '--self-contained', 'true',
-        '-p:DebugType=None', '-p:DebugSymbols=false'
-    ) -AdditionalArguments ($BuildArguments + $VersionArguments)
-    Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent -Arguments @(
         'publish', $ProjectFile, '-c', $Configuration, '--no-build', '-r', 'win-x64', '--self-contained', 'true',
         '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', $PublishDirectory
     ) -AdditionalArguments ($BuildArguments + $VersionArguments)
@@ -60,7 +55,6 @@ if ($Publish -or $Package) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'Docs\UserGuide.txt') -Destination (Join-Path $PublishDirectory 'UserGuide.txt') -Force
     [ordered]@{ Version = $ReleasePlan.Version; SourceHash = $ReleasePlan.SourceHash } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'Release.json') -Encoding utf8
-    Install-ApplicationLauncher -ApplicationDirectory $PublishDirectory -LauncherDirectory (Join-Path $ProjectRoot "Build/Bin/CDirLauncher/$Configuration/net10.0-windows/win-x64")
     Invoke-QuietProcess -RunnerPath $RunnerPath -Executable (Get-Process -Id $PID).Path -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent `
         -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'Package.ps1'))
     # Commit only after compilation, publication and ZIP creation have all succeeded.
@@ -78,7 +72,4 @@ if ($Publish -or $Package) {
     Write-Host 'Building only, with background I/O scheduling. Tests and packaging are separate commands.'
     Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent `
         -Arguments @('build', $ProjectFile, '-c', $Configuration) -AdditionalArguments $BuildArguments
-    Invoke-QuietProcess -RunnerPath $RunnerPath -Executable $DotnetPath -WorkingDirectory $ProjectRoot -CpuPercent $CpuPercent `
-        -Arguments @('build', (Join-Path $SourceRoot 'Launcher/CDirLauncher.csproj'), '-c', $Configuration) -AdditionalArguments $BuildArguments
-    Install-ApplicationLauncher -ApplicationDirectory (Join-Path $ProjectRoot "Build/Bin/CDir/$Configuration/net10.0-windows") -LauncherDirectory (Join-Path $ProjectRoot "Build/Bin/CDirLauncher/$Configuration/net10.0-windows")
 }
