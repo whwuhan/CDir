@@ -43,6 +43,7 @@ public partial class ExplorerTab
             await Source.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: async Dialog =>
             {
                 Dialog.Categories.SelectedItem = Dialog.UICategory;
+                Dialog.BoldAllFontsCheck.IsChecked = true;
                 Dialog.GridLinesCheck.IsChecked = true;
                 Dialog.ShowBookmarkPathsCheck.IsChecked = true;
                 Dialog.ShowSidebarDriveUsageCheck.IsChecked = true;
@@ -50,7 +51,7 @@ public partial class ExplorerTab
                 Dialog.SeparatePinnedTabsCheck.IsChecked = true;
                 Dialog.FontSizePickers["FileList"].SelectedItem = 16.0;
                 Dialog.ColumnChecks[nameof(FileEntry.Size)].IsChecked = false;
-                Check(Dialog.IsVisible && Probe.Tabs.All(Tab => Tab.Settings.ShowGridLines && Tab.Settings.ShowBookmarkPaths
+                Check(Dialog.IsVisible && Probe.Tabs.All(Tab => Tab.Settings.BoldAllFonts && Tab.FileGrid.FontWeight == FontWeights.Bold && Tab.Settings.ShowGridLines && Tab.Settings.ShowBookmarkPaths
                     && Tab.Settings.ShowSidebarDriveUsage && Tab.Settings.AutoFitColumnsOnNavigation && Tab.Settings.SeparatePinnedTabs
                     && Tab.ShowBookmarkPaths && Tab.ShowSidebarDriveUsage && Tab.FileGridLines.Visibility == Visibility.Visible
                     && Tab.FileGrid.FontSize == 16 && Tab.Settings.FontSizes!["FileList"] == 16
@@ -64,25 +65,26 @@ public partial class ExplorerTab
                 Probe.ApplyCurrentUIPreferences(Late);
                 try
                 {
-                    Check(Late.Settings.ShowGridLines && Late.ShowBookmarkPaths && Late.ShowSidebarDriveUsage
+                    Check(Late.Settings.BoldAllFonts && Late.Settings.ShowGridLines && Late.ShowBookmarkPaths && Late.ShowSidebarDriveUsage
                         && Late.Settings.FontSizes?.GetValueOrDefault("FileList") == 16
                         && Late.Settings.HiddenColumns!.Contains(nameof(FileEntry.Size)),
                         "A tab constructed later from older saved state adopts the window's current UI preferences");
                 }
                 finally { Late.DisposePage(); }
                 var NewTab = Probe.AddTab(); await NewTab.WaitUntilReadyAsync();
-                Check(NewTab.Settings.ShowGridLines && NewTab.ShowBookmarkPaths && NewTab.ShowSidebarDriveUsage
+                Check(NewTab.Settings.BoldAllFonts && NewTab.Settings.ShowGridLines && NewTab.ShowBookmarkPaths && NewTab.ShowSidebarDriveUsage
                     && NewTab.FileGrid.FontSize == 16
                     && NewTab.FileGrid.Columns.Single(Column => Column.SortMemberPath == nameof(FileEntry.Size)).Visibility == Visibility.Collapsed,
                     "A new tab immediately inherits the current shared UI preferences");
                 Check(Probe.PersistWorkspaceNow() && DurableJsonStore.Read<WorkspaceState>(SettingsFile + ".workspace.json") is { Tabs.Count: 4 } Saved
-                    && Saved.Tabs.All(Tab => Tab.Settings.ShowGridLines && Tab.Settings.ShowBookmarkPaths
+                    && Saved.Tabs.All(Tab => Tab.Settings.BoldAllFonts && Tab.Settings.ShowGridLines && Tab.Settings.ShowBookmarkPaths
                         && Tab.Settings.FontSizes!["FileList"] == 16 && Tab.Settings.HiddenColumns!.Contains(nameof(FileEntry.Size))),
                     "The complete workspace persists the updated UI preferences for every tab while the dialog remains open");
                 await this.RestorePreferencesSmokeAsync(Dialog, PreferenceResetScope.UI, Passed: Passed);
                 var Deadline = Environment.TickCount64 + 30000;
                 while (!Dialog.RestoreDefaultsButton.IsEnabled && Environment.TickCount64 < Deadline) await Task.Delay(20);
-                Check(Probe.Tabs.All(Tab => Tab.Settings.ShowGridLines == DefaultSettings.Current.ShowGridLines
+                Check(Dialog.BoldAllFontsCheck.IsChecked == false && Probe.Tabs.All(Tab => !Tab.Settings.BoldAllFonts && Tab.FileGrid.FontWeight == FontWeights.Normal
+                    && Tab.Settings.ShowGridLines == DefaultSettings.Current.ShowGridLines
                     && Tab.Settings.ShowBookmarkPaths == DefaultSettings.Current.ShowBookmarkPaths
                     && Tab.Settings.ShowSidebarDriveUsage == DefaultSettings.Current.ShowSidebarDriveUsage
                     && Tab.Settings.AutoFitColumnsOnNavigation == DefaultSettings.Current.AutoFitColumnsOnNavigation

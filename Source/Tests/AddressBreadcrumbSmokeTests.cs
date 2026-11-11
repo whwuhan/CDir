@@ -258,6 +258,39 @@ public partial class ExplorerTab
             Invoke(this.AddressGoButton);
             await WaitUntil(() => !this.Loading && SamePath(this.CurrentPath, ChildPath) && this.AddressDisplay.IsVisible);
             Check(SamePath(this.AddressBox.Text, ChildPath), "Go button navigation preserves typed addresses across editor focus loss");
+            // Use only process-local variables pointing at the owned fixture.
+            var VariableName = "CDirAddressRoot" + FixtureId;
+            Environment.SetEnvironmentVariable(VariableName, ParentPath);
+            try
+            {
+                this.BeginAddressEdit();
+                this.AddressBox.Text = "%" + VariableName.ToLowerInvariant() + "%";
+                AddressKey(Key.Enter);
+                await WaitUntil(() => !this.Loading && SamePath(this.CurrentPath, ParentPath) && this.AddressDisplay.IsVisible);
+                Check(SamePath(this.AddressBox.Text, ParentPath) && SamePath(Segments()[^1].FullPath, ParentPath)
+                    && SamePath(this.History[this.HistoryIndex], ParentPath),
+                    "Enter expands case-insensitive environment variables and records the resolved directory in breadcrumbs and history");
+                this.BeginAddressEdit();
+                this.AddressBox.Text = "\"%" + VariableName + "%\\子目录 中文\"";
+                this.AddressGoButton.Focus();
+                Invoke(this.AddressGoButton);
+                await WaitUntil(() => !this.Loading && SamePath(this.CurrentPath, ChildPath) && this.AddressDisplay.IsVisible);
+                Check(SamePath(this.AddressBox.Text, ChildPath) && SamePath(Segments()[^1].FullPath, ChildPath),
+                    "Go expands quoted environment-variable paths with Unicode subdirectories across editor focus loss");
+                await this.BackAsync();
+                Check(SamePath(this.CurrentPath, ParentPath), "Back returns to the expanded environment-variable directory");
+                await this.ForwardAsync();
+                Check(SamePath(this.CurrentPath, ChildPath), "Forward returns to the expanded environment-variable subdirectory");
+                this.BeginAddressEdit();
+                var MissingVariable = "%CDirAddressMissing" + FixtureId + "%";
+                this.AddressBox.Text = MissingVariable;
+                AddressKey(Key.Enter);
+                await WaitUntil(() => !this.Loading);
+                Check(this.AddressEditing && this.AddressBox.Text == MissingVariable && SamePath(this.CurrentPath, ChildPath),
+                    "An undefined environment variable preserves the draft and current directory");
+                AddressKey(Key.Escape);
+            }
+            finally { Environment.SetEnvironmentVariable(VariableName, null); }
             await this.RunAddressSourceSmokeChecksAsync(Passed, ParentPath, ChildPath, LongPath);
             await this.RunAddressDropSmokeChecksAsync(Passed);
         }

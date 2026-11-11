@@ -22,6 +22,7 @@ public partial class ExplorerTab
         }
         var Surface = (EmbeddedTerminalControl)this.TerminalSurface!;
         var Session = this.TerminalSession;
+        var InitialBold = this.Settings.BoldAllFonts;
         var Font = this.GetTerminalFontSize();
         var Background = this.GetTerminalBackgroundColor();
         var OriginalForeground = this.GetTerminalForegroundColor();
@@ -33,6 +34,18 @@ public partial class ExplorerTab
             Check(DefaultSettings.Current.TerminalFontSize == 15 && DefaultSettings.Current.TerminalBackgroundColor == "#1E1E1E"
                 && new AppSettings() is { TerminalFontSize: 15, TerminalBackgroundColor: "#1E1E1E" },
                 "New settings and restored defaults use the requested 15-point charcoal terminal theme");
+            this.ChangeBoldAllFonts(true);
+            using (var Glyphs = new VirtualTerminal.Rendering.GlyphCache())
+            {
+                Glyphs.Configure(Surface.FontFamily.Source, Surface.FontSize, Surface.LineHeight, EmbeddedTerminalControl.BoldUnicodeFontFallback);
+                Check(Glyphs.Primary.Weight == FontWeights.Bold && ReferenceEquals(this.TerminalSession, Session)
+                    && ((VirtualTerminal.TerminalDecoder)Session!.Decoder).Options.FontFallback.SequenceEqual(EmbeddedTerminalControl.BoldUnicodeFontFallback),
+                    "Bold fonts updates the live terminal glyph face and Unicode fallbacks without restarting its session");
+            }
+            this.ChangeBoldAllFonts(false);
+            Check(Surface.FontFamily.Source == "Consolas" && ReferenceEquals(this.TerminalSession, Session)
+                && ((VirtualTerminal.TerminalDecoder)Session!.Decoder).Options.FontFallback.SequenceEqual(EmbeddedTerminalControl.UnicodeFontFallback),
+                "Disabling bold restores the live terminal font and Unicode fallbacks");
             await Task.Delay(450);
             string Snapshot() { lock (Session!.Buffer.SyncRoot) return Session.Buffer.GetAllText(); }
             static int Prompts(string Text) => Text.Split("PS ", StringSplitOptions.None).Length - 1;
@@ -208,6 +221,7 @@ public partial class ExplorerTab
         }
         finally
         {
+            this.ChangeBoldAllFonts(InitialBold);
             this.Settings.Shortcuts = Overrides;
             this.ShortcutBindings = Bindings;
             this.ChangeLanguage(Language, Persist: false);

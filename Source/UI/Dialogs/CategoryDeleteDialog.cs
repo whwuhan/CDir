@@ -23,7 +23,9 @@ internal sealed class CategoryDeleteDialog : DialogWindow
         this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         this.ShowInTaskbar = false;
         var Panel = new StackPanel { Margin = new Thickness(26) };
-        Panel.Children.Add(new TextBlock { Text = this.Title, FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap });
+        var Heading = new TextBlock { Text = this.Title, FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap };
+        Heading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
+        Panel.Children.Add(Heading);
         this.Question = new TextBlock { Text = LanguageService.Text("DeleteCategoryQuestion", CategoryName), FontSize = 14, TextWrapping = TextWrapping.Wrap };
         var Body = new StackPanel();
         Body.Children.Add(this.Question);

@@ -32,6 +32,7 @@ internal sealed partial class PreferencesWindow
         var Panel = new StackPanel { Visibility = Visibility.Collapsed };
         this.ShortcutsPanel = Panel;
         var Heading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16) };
+        Heading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         Heading.SetResourceReference(TextBlock.TextProperty, "TextShortcutsCategory");
         Heading.SetResourceReference(FontSizeProperty, "UIPreferencesHeadingSize");
         Panel.Children.Add(Heading);

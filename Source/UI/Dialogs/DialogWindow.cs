@@ -7,6 +7,7 @@ internal abstract class DialogWindow : Window
 {
     protected DialogWindow()
     {
+        this.SetResourceReference(FontWeightProperty, "UIFontWeight");
         this.SetResourceReference(BackgroundProperty, "SurfaceMiddle");
         this.Closed += (_, _) =>
         {

@@ -36,8 +36,25 @@ internal sealed partial class EmbeddedTerminalControl : TerminalControl
     {
         // Leave all IME keys to the native text store, including the first processed key.
         if (this.IsComposing || E.Key == Key.ImeProcessed) return;
+        var PressedKey = E.Key == Key.System ? E.SystemKey : E.Key;
+        // The base terminal clears selection before encoding even modifier-only keys.
+        // Let the native editor observe modifiers without treating them as terminal input.
+        if (PressedKey is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
+            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin) return;
         var Modifiers = E.KeyboardDevice.Modifiers;
-        if (!E.Handled && this.HandlePasteShortcut(E.Key, Modifiers))
+        if (!E.Handled && PressedKey == Key.C
+            && (Modifiers == ModifierKeys.Control || Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)))
+        {
+            if (CopyCommand.CanExecute(null, this)) CopyCommand.Execute(null, this);
+            else if (Modifiers == ModifierKeys.Control && this.AllowDirectInput && this.Session is { } InterruptSession)
+            {
+                this.ScrollToBottom();
+                InterruptSession.Write([0x03]);
+            }
+            E.Handled = true;
+            return;
+        }
+        if (!E.Handled && this.HandlePasteShortcut(PressedKey, Modifiers))
         {
             E.Handled = true;
             return;

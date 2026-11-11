@@ -218,6 +218,7 @@ public partial class ExplorerTab
             AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
             ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
             HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
+            BoldAllFonts = this.Settings.BoldAllFonts,
             FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
             TitleBarFontRevision = this.Settings.TitleBarFontRevision,
             ShortcutDefaultsRevision = this.Settings.ShortcutDefaultsRevision,

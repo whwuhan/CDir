@@ -32,6 +32,66 @@ public partial class ExplorerTab
             try
             {
                 Control.Measure(new Size(800, 300)); Control.Arrange(new Rect(0, 0, 800, 300)); Control.UpdateLayout();
+                Capture.Decoder.Write(Encoding.UTF8.GetBytes("COPY 中文 text"));
+                var SelectedText = typeof(TerminalControl).GetMethod("BuildSelectedText",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                string? Selection() => SelectedText.Invoke(Control, null) as string;
+                KeyEventArgs Press(Key Key, ModifierKeys Modifiers, UIElement? Source = null, bool Up = false)
+                {
+                    var Input = new KeyEventArgs(new SmokeKeyboardDevice(Modifiers), PresentationSource.FromVisual(this.HostWindow), 0, Key)
+                        { RoutedEvent = Up ? Keyboard.KeyUpEvent : Keyboard.PreviewKeyDownEvent };
+                    (Source ?? Control.InputEditor).RaiseEvent(Input);
+                    return Input;
+                }
+                var Copies = new List<string?>();
+                // Observe the actual terminal copy command without touching the user's clipboard.
+                CommandManager.AddPreviewExecutedHandler(Control, (_, E) =>
+                {
+                    if (E.Command != TerminalControl.CopyCommand) return;
+                    Copies.Add(Selection());
+                    E.Handled = true;
+                });
+                foreach (var Source in new UIElement[] { Control, Control.InputEditor })
+                {
+                    Control.SelectAll();
+                    var Selected = Selection();
+                    Check(Selected?.Contains("COPY 中文 text", StringComparison.Ordinal) == true,
+                        "The owned terminal fixture has a real Unicode text selection");
+                    foreach (var Modifier in new[] { Key.LeftCtrl, Key.RightCtrl, Key.LeftShift, Key.RightShift, Key.LeftAlt, Key.RightAlt, Key.LWin, Key.RWin })
+                    {
+                        Capture.Sent.Clear();
+                        Press(Modifier, ModifierKeys.Control, Source);
+                        Press(Modifier, ModifierKeys.None, Source, Up: true);
+                        Check(Selection() == Selected && Capture.Sent.Count == 0,
+                            "Modifier down and up preserve terminal selection without sending input: " + Modifier + " from " + Source.GetType().Name);
+                    }
+                    foreach (var Modifiers in new[] { ModifierKeys.Control, ModifierKeys.Control | ModifierKeys.Shift })
+                    {
+                        var Before = Copies.Count;
+                        Capture.Sent.Clear();
+                        var Copy = Press(Key.C, Modifiers, Source);
+                        Check(Copy.Handled && Copies.Count == Before + 1 && Copies[^1] == Selected
+                            && Capture.Sent.Count == 0 && Selection() == Selected && Control.InputEditor.Text.Length == 0,
+                            "The routed copy shortcut copies selected terminal text exactly once without interrupting the shell: " + Modifiers + " from " + Source.GetType().Name);
+                    }
+                }
+                Control.AllowDirectInput = false;
+                var BeforeExitedCopy = Copies.Count;
+                Press(Key.LeftCtrl, ModifierKeys.Control);
+                Press(Key.C, ModifierKeys.Control);
+                Check(Copies.Count == BeforeExitedCopy + 1 && Selection() is not null,
+                    "Selected terminal output remains copyable after direct input is disabled");
+                Control.AllowDirectInput = true;
+                Press(Key.Right, ModifierKeys.None);
+                Check(Selection() is null, "An ordinary terminal key still clears the text selection");
+                Capture.Sent.Clear();
+                var Interrupt = Press(Key.C, ModifierKeys.Control);
+                Check(Interrupt.Handled && Capture.Sent.SequenceEqual(new byte[] { 0x03 }),
+                    "Ctrl+C without a selection still sends exactly one shell interrupt");
+                Capture.Sent.Clear();
+                var EmptyCopy = Press(Key.C, ModifierKeys.Control | ModifierKeys.Shift);
+                Check(EmptyCopy.Handled && Capture.Sent.Count == 0,
+                    "Ctrl+Shift+C without a selection does not interrupt the shell");
                 const string Payload = "echo '粘贴文本'";
                 Control.ReadClipboardText = () => Payload;
                 string Sent() => Encoding.UTF8.GetString(Capture.Sent.ToArray());
@@ -73,8 +133,34 @@ public partial class ExplorerTab
         var Surface = (EmbeddedTerminalControl)this.TerminalSurface!;
         var Session = this.TerminalSession!;
         var ClipboardReader = Surface.ReadClipboardText;
+        var FileClipboardWriter = this.WriteClipboardFiles;
+        var FileCopies = 0;
+        var LiveCopies = 0;
+        ExecutedRoutedEventHandler ObserveCopy = (_, E) =>
+        {
+            if (E.Command != TerminalControl.CopyCommand) return;
+            LiveCopies++;
+            E.Handled = true;
+        };
         try
         {
+            this.WriteClipboardFiles = _ => FileCopies++;
+            CommandManager.AddPreviewExecutedHandler(Surface, ObserveCopy);
+            Surface.SelectAll();
+            foreach (var Source in new UIElement[] { Surface, Surface.InputEditor })
+            {
+                foreach (var Key in new[] { Key.LeftCtrl, Key.C })
+                {
+                    var Input = new KeyEventArgs(new SmokeKeyboardDevice(ModifierKeys.Control), PresentationSource.FromVisual(Source), 0, Key)
+                        { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+                    Source.RaiseEvent(Input);
+                    if (Key == Key.C) Check(Input.Handled, "The live terminal handles Ctrl+C through the full window route");
+                }
+            }
+            Check(LiveCopies == 2 && FileCopies == 0 && !Session.HasExited,
+                "Ctrl then C in the live terminal copies terminal text without invoking file copying or exiting the session");
+            CommandManager.RemovePreviewExecutedHandler(Surface, ObserveCopy);
+            this.WriteClipboardFiles = FileClipboardWriter;
             FocusManager.SetFocusedElement(this, Surface);
             Session.Write(Encoding.UTF8.GetBytes("$global:CDirPasteCount=0\r"));
             await Task.Delay(100);
@@ -117,6 +203,11 @@ public partial class ExplorerTab
             Check(File.ReadAllText(CountFile) == "3", "Three pasted commands execute exactly once each without hidden duplicates");
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
         }
-        finally { Surface.ReadClipboardText = ClipboardReader; }
+        finally
+        {
+            Surface.ReadClipboardText = ClipboardReader;
+            this.WriteClipboardFiles = FileClipboardWriter;
+            CommandManager.RemovePreviewExecutedHandler(Surface, ObserveCopy);
+        }
     }
 }

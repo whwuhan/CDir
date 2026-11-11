@@ -1,4 +1,5 @@
 {
+  "BoldAllFonts": "すべてのフォントを太字にする",
   "DistributePanesEvenly": "ペインを均等に配置",
   "AutoFitColumns": "すべての列幅を内容に合わせる",
   "ResetScopeQuestion": "既定に戻す設定の範囲を選択してください。変更はすぐに適用され、保存されます。",
@@ -10,7 +11,7 @@
   "ToggleTabPin": "タブの固定を切り替え",
   "SeparatePinnedTabs": "固定タブを別の行に表示",
   "ShowSidebarDriveUsage": "マイ コンピューターにドライブ使用量を表示",
-  "ShowSidebarDriveUsageTooltip": "ドライブの右側に使用済み容量、合計容量と割合を表示し、各ドライブの下にツリー全幅の使用量バーを表示します。",
+  "ShowSidebarDriveUsageTooltip": "ドライブ名の右側の同じ行に、使用済み容量、合計容量、固定幅の使用量バーと割合を表示します。",
   "AutoFitColumnsOnNavigation": "フォルダーを開くときに列幅を自動調整",
   "AutoFitColumnsOnNavigationTooltip": "フォルダーを開くたびに、表示されている各列の幅を見出しとフォルダーの内容に合わせます。",
   "ShowBookmarkPaths": "フォルダーのパスを表示",
@@ -83,7 +84,7 @@
   "AddressAncestors": "パス内のフォルダーを選択",
   "AddressEdit": "パスまたはフォルダー名をダブルクリック、空白部分をクリック、または Ctrl + L / Alt + D でパスを編集",
   "AddressDrag": "このフォルダーまたはパスの一部をカテゴリにドラッグすると、現在のパスを変更せずにショートカットを追加できます",
-  "AddressTooltip": "パスを入力・貼り付けて Enter で移動 · Esc で編集を取り消す",
+  "AddressTooltip": "パスや %LocalAppData% などの環境変数を入力・貼り付けて Enter で移動 · Esc で編集を取り消す",
   "AppErrorTitle": "CDir · 操作を完了できません",
   "Back": "戻る",
   "BackTooltip": "戻る（Alt + ←）",

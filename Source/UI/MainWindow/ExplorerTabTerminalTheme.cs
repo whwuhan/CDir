@@ -42,12 +42,25 @@ public partial class ExplorerTab
             this.ShortcutBindings["TerminalFontDecrease"] is { Length: > 0 } Decrease ? Decrease : "—");
     }
 
+    private void ApplyTerminalFontWeight()
+    {
+        if (this.TerminalSurface is not { } Surface) return;
+        if (Surface.Session?.Decoder is VirtualTerminal.TerminalDecoder Decoder)
+            Decoder.Options.FontFallback = this.Settings.BoldAllFonts
+                ? CDir.Controls.EmbeddedTerminalControl.BoldUnicodeFontFallback
+                : CDir.Controls.EmbeddedTerminalControl.UnicodeFontFallback;
+        // The terminal renderer resolves font faces by family name rather than Control.FontWeight.
+        var Family = this.Settings.BoldAllFonts ? "Consolas Bold" : "Consolas";
+        if (Surface.FontFamily.Source != Family) Surface.FontFamily = new FontFamily(Family);
+    }
+
     private void ApplyTerminalTheme()
     {
         this.Settings.TerminalFontSize = this.GetTerminalFontSize();
         this.Settings.TerminalBackgroundColor = this.GetTerminalBackgroundColor();
         this.Settings.TerminalForegroundColor = this.GetTerminalForegroundColor();
         this.UpdateTerminalStatus();
+        this.ApplyTerminalFontWeight();
         if (this.TerminalSurface is not { } Surface) return;
         TryTerminalColor(this.Settings.TerminalBackgroundColor, out var Background);
         var Foreground = TryTerminalColor(this.Settings.TerminalForegroundColor, out var Custom) ? Custom : TerminalForeground(Background);

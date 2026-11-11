@@ -942,6 +942,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             Value => this.ChangeSharedUI(() => this.ChangeGridLines(Value)),
             this.Settings.ShowHidden, this.ChangeShowHiddenAsync, this.Settings.Use12HourClock, this.ChangeTimeFormat,
             this.GetColumnPreferences(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeColumnVisibility(Key, Value)),
+            this.Settings.BoldAllFonts, Value => this.ChangeSharedUI(() => this.ChangeBoldAllFonts(Value)),
             this.GetFontOptions(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeUIFontSize(Key, Value)),
             this.RestoreDefaultPreferencesAsync, this.ShortcutBindings, this.ChangeShortcut,
             this.GetTerminalFontSize(), this.GetTerminalBackgroundColor(), this.ChangeTerminalFontSize, this.ChangeTerminalBackgroundColor,

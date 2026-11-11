@@ -14,6 +14,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     private ColumnDefinition? CategoryColumn;
     internal ComboBox LanguagePicker { get; }
     internal Label LanguageLabel { get; }
+    internal CheckBox BoldAllFontsCheck { get; }
     internal CheckBox GridLinesCheck { get; }
     internal CheckBox ShowHiddenCheck { get; }
     internal CheckBox ExitOnCloseCheck { get; }
@@ -40,6 +41,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
     public PreferencesWindow(Window Owner, Action<string> OnLanguageChanged, bool ShowGridLines, Action<bool> OnGridLinesChanged,
         bool ShowHidden, Func<bool, Task> OnShowHiddenChanged, bool Use12HourClock, Action<bool> OnTimeFormatChanged,
         IReadOnlyList<ColumnPreference> Columns, Func<string, bool, bool> OnColumnVisibilityChanged,
+        bool BoldAllFonts, Action<bool> OnBoldAllFontsChanged,
         IReadOnlyList<UIFontOption> Fonts, Func<string, double, bool> OnFontSizeChanged, Func<PreferenceResetScope, Task> OnRestoreDefaults,
         IReadOnlyDictionary<string, string> Shortcuts, Func<string, string, bool> OnShortcutChanged,
         double TerminalFontSize, string TerminalBackgroundColor, Func<double, bool> OnTerminalFontSizeChanged,
@@ -268,13 +270,15 @@ internal sealed partial class PreferencesWindow : DialogWindow
         this.GeneralPanel = Panel;
         var UI = new StackPanel { Visibility = Visibility.Collapsed };
         var UIHeading = new TextBlock { FontSize = 18, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 16) };
+        UIHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         UIHeading.SetResourceReference(TextBlock.TextProperty, "TextUICategory");
         UIHeading.SetResourceReference(TextBlock.FontSizeProperty, "UIPreferencesHeadingSize");
         UI.Children.Add(UIHeading);
         var FontsHeading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) };
+        FontsHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         FontsHeading.SetResourceReference(TextBlock.TextProperty, "TextPanelFontSizes");
         UI.Children.Add(FontsHeading);
-        var FontGrid = new Grid { Margin = new Thickness(0, 0, 0, 20) };
+        var FontGrid = new Grid { Margin = new Thickness(0, 0, 0, 0) };
         FontGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         FontGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var Pickers = new Dictionary<string, ComboBox>(StringComparer.Ordinal);
@@ -315,8 +319,19 @@ internal sealed partial class PreferencesWindow : DialogWindow
             };
         }
         UI.Children.Add(FontGrid);
+        this.BoldAllFontsCheck = new CheckBox
+        {
+            Name = "BoldAllFontsCheck", IsChecked = BoldAllFonts,
+            Margin = new Thickness(0, 0, 0, 12), VerticalContentAlignment = VerticalAlignment.Center
+        };
+        this.BoldAllFontsCheck.SetResourceReference(ContentControl.ContentProperty, "TextBoldAllFonts");
+        this.BoldAllFontsCheck.SetResourceReference(AutomationProperties.NameProperty, "TextBoldAllFonts");
+        this.BoldAllFontsCheck.Checked += (_, _) => { if (!UpdatingPreferences) OnBoldAllFontsChanged(true); };
+        this.BoldAllFontsCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnBoldAllFontsChanged(false); };
+        UI.Children.Add(this.BoldAllFontsCheck);
         this.DirectoryTreeAndTabBarHeading = new TextBlock
         { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        this.DirectoryTreeAndTabBarHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         this.DirectoryTreeAndTabBarHeading.SetResourceReference(TextBlock.TextProperty, "TextDirectoryTreeAndTabBarUI");
         UI.Children.Add(this.DirectoryTreeAndTabBarHeading);
         this.GridLinesCheck.Margin = new Thickness(0, 0, 0, 12);
@@ -346,6 +361,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
         this.SeparatePinnedTabsCheck.Unchecked += (_, _) => { if (!UpdatingPreferences) OnSeparatePinnedTabsChanged(false); };
         UI.Children.Add(this.SeparatePinnedTabsCheck);
         var ColumnsHeading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
+        ColumnsHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         ColumnsHeading.SetResourceReference(TextBlock.TextProperty, "TextVisibleColumns");
         UI.Children.Add(ColumnsHeading);
         var Checks = new Dictionary<string, CheckBox>(StringComparer.Ordinal);
@@ -481,6 +497,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
                     this.ShowSidebarDriveUsageCheck.IsChecked = Defaults.ShowSidebarDriveUsage;
                     this.AutoFitColumnsOnNavigationCheck.IsChecked = Defaults.AutoFitColumnsOnNavigation;
                     this.SeparatePinnedTabsCheck.IsChecked = Defaults.SeparatePinnedTabs;
+                    this.BoldAllFontsCheck.IsChecked = Defaults.BoldAllFonts;
                     this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
                     foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;
                     foreach (var Check in Checks) Check.Value.IsChecked = !Defaults.HiddenColumns.Contains(Check.Key);

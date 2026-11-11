@@ -111,6 +111,7 @@ public partial class ExplorerTab
         ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
         AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
         SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
+        BoldAllFonts = this.Settings.BoldAllFonts,
         FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
         ColumnOrder = this.Settings.ColumnOrder?.ToList(), HiddenColumns = this.Settings.HiddenColumns?.ToList()
     };
@@ -125,6 +126,7 @@ public partial class ExplorerTab
         this.ShowSidebarDriveUsage = Source.ShowSidebarDriveUsage;
         this.Settings.AutoFitColumnsOnNavigation = Source.AutoFitColumnsOnNavigation;
         this.Settings.SeparatePinnedTabs = Source.SeparatePinnedTabs;
+        this.Settings.BoldAllFonts = Source.BoldAllFonts;
         this.Settings.FontSizes = Source.FontSizes is null ? null : new(Source.FontSizes, StringComparer.Ordinal);
         this.ApplyUIFonts();
         this.ApplyGridLines();

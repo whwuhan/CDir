@@ -125,7 +125,7 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
             var Y = Top - VerticalOffset + 6;
             if (Y < -40 || Y > ViewportHeight) continue;
             var Text = new FormattedText(Label, CDir.Localization.LanguageService.Culture, FlowDirection.LeftToRight,
-                new Typeface(Owner.FontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal), Owner.FontSize, Owner.Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                new Typeface(Owner.FontFamily, FontStyles.Normal, (FontWeight)Owner.FindResource("UIHeadingFontWeight"), FontStretches.Normal), Owner.FontSize, Owner.Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             Context.DrawText(Text, new Point(8, Y));
             Context.DrawLine(new Pen(SystemColors.ControlLightBrush, 1), new Point(Math.Min(ViewportWidth, Text.Width + 20), Y + Text.Height / 2), new Point(ViewportWidth, Y + Text.Height / 2));
         }

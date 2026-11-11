@@ -34,6 +34,7 @@ public partial class ExplorerTab
         {
             if (!Condition) throw new InvalidOperationException("Drive usage UI smoke test failed: " + Name);
             Passed.Add(Name);
+            AppMain.RecordSmokeProgress("Drive usage: " + Name);
         }
         async Task Refresh(string Path)
         {
@@ -186,6 +187,7 @@ public partial class ExplorerTab
         {
             if (!Condition) throw new InvalidOperationException("Sidebar drive usage check failed: " + Name);
             Passed.Add(Name);
+            AppMain.RecordSmokeProgress("Drive usage: " + Name);
         }
         IEnumerable<T> Children<T>(DependencyObject Parent) where T : FrameworkElement
         {
@@ -199,18 +201,20 @@ public partial class ExplorerTab
         T Element<T>(FolderNode Node, string Name) where T : FrameworkElement
         {
             var Container = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node);
-            return Name == "SidebarDriveMeter" ? (T)Container.Template.FindName(Name, Container)
-                : Children<T>(Container).Single(Item => Item.Name == Name);
+            var Header = (DependencyObject)Container.Template.FindName("HeaderHost", Container);
+            return Children<T>(Header).Single(Item => Item.Name == Name);
         }
         bool MeterFitsHeader(FolderNode Node)
         {
-            var Container = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node);
-            var Header = (FrameworkElement)Container.Template.FindName("HeaderHost", Container);
+            var Capacity = Element<TextBlock>(Node, "SidebarDriveCapacity");
             var Meter = Element<ProgressBar>(Node, "SidebarDriveMeter");
-            var Left = Meter.TranslatePoint(new Point(), this.FolderTree).X;
-            var Right = Meter.TranslatePoint(new Point(Meter.ActualWidth, 0), this.FolderTree).X;
-            return Math.Abs(Left - Header.TranslatePoint(new Point(), this.FolderTree).X) < .1
-                && Math.Abs(Right - (this.FolderTree.ActualWidth - Container.Padding.Right - 8)) < .1;
+            var Percentage = Element<TextBlock>(Node, "SidebarDrivePercentage");
+            var Summary = Element<Grid>(Node, "SidebarDriveUsage");
+            return Math.Abs(Meter.ActualWidth - 64) < .1
+                && Meter.TranslatePoint(new Point(), Summary).X >= Capacity.TranslatePoint(new Point(Capacity.ActualWidth, 0), Summary).X + 11
+                && Percentage.TranslatePoint(new Point(), Summary).X >= Meter.TranslatePoint(new Point(Meter.ActualWidth, 0), Summary).X + 11
+                && Math.Abs(Meter.TranslatePoint(new Point(0, Meter.ActualHeight / 2), Summary).Y
+                    - Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight / 2), Summary).Y) < 1;
         }
         async Task Refresh(bool Force = true)
         {
@@ -252,7 +256,7 @@ public partial class ExplorerTab
                 Check(this.UsageBarHasNoInset(Element<ProgressBar>(Node, "SidebarDriveMeter").Template),
                     "Sidebar usage fill touches the frame without a white inset");
                 Check(Element<ProgressBar>(Node, "SidebarDriveMeter").Height == 10,
-                    "The sidebar drive meter has a thicker ten-DIP outline and fill");
+                    "The sidebar drive meter retains its ten-DIP height");
                 Check(!Children<TextBlock>((TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Node))
                     .Any(Text => Text.IsVisible && Text.Text == Node.FullPath),
                     "My Computer drive rows do not repeat the drive root beside their name: " + Node.Name);
@@ -271,7 +275,7 @@ public partial class ExplorerTab
                     - FavoritePath.TranslatePoint(new Point(), this.SidebarScroll).X) < 1),
                     "Drive capacity and folder path columns stay aligned after resizing the sidebar to " + Width);
                 Check(Nodes.Take(2).All(MeterFitsHeader),
-                    "Drive meters align with header content edges while folder paths are visible: " + Width);
+                    "Fixed-width drive meters remain inline while folder paths are visible: " + Width);
                 if (Width == 850 && AppMain.ScreenshotPath is { } AlignedOutput)
                 {
                     var Bitmap = new RenderTargetBitmap((int)this.HostWindow.ActualWidth, (int)this.HostWindow.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -366,10 +370,8 @@ public partial class ExplorerTab
                 Check(CapacityRight + 11 <= PercentLeft
                     && Math.Abs(Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight / 2), Summary).Y
                         - Percentage.TranslatePoint(new Point(0, Percentage.ActualHeight / 2), Summary).Y) < 1
-                    && Meter.TranslatePoint(new Point(), this.FolderTree).Y
-                        >= Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight), this.FolderTree).Y
                     && MeterFitsHeader(Nodes[0]),
-                    "Capacity and percentage retain their row while the lower meter aligns with the header content edges: " + FontSize
+                    "Capacity, the fixed-width meter and percentage share one centered row: " + FontSize
                     + $"; capacity right={CapacityRight}, percentage left={PercentLeft}, meter left={Meter.TranslatePoint(new Point(), this.FolderTree).X}, meter width={Meter.ActualWidth}, tree width={this.FolderTree.ActualWidth}, meter top={Meter.TranslatePoint(new Point(), this.FolderTree).Y}, text bottom={Capacity.TranslatePoint(new Point(0, Capacity.ActualHeight), this.FolderTree).Y}");
                 var NameWidths = Nodes.Select(Node => Element<TextBlock>(Node, "SidebarDriveName").ActualWidth).ToArray();
                 // Inline-rename labels size to their text; their parent grid owns the aligned column.
@@ -421,7 +423,7 @@ public partial class ExplorerTab
                 FixedCapacityLeft ??= CapacityLeft;
 
                 Check(Math.Abs(CapacityLeft - FixedCapacityLeft.Value) < 1 && Nodes.Take(2).All(MeterFitsHeader),
-                    "Resizing keeps capacity text in place and aligns the lower meter with the drive content row: " + Width);
+                    "Resizing keeps capacity text in place and retains inline 64-DIP meters: " + Width);
             }
             this.SidebarColumn.Width = new GridLength(690);
             this.UpdateLayout();
@@ -438,7 +440,7 @@ public partial class ExplorerTab
             this.UpdateLayout();
             Check(Nodes.All(Node => !Element<Grid>(Node, "SidebarDriveUsage").IsVisible
                 && !Element<ProgressBar>(Node, "SidebarDriveMeter").IsVisible),
-                "Turning off drive usage hides both populated capacity text and the separate lower bars");
+                "Turning off drive usage hides capacity text and inline meters together");
             this.ChangeShowSidebarDriveUsage(true);
             await this.SidebarDriveUsageTask;
             Nodes[0].Children.Add(new FolderNode("Owned child", Path.Combine(AppMain.SmokeRoot!, "Owned child")));
@@ -451,8 +453,9 @@ public partial class ExplorerTab
             var RootMeter = Element<ProgressBar>(Nodes[0], "SidebarDriveMeter");
             Check(ChildItem.TranslatePoint(new Point(), this.FolderTree).Y
                 >= RootMeter.TranslatePoint(new Point(0, RootMeter.ActualHeight), this.FolderTree).Y
-                && !Children<ProgressBar>(ChildItem).Single(Item => Item.Name == "SidebarDriveMeter").IsVisible,
-                "Expanded child folders start below the full-width drive meter and do not show their own meter");
+                && !Children<ProgressBar>(ChildItem).Single(Item => Item.Name == "SidebarDriveMeter").IsVisible
+                && RootMeter.ActualWidth == 64,
+                "Expanded child folders start below the inline drive row and do not show their own meter");
             Nodes[0].IsExpanded = false;
             this.ReadDriveUsage = _ => null;
             await Refresh();

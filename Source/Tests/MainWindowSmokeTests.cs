@@ -79,7 +79,7 @@ public partial class ExplorerTab
 
     private async Task RunNavigationSmokeChecksAsync(List<string> Passed)
     {
-        void Check(bool Condition, string Name) { if (!Condition) throw new InvalidOperationException("UI smoke test failed: " + Name); Passed.Add(Name); }
+        void Check(bool Condition, string Name) { if (!Condition) throw new InvalidOperationException("UI smoke test failed: " + Name); Passed.Add(Name); AppMain.RecordSmokeProgress("Navigation: " + Name); }
         Check(this.CurrentPath.Length > 0 && this.View is not null, "initial folder loaded");
         Check(SamePath(this.AddressBox.Text, this.CurrentPath), "address reflects current folder");
         Check(this.FolderTree.SelectedItem is FolderNode SelectedNode && SamePath(SelectedNode.FullPath, this.CurrentPath), "directory tree follows navigation");

@@ -19,7 +19,9 @@ internal sealed class NameDialog : DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         var Panel = new StackPanel { Margin = new Thickness(26) };
-        Panel.Children.Add(new TextBlock { Text = Title, FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var Heading = new TextBlock { Text = Title, FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+        Heading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
+        Panel.Children.Add(Heading);
         Panel.Children.Add(new TextBlock { Text = LanguageService.Text(HintKey), Foreground = (Brush)this.FindResource("Muted"), FontSize = 12, Margin = new Thickness(0, 0, 0, 18), TextWrapping = TextWrapping.Wrap });
         this.NameInput = new TextBox { Text = Initial, MinWidth = 340, Margin = new Thickness(0, 0, 0, 22) };
         Panel.Children.Add(this.NameInput);
