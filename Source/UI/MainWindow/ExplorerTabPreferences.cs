@@ -87,6 +87,7 @@ public partial class ExplorerTab
             this.ShowBookmarkPaths = Defaults.ShowBookmarkPaths;
             this.Settings.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
             this.ShowSidebarDriveUsage = Defaults.ShowSidebarDriveUsage;
+            this.Settings.BoldAllFonts = Defaults.BoldAllFonts;
             this.Settings.FontSizes = null;
             this.ApplyUIFonts();
             this.ApplyGridLines();

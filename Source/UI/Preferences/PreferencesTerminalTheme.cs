@@ -28,6 +28,7 @@ internal sealed partial class PreferencesWindow
         var Panel = new StackPanel { Visibility = Visibility.Collapsed };
         this.TerminalThemePanel = Panel;
         var Heading = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 20) };
+        Heading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         Heading.SetResourceReference(TextBlock.TextProperty, "TextTerminalTheme");
         Heading.SetResourceReference(FontSizeProperty, "UIPreferencesHeadingSize");
         Panel.Children.Add(Heading);
@@ -115,6 +116,7 @@ internal sealed partial class PreferencesWindow
         }
         Panel.Children.Add(TextSwatches);
         var PreviewLabel = new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+        PreviewLabel.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         PreviewLabel.SetResourceReference(TextBlock.TextProperty, "TextTerminalPreview");
         Panel.Children.Add(PreviewLabel);
         this.TerminalPreviewText = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = Size, Text = "PS C:\\> Get-ChildItem\nCDir", TextWrapping = TextWrapping.Wrap };

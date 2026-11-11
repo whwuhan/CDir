@@ -1,4 +1,4 @@
-CDir File Manager
+﻿CDir File Manager
 
 File views
 Hold Ctrl and turn the mouse wheel over the main file pane to change the view and icon size. Up enlarges the view; down moves toward Content. Intermediate icon sizes are remembered per folder and included when applying a view recursively. Search uses the same view. Ordinary scrolling and terminal font zoom keep their existing behavior.
@@ -51,7 +51,7 @@ Double-click the address bar or a segment to edit the full path without navigati
 Submitting a path with Enter or Go reveals and selects the destination under My Computer, even when browsing began from Quick Access or a custom category.
 While editing a path, clicking other blank areas of the window, including the list, sidebar, toolbar, status bar, or title bar, or pressing Esc, cancels unsubmitted text and moves focus out of the address field. Clicking inside still positions the caret or selects text. Go submits the current draft.
 Long paths prioritize the current directory. The … menu on the left lets you choose any ancestor.
-Paths may contain spaces, Chinese characters, or surrounding quotes. Environment variables such as %USERPROFILE%, relative paths, and network shares are supported.
+Paths may contain spaces, Chinese characters, or surrounding quotes. Environment variables such as %LocalAppData%, %AppData% and %USERPROFILE%, relative paths, and network shares are supported. For example, enter %LocalAppData% or %LocalAppData%\Temp and press Enter or click Go; the address bar displays the resolved directory.
 Entering a file path opens its containing directory and selects the file.
 The copy button to the right of the address bar copies the current folder path.
 The search box recursively searches names of files and folders in the current directory and all subdirectories.
@@ -230,7 +230,7 @@ Drag files or folders from Windows Recycle Bin or CDir's Recycle Bin view into a
 Show Folder Paths in Preferences > UI is unchecked by default. Enable it to show absolute paths for every folder in custom categories, Quick Access, and My Computer, including expanded descendants and pinned parents. Paths share one aligned column with drive capacity panels and remain aligned when resizing the sidebar. Drive roots are not repeated beside drive names; expanded directory paths remain visible. Long paths use an ellipsis; hovering over the name or path shows the full path immediately. The choice saves and synchronizes to other tabs. Only expanded folder branches pin parent rows; category headers yield to the following category, independently of the main panel location.
 
 Display options
-The dropdown to the right of search ends with a separator and Show Hidden Files And Folders, synchronized with Preferences > General. Turning off Show Grid Lines In The File List also removes separators beneath file rows. Preferences > UI includes Show Folder Paths and Show Drive Usage In My Computer. Drive usage is unchecked by default and controls both the capacity text and percentages beside drive names and the usage bar below each drive, aligned with the content row and excluding the expander gutter and outer padding.
+The dropdown to the right of search ends with a separator and Show Hidden Files And Folders, synchronized with Preferences > General. Turning off Show Grid Lines In The File List also removes separators beneath file rows. Preferences > UI includes Show Folder Paths and Show Drive Usage In My Computer. Drive usage is unchecked by default and controls the capacity text, fixed-width 64-DIP usage bar and percentages on the same row to the right of drive names.
 Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enable it to fit every displayed column to its header and folder contents whenever a folder opens, including new tabs. Background refreshes keep manually adjusted widths. The preference is saved and can be restored to its default.
 
 Tabs can be dragged to reorder within the pinned or ordinary group. When the separate pinned row is visible, dragging across rows pins or unpins the tab at the drop position. An insertion marker shows the destination and row edges scroll while dragging. Tab order and pin state are saved.
@@ -244,3 +244,7 @@ Alt+R distributes every split pane in the current window as evenly as their mini
 Startup workspace restoration
 The last active folder appears first. Selected tabs in other panes are prioritized, with the remaining saved tabs restored without repeatedly selecting them. Folder reads, searches and terminal restoration use bounded concurrency; input and painting continue between control construction steps. The initial drive list is reused while each tab restores its own tree state. Tab order, pinned tabs, selections and pane layout remain saved.
 Loaded file panels become interactive before drive metadata and saved sidebar branches finish loading. Automatic column measurement and large tree updates yield to input in small batches. Navigation or selection made during loading takes precedence over late workspace restoration; incomplete workspaces are not saved.
+
+Preferences → UI → Bold All Fonts is off by default. Enable it below Panel Font Sizes to make all interface and terminal text bold. Changes apply immediately, save automatically, and synchronize across tabs and panes. Turning it off restores the original weights; restoring UI defaults turns it off.
+
+Terminal text selection stays selected when pressing Ctrl, Shift, Alt, or Windows keys. With a selection, Ctrl+C and Ctrl+Shift+C copy the selected terminal text; without a selection, Ctrl+C still interrupts the running command.

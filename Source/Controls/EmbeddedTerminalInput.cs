@@ -21,6 +21,8 @@ internal sealed partial class EmbeddedTerminalControl
     private readonly TranslateTransform InputPosition = new();
     internal static readonly string[] UnicodeFontFallback = ["Microsoft YaHei UI", "Yu Gothic UI", "Malgun Gothic", "Segoe UI", "Segoe UI Symbol", "Segoe UI Emoji"];
 
+    internal static readonly string[] BoldUnicodeFontFallback = ["Microsoft YaHei UI Bold", "Yu Gothic UI Bold", "Malgun Gothic Bold", "Segoe UI Bold", "Segoe UI Symbol", "Segoe UI Emoji"];
+
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs E)
     {
         base.OnPropertyChanged(E);

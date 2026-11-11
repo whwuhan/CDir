@@ -216,7 +216,7 @@ public partial class ExplorerTab
                     "UI category opens its own page for grid lines and column checkboxes");
                 Check(Dialog.DirectoryTreeAndTabBarHeading.IsVisible
                     && Dialog.DirectoryTreeAndTabBarHeading.Text == LanguageService.Text("DirectoryTreeAndTabBarUI")
-                    && Dialog.DirectoryTreeAndTabBarHeading.FontWeight == FontWeights.SemiBold
+                    && Dialog.DirectoryTreeAndTabBarHeading.FontWeight == (this.Settings.BoldAllFonts ? FontWeights.Bold : FontWeights.SemiBold)
                     && Dialog.DirectoryTreeAndTabBarHeading.TranslatePoint(new Point(0, Dialog.DirectoryTreeAndTabBarHeading.ActualHeight), Dialog.UIPanel).Y
                         <= Dialog.GridLinesCheck.TranslatePoint(new Point(), Dialog.UIPanel).Y,
                     "The localized directory tree and tab bar heading separates font sizes from UI options");

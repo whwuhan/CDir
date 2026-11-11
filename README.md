@@ -1,4 +1,4 @@
-# CDir
+﻿# CDir
 
 ## English
 
@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v2.2.21 interface preview](Docs/Images/CDirPreview.png)
+![CDir v2.2.25 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -40,7 +40,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - Expand or collapse Quick Access and the drive tree by clicking their headings; section state is saved. Directories load on demand and selection follows navigation. A single tree-folder click navigates immediately without expanding or waiting for a double-click interval. A double-click also expands or collapses that folder without duplicate loading or history entries. When the main panel gains focus, the tree and matching bookmark category synchronize to its current path. Navigation preserves selection and sidebar scroll position; arrows change expansion independently. Category headings do not connect to bookmark roots. Expanded root folders retain their full subtree indentation guides; child connectors and pinned rows use the actual child-tree guide columns. Right-click a drive or folder in the tree to expand or collapse all subfolders in that branch.
 - Drag sidebar category headings to reorder sections, including Quick Access and My Computer. A blue line marks the insertion point and order is saved. Right-click only blank sidebar space to create a category. Category context menus expand or collapse all contained folder branches while keeping the category open. Custom categories can also be renamed or deleted; built-in sections cannot.
 - Bookmark folders in Quick Access and custom categories can expand through multiple directory levels. Click a subfolder to open it or drag it to another custom category.
-- The address bar displays path segments with hover highlighting. Click a segment to navigate. Click blank space or press `Ctrl+L` / `Alt+D` to type or paste a path; `Enter` navigates and `Esc` cancels. Quoted paths, relative paths, environment variables such as `%USERPROFILE%`, `~`, and UNC shares are supported. A file path opens its containing folder and selects the file.
+- The address bar displays path segments with hover highlighting. Click a segment to navigate. Click blank space or press `Ctrl+L` / `Alt+D` to type or paste a path; `Enter` navigates and `Esc` cancels. Quoted paths, relative paths, environment variables such as `%LocalAppData%`, `%AppData%`, `%USERPROFILE%` (including subdirectories such as `%LocalAppData%\Temp`), `~`, and UNC shares are supported. A file path opens its containing folder and selects the file.
 - Long paths prioritize the current directory. The `…` menu provides access to any ancestor.
 - Copy the current path or selected item paths, and navigate back, forward, up, or refresh.
 - New folders and F2/single-item Rename use an inline filename editor. Enter confirms, Esc cancels naming, and files initially select their stem without the extension. Copy/move actions show native Windows progress and same-name replacement prompts with cancellation and refresh the destination before reporting completion.
@@ -78,7 +78,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - Quick Access, My Computer, and each custom category support independent horizontal scrolling. Use Shift+Wheel, a horizontal wheel, or the horizontal scrollbar to view full names, paths, and drive capacity. Bookmark roots and expanded descendants move together while category titles stay fixed; the ordinary wheel continues to scroll vertically.
 - The column dropdown ends with Show Hidden Files And Folders, synchronized with Preferences > General. Turning off file-list grid lines also removes separators beneath file rows.
 - Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enable it to fit every displayed column to its header and folder contents whenever a folder opens; background refreshes preserve manual widths.
-- Preferences > UI > Show Drive Usage In My Computer is unchecked by default; enable it for capacity text and percentages beside drives, with a usage bar below each drive aligned to the drive content row, excluding the expander gutter and outer padding. Drive root paths are not repeated beside drive names.
+- Preferences > UI > Show Drive Usage In My Computer is unchecked by default; enable it for capacity text, a fixed-width 64-DIP usage bar and percentages on the same row to the right of drive names. Drive root paths are not repeated beside drive names.
 - Preferences > UI > Show Folder Paths is off by default. Enable it for absolute paths beside every directory-tree folder, including expanded descendants and pinned parents; hover shows the full path immediately. Folder paths and drive capacity panels share an aligned right-hand column. Pinned parents are limited to expanded branches and category headers yield at the next section.
 - Drag pinned or ordinary tabs to reorder their own group. With the separate pinned row visible, drag across rows to pin or unpin at the drop position. The insertion marker shows the destination, row edges scroll during a drag, and both group orders are saved.
 - Pin or unpin the current tab with `Alt+W` (customizable in Preferences > Keyboard Shortcuts), or click the pin between its label and Close. Pinned tabs stay on the left in pin order; unpinning moves a tab to the front of the ordinary group. Preferences > UI > Show Pinned Tabs In A Separate Row is off by default and optionally places pinned tabs above the ordinary row. Pin state, order, and the row preference survive restart. Tab Close uses the same red hover and pressed colors as window Close.
@@ -262,7 +262,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v2.2.21 界面预览](Docs/Images/CDirPreview.png)
+![CDir v2.2.25 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -297,13 +297,13 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 用 `Alt+W` 置顶或取消置顶当前标签页（可在 Preferences > Keyboard Shortcuts 自定义），或点击名称与关闭按钮之间的图钉。置顶标签按置顶顺序排列在左侧，取消置顶后进入普通标签最左侧。Preferences > UI 的“在单独一行显示置顶标签页”默认不勾选，开启后将置顶标签放在普通标签上方；置顶状态、顺序和布局选项重启后保留。标签关闭按钮的悬停和按下颜色与窗口关闭按钮一致。
 - 列显示下拉菜单末尾的“显示隐藏文件/文件夹”与 Preferences → General 同步；关闭文件列表网格线时，文件条目下方的分割线也会隐藏。
 - Preferences → UI → “打开文件夹时自动适配列宽”默认关闭；开启后每次打开文件夹会根据表头和文件夹内容调整全部显示列，后台刷新保留手动列宽。
-- Preferences → UI → 显示“我的电脑”中的磁盘用量默认不勾选，开启后在右侧显示磁盘容量和百分比，在每个磁盘下方显示与上方盘符内容行左右对齐的用量条（避开展开箭头和外侧留白）；关闭时两者一起隐藏。磁盘名称旁不再重复根路径。
+- Preferences → UI → 显示“我的电脑”中的磁盘用量默认不勾选，开启后在盘符名称右侧同一行显示磁盘容量、固定 64 逻辑像素宽的用量条和百分比；关闭时一起隐藏。磁盘名称旁不再重复根路径。
 - Preferences → UI → 显示文件夹路径默认关闭；启用后在所有目录树文件夹（包括展开的子目录和置顶父目录）名称右侧显示绝对路径，悬停立即显示完整路径。路径与磁盘容量面板使用对齐的右侧列。父级置顶仅保留展开分支，分类标题在下一分类进入时退让。
 - 文件夹大小默认不计算。在“偏好设置 → General → 在后台计算文件夹大小”中勾选后，Size 列逐步显示包含隐藏文件在内的递归合计大小；取消勾选立即停止计算并清空文件夹合计，文件自身大小始终显示。统计任务串行、分批执行；切换目录或标签、隐藏 Size 列时取消未完成的统计。`—` 表示未知，`≥` 表示仅统计了部分内容；不会递归进入链接或联接目录。子目录内容变化后可按 `F5` 重新计算。
 - 左侧常用位置与驱动器目录树可分别点击标题展开、收起，并记住状态；目录按需加载，导航时同步所选位置。单击目录树中的文件夹立即导航，不展开，也不等待双击判定；双击同时展开或收起，同一目录不重复加载或增加历史记录。主面板获得焦点时，目录树及匹配的收藏分类同步回主面板当前路径。跳转时保留选中状态与侧栏滚动位置；箭头独立展开或收起。类别标题与收藏根目录之间不连线，展开后的根文件夹保留完整缩进线；连接子目录的短线及固定目录栏按实际子树坐标对齐。右键点击目录树中的盘符或文件夹，可展开或收起所有子文件夹，递归操作当前分支。
 - 拖动左侧类别标题可调整顺序，包括常用位置与目录树；蓝色提示线表示插入位置，顺序自动保存。仅在侧栏空白处右键可新增类别；类别标题右键可展开或收起其下所有文件夹分支，类别本身保持展开。自定义类别还支持重命名和删除。常用位置与目录树为内置分组，不允许删除或重命名。
 - 常用位置和自定义类别中的收藏文件夹可逐级展开子目录，点击子目录即可打开，也支持将子目录拖到其他自定义类别。
-- 地址栏按级显示路径，悬停高亮文件夹，点击直接跳转到对应目录；点击空白处或按 `Ctrl + L` / `Alt + D` 可输入、粘贴路径，`Enter` 跳转、`Esc` 取消编辑。支持带引号的路径、相对路径、`%USERPROFILE%` 等环境变量、`~` 和 UNC 共享路径；输入文件路径会打开其所在目录并选中文件。
+- 地址栏按级显示路径，悬停高亮文件夹，点击直接跳转到对应目录；点击空白处或按 `Ctrl + L` / `Alt + D` 可输入、粘贴路径，`Enter` 跳转、`Esc` 取消编辑。支持带引号的路径、相对路径、`%LocalAppData%`、`%AppData%`、`%USERPROFILE%` 等环境变量（可接子目录，如 `%LocalAppData%\Temp`）、`~` 和 UNC 共享路径；输入文件路径会打开其所在目录并选中文件。
 - 路径过长时优先显示当前目录，左侧 `…` 菜单可选择任意级目录。
 - 一键复制当前路径、复制选中项目路径，支持后退、前进、上一级与刷新。
 - 文件详细列表、列排序、多选、按名称递归搜索当前目录及子目录；使用 `/file` 仅显示文件、`/dir` 仅显示文件夹，例如 `report /file`、`/dir work`。隐藏项目在偏好设置中控制，项目数量和操作提示显示在底部状态栏；已选择数量独立显示，保留总数、文件夹数和文件数。

@@ -32,6 +32,7 @@ public partial class ExplorerTab
         {
             if (!Condition) throw new InvalidOperationException("Tree navigation UI smoke test failed: " + Name);
             Passed.Add(Name);
+            AppMain.RecordSmokeProgress("Tree navigation: " + Name);
         }
         async Task Settle()
         {
@@ -272,8 +273,18 @@ public partial class ExplorerTab
                 ActiveMenu.StaysOpen = true;
                 ActiveMenu.PlacementTarget = Item;
                 ActiveMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-                ActiveMenu.IsOpen = true;
-                await Settle();
+                // A language change can still be closing the reused popup on the
+                // current desktop. Let that transition finish before reopening it.
+                for (var Attempt = 0; Attempt < 3; Attempt++)
+                {
+                    ActiveMenu.IsOpen = true;
+                    await Settle();
+                    await Task.Delay(50);
+                    if (ActiveMenu.IsOpen && ActiveMenu.IsVisible) break;
+                    ActiveMenu.IsOpen = false;
+                    await Settle();
+                    await Task.Delay(50);
+                }
                 Check(ActiveMenu.IsOpen && ActiveMenu.IsVisible && ReferenceEquals(ActiveMenu.DataContext, Node)
                     && ActiveMenu.Items.OfType<MenuItem>().Select(Action => Action.Tag?.ToString())
                         .SequenceEqual(new[] { "ExpandAllSubfolders", "CollapseAllSubfolders", "NewFolder" })

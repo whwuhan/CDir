@@ -14,6 +14,7 @@ public partial class ExplorerTab
 {
     private async Task RunFontsSmokeChecksAsync(List<string> Passed)
     {
+        var InitialBold = this.Settings.BoldAllFonts;
         var InitialFonts = this.Settings.FontSizes is null ? null : new Dictionary<string, double>(this.Settings.FontSizes);
         var InitialPath = this.CurrentPath;
         var Fixture = Path.Combine(Path.GetTempPath(), "CDirFonts-" + Guid.NewGuid().ToString("N"));
@@ -87,9 +88,10 @@ public partial class ExplorerTab
             File.WriteAllText(SettingsFile, "{\"TitleBarFontRevision\":1,\"FontSizes\":{\"TitleBar\":20,\"Sidebar\":13}}");
             Check(ReadSettings(SettingsFile).FontSizes!["TitleBar"] == 20,
                 "Explicit title font choices after the compact-title upgrade survive loading");
+            File.WriteAllText(SettingsFile + ".bak", "{}");
             File.WriteAllText(SettingsFile, "null");
             Check(ReadSettings(SettingsFile).FontSizes!["TitleBar"] == 13,
-                "Null legacy settings continue to restore the compact defaults");
+                "A null primary settings file recovers compact defaults from its valid backup");
             Check(await this.NavigateAsync(Fixture), "Font fixture navigation");
             await Settle();
             var Row = (DataGridRow)this.FileGrid.ItemContainerGenerator.ContainerFromIndex(0);
@@ -148,10 +150,59 @@ public partial class ExplorerTab
             this.Settings.FontSizes = null;
             this.ApplyUIFonts();
             await this.RunGridLinesSmokeChecksAsync(Passed);
+            using (var Glyphs = new VirtualTerminal.Rendering.GlyphCache())
+            {
+                Glyphs.Configure("Consolas Bold", 15, 1.2, null);
+                Check(Glyphs.Primary.Weight == FontWeights.Bold, $"Terminal bold font resolves an actual bold glyph face: {Glyphs.Primary.Weight}");
+            }
+            Check(!JsonSerializer.Deserialize<AppSettings>("{}")!.BoldAllFonts && !DefaultSettings.Current.BoldAllFonts,
+                "New and legacy settings leave bold fonts disabled by default");
+            await this.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: async Dialog =>
+            {
+                Dialog.Categories.SelectedItem = Dialog.UICategory;
+                Check(Dialog.BoldAllFontsCheck.IsChecked == this.Settings.BoldAllFonts
+                    && Dialog.BoldAllFontsCheck.Content?.ToString() == CDir.Localization.LanguageService.Text("BoldAllFonts"),
+                    "The localized bold-font checkbox reflects saved state");
+                Dialog.BoldAllFontsCheck.IsChecked = true;
+                await Settle(); Dialog.UpdateLayout();
+                Check(Dialog.BoldAllFontsCheck.TranslatePoint(new Point(), Dialog.UIPanel).Y
+                    >= Dialog.FontSizePickers["Preferences"].TranslatePoint(new Point(0, Dialog.FontSizePickers["Preferences"].ActualHeight), Dialog.UIPanel).Y
+                    && Dialog.BoldAllFontsCheck.TranslatePoint(new Point(0, Dialog.BoldAllFontsCheck.ActualHeight), Dialog.UIPanel).Y
+                    <= Dialog.DirectoryTreeAndTabBarHeading.TranslatePoint(new Point(), Dialog.UIPanel).Y,
+                    "Bold fonts appears below the font sizes and above display options");
+                Check(this.Settings.BoldAllFonts && this.FileGrid.FontWeight == FontWeights.Bold
+                    && this.AddressBox.FontWeight == FontWeights.Bold && this.SearchBox.FontWeight == FontWeights.Bold
+                    && this.StatusText.FontWeight == FontWeights.Bold && this.HostWindow.TitleBrand.FontWeight == FontWeights.Bold
+                    && this.HostWindow.TitleVersion.FontWeight == FontWeights.Bold && TabCaption().FontWeight == FontWeights.Bold
+                    && this.HostWindow.PreferencesMenuItem.FontWeight == FontWeights.Bold,
+                    $"Live weights: grid={this.FileGrid.FontWeight}, address={this.AddressBox.FontWeight}, search={this.SearchBox.FontWeight}, status={this.StatusText.FontWeight}, brand={this.HostWindow.TitleBrand.FontWeight}, version={this.HostWindow.TitleVersion.FontWeight}, tab={TabCaption().FontWeight}, menu={this.HostWindow.PreferencesMenuItem.FontWeight}");
+                Check(Children<TextBlock>(Dialog).Where(Text => Text.IsVisible && Text.Text.Length > 0).All(Text => Text.FontWeight == FontWeights.Bold)
+                    && Children<TextBlock>(this.FileGrid).Where(Text => Text.IsVisible && Text.Text.Length > 0).All(Text => Text.FontWeight == FontWeights.Bold),
+                    "Preferences headings labels dropdowns and file cells all render in bold");
+                Check(this.SaveSettings(SettingsFile) && ReadSettings(SettingsFile).BoldAllFonts,
+                    "Bold fonts survives settings serialization and loading");
+                if (AppMain.ScreenshotPath is { } Output)
+                {
+                    var Bitmap = new RenderTargetBitmap((int)Dialog.ActualWidth, (int)Dialog.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    Bitmap.Render(Dialog);
+                    var Encoder = new PngBitmapEncoder(); Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
+                    using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(Output)!, "PreferencesBold.png")); Encoder.Save(Stream);
+                }
+                Dialog.BoldAllFontsCheck.IsChecked = false;
+                await Settle();
+                Check(!this.Settings.BoldAllFonts && this.FileGrid.FontWeight == FontWeights.Normal
+                    && this.AddressBox.FontWeight == FontWeights.Normal && TabCaption().FontWeight == FontWeights.Normal
+                    && Dialog.DirectoryTreeAndTabBarHeading.FontWeight == FontWeights.SemiBold
+                    && this.HostWindow.PreferencesMenuItem.FontWeight == FontWeights.Normal
+                    && this.SaveSettings(SettingsFile) && !ReadSettings(SettingsFile).BoldAllFonts,
+                    "Disabling bold restores normal text and original heading emphasis and saves immediately");
+            });
+            await this.RunSharedUIPreferencesSmokeChecksAsync(Passed);
         }
         finally
         {
             this.SearchBox.Clear();
+            this.Settings.BoldAllFonts = InitialBold;
             this.Settings.FontSizes = InitialFonts;
             this.ApplyUIFonts();
             await this.NavigateAsync(InitialPath);

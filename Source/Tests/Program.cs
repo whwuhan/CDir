@@ -382,6 +382,34 @@ internal sealed partial class RegressionRunner
 
     private void RunAddressSegmentChecks()
     {
+        this.Test("Address variables expand standard Windows names without accessing their directories", () =>
+        {
+            foreach (var Name in new[] { "LocalAppData", "AppData", "UserProfile", "Temp" })
+            {
+                var Value = Environment.GetEnvironmentVariable(Name);
+                Check(!string.IsNullOrWhiteSpace(Value), "Expected a standard Windows environment variable: " + Name);
+                EqualPath(Value!, this.Service.NormalizePath("%" + Name + "%", this.Root));
+                EqualPath(System.IO.Path.Combine(Value!, "CDir owned path model"),
+                    this.Service.NormalizePath("%" + Name.ToUpperInvariant() + @"%\CDir owned path model", this.Root));
+            }
+        });
+        this.Test("Address variables support quoted Unicode subdirectories and case-insensitive names", () =>
+        {
+            var Name = "CDirAddress" + Guid.NewGuid().ToString("N");
+            Environment.SetEnvironmentVariable(Name, this.Root);
+            try
+            {
+                var Expected = System.IO.Path.Combine(this.Root, "子目录 With Spaces");
+                EqualPath(Expected, this.Service.NormalizePath("\"%" + Name.ToLowerInvariant() + "%\\子目录 With Spaces\"", this.Root));
+                EqualPath(this.Root, this.Service.NormalizePath("%" + Name + @"%\子目录 With Spaces\..", this.Root));
+            }
+            finally { Environment.SetEnvironmentVariable(Name, null); }
+        });
+        this.Test("Unresolved address variables remain literal and do not silently jump elsewhere", () =>
+        {
+            var Raw = "%CDirMissing" + Guid.NewGuid().ToString("N") + "%";
+            EqualPath(System.IO.Path.Combine(this.Root, Raw), this.Service.NormalizePath(Raw, this.Root));
+        });
         this.Test("Address segments preserve drive roots Unicode spaces and exact ancestor destinations", () =>
         {
             var Segments = AddressSegment.Create(@"C:\路径 带空格\Child");

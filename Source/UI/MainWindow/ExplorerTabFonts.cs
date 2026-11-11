@@ -31,6 +31,8 @@ public partial class ExplorerTab
 
     private void ApplyUIFonts()
     {
+        SetSharedResource("UIFontWeight", this.Settings.BoldAllFonts ? FontWeights.Bold : FontWeights.Normal);
+        SetSharedResource("UIHeadingFontWeight", this.Settings.BoldAllFonts ? FontWeights.Bold : FontWeights.SemiBold);
         var Values = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var Panel in FontPanels)
         {
@@ -71,13 +73,23 @@ public partial class ExplorerTab
         ApplyMenuFont(this.FileGrid?.ContextMenu);
         if (this.AddressDisplay is not null) this.QueueAddressLayout();
         if (this.FileTiles is not null && !this.IsDetailsView) this.ApplyFileView();
+        this.ApplyTerminalFontWeight();
     }
 
     private static void ApplyMenuFont(ItemsControl? Menu)
     {
         if (Menu is null) return;
         Menu.SetResourceReference(Control.FontSizeProperty, "UIFontMenus");
+        Menu.SetResourceReference(Control.FontWeightProperty, "UIFontWeight");
         foreach (var Item in Menu.Items.OfType<MenuItem>()) ApplyMenuFont(Item);
+    }
+
+    private void ChangeBoldAllFonts(bool Bold)
+    {
+        if (this.WindowClosed) return;
+        this.Settings.BoldAllFonts = Bold;
+        this.ApplyUIFonts();
+        if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
     private bool ChangeUIFontSize(string Key, double Size)

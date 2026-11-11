@@ -1,4 +1,5 @@
 {
+  "BoldAllFonts": "Bold All Fonts",
   "DistributePanesEvenly": "Distribute Panes Evenly",
   "AutoFitColumns": "Size All Columns To Fit",
   "ResetScopeQuestion": "Choose which preferences to restore. Changes apply and save immediately.",
@@ -10,7 +11,7 @@
   "ToggleTabPin": "Toggle Tab Pin",
   "SeparatePinnedTabs": "Show Pinned Tabs In A Separate Row",
   "ShowSidebarDriveUsage": "Show Drive Usage In My Computer",
-  "ShowSidebarDriveUsageTooltip": "Show used and total space and percentages beside drives, with a full-width usage bar below each drive.",
+  "ShowSidebarDriveUsageTooltip": "Show used and total space, a fixed-width usage bar and percentages to the right of drive names.",
   "AutoFitColumnsOnNavigation": "Auto Fit Columns When Opening Folders",
   "AutoFitColumnsOnNavigationTooltip": "Automatically size every visible column to fit its header and folder contents when opening a folder.",
   "ShowBookmarkPaths": "Show Folder Paths",
@@ -83,7 +84,7 @@
   "AddressAncestors": "Choose a folder in this path",
   "AddressEdit": "Double-click the path or a folder name, click empty space, or press Ctrl + L / Alt + D to edit the path",
   "AddressDrag": "Drag this folder or a path segment into a category to add a shortcut without changing the current path",
-  "AddressTooltip": "Enter or paste a path, then press Enter · Esc cancels editing",
+  "AddressTooltip": "Enter or paste a path or an environment variable such as %LOCALAPPDATA%, then press Enter · Esc cancels editing",
   "AppErrorTitle": "CDir · Unable To Complete The Operation",
   "Back": "Back",
   "BackTooltip": "Back (Alt + ←)",
