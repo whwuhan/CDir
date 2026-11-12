@@ -28,7 +28,7 @@ public partial class ExplorerTab
         var InitialTreeExpanded = this.DirectoryTreeSection.IsExpanded;
         var InitialScroll = this.SidebarScroll.VerticalOffset;
         var FixtureId = Guid.NewGuid().ToString("N");
-        var Fixture = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CDirVcsUI" + FixtureId);
+        var Fixture = System.IO.Path.Combine(AppMain.SmokeRoot!, "CDirVcsUI" + FixtureId);
         Directory.CreateDirectory(Fixture);
         var Marker = System.IO.Path.Combine(Fixture, ".CDirVcsOwner");
         File.WriteAllText(Marker, FixtureId);
@@ -79,6 +79,9 @@ public partial class ExplorerTab
             await Git(GitPath, "-c", "init.templateDir=", "init", "-q"); await Git(GitPath, "add", "."); await Git(GitPath, "commit", "-qm", "Initial fixture");
             File.AppendAllText(System.IO.Path.Combine(GitPath, "Modified.txt"), "change\n");
             if (!await this.NavigateAsync(GitPath)) throw new InvalidOperationException("Cannot open Git UI fixture");
+            Check(this.FavoritesList.Items.Cast<FavoriteLocation>().Any(Favorite => Favorite.IsVirtual)
+                && this.VisibleVersionNodes().All(Node => !ShellLocations.IsVirtual(Node.FullPath) && AppMain.IsInsideSmokeScope(Node.FullPath)),
+                "Virtual quick-access locations stay visible without entering filesystem version-control queries");
             await WaitUntil(() => Entry("Clean.txt").VersionStatus.State == VersionState.Clean && Entry("Modified.txt").VersionStatus.State == VersionState.Modified);
             Check(TreeNode(GitPath).VersionStatus is { State: VersionState.Modified, ContainsChanges: true }
                 && Entry("Child").VersionStatus.State == VersionState.Clean,
@@ -334,7 +337,7 @@ public partial class ExplorerTab
             {
                 this.VersionWatchers[Path].Dispose(); this.VersionWatchers.Remove(Path);
             }
-            var TempRoot = System.IO.Path.GetFullPath(System.IO.Path.GetTempPath()).TrimEnd('\\') + "\\";
+            var TempRoot = System.IO.Path.GetFullPath(AppMain.SmokeRoot!).TrimEnd('\\') + "\\";
             if (!System.IO.Path.GetFullPath(Fixture).StartsWith(TempRoot, StringComparison.OrdinalIgnoreCase)
                 || System.IO.Path.GetFileName(Fixture) != "CDirVcsUI" + FixtureId || File.ReadAllText(Marker) != FixtureId
                 || (File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Unsafe VCS test cleanup path");

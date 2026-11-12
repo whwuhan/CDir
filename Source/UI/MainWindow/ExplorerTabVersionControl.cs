@@ -91,7 +91,8 @@ public partial class ExplorerTab
                         _ => null
                     };
                     var Top = Icon.TranslatePoint(new Point(), this.SidebarScroll).Y;
-                    if (Node is { IsPlaceholder: false } && Top + Icon.ActualHeight > 0 && Top < this.SidebarScroll.ViewportHeight)
+                    if (Node is { IsPlaceholder: false } && !ShellLocations.IsVirtual(Node.FullPath)
+                        && Top + Icon.ActualHeight > 0 && Top < this.SidebarScroll.ViewportHeight)
                         yield return Node;
                 }
                 else foreach (var Node in Visit(Child)) yield return Node;

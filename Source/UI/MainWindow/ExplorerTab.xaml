@@ -5,16 +5,27 @@
       <ResourceDictionary Source="/CDir;component/Resource/CategoryFolderIcons.xaml" />
     </ResourceDictionary.MergedDictionaries>
     <Style x:Key="ColumnToggleMenuItem" TargetType="MenuItem">
+      <Setter Property="Foreground" Value="{StaticResource Ink}" />
       <Setter Property="Padding" Value="8,3" />
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem">
         <Border x:Name="MenuSurface" Background="Transparent" Padding="{TemplateBinding Padding}">
           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
             <TextBlock x:Name="CheckMark" Grid.Column="1" Text="√" Margin="12,0,0,0" Visibility="Hidden" VerticalAlignment="Center" />
+            <TextBlock x:Name="SubmenuArrow" Grid.Column="1" Text="›" Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center" />
+            <Popup x:Name="PART_Popup" Placement="Right" PlacementTarget="{Binding ElementName=MenuSurface}"
+                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" AllowsTransparency="True" Focusable="False">
+              <Border Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="2">
+                <ScrollViewer CanContentScroll="True" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                  <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Cycle" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
           </Grid>
         </Border>
         <ControlTemplate.Triggers>
           <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckMark" Property="Visibility" Value="Visible" /></Trigger>
+          <Trigger Property="HasItems" Value="True"><Setter TargetName="CheckMark" Property="Visibility" Value="Collapsed" /><Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" /></Trigger>
           <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="MenuSurface" Property="Background" Value="{StaticResource FocusHint}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger>
           <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45" /></Trigger>
         </ControlTemplate.Triggers>
@@ -454,7 +465,7 @@
               <Border Grid.ColumnSpan="4" Margin="-1" BorderBrush="{StaticResource FocusOutline}" BorderThickness="2" CornerRadius="0" IsHitTestVisible="False" Visibility="{Binding Visibility, ElementName=AddressBox}" />
             </Grid>
           </Border>
-          <Button x:Name="ColumnMenuButton" Grid.Column="5" Style="{StaticResource CompactNavigationButton}" Width="{DynamicResource UINavigationControlHeight}" Height="{DynamicResource UINavigationControlHeight}" VerticalAlignment="Center" ToolTip="{DynamicResource TextVisibleColumns}" AutomationProperties.Name="{DynamicResource TextVisibleColumns}" Click="ColumnMenuClick">
+          <Button x:Name="ColumnMenuButton" Grid.Column="5" Style="{StaticResource CompactNavigationButton}" Width="{DynamicResource UINavigationControlHeight}" Height="{DynamicResource UINavigationControlHeight}" VerticalAlignment="Center" ToolTip="{DynamicResource TextViewOptions}" AutomationProperties.Name="{DynamicResource TextViewOptions}" Click="ColumnMenuClick">
             <Path Width="12" Height="7" Data="M 1,1 L 6,6 L 11,1" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
           </Button>
           <Border x:Name="SearchContainer" Grid.Column="3" Height="{DynamicResource UINavigationControlHeight}" VerticalAlignment="Center" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="0" ToolTip="{DynamicResource TextSearchHint}">
@@ -709,8 +720,18 @@
         <Grid x:Name="MainPanelContent" Background="Transparent" AllowDrop="True" PreviewMouseWheel="MainPanelViewMouseWheel" MouseLeave="MainPanelViewMouseLeave" PreviewDragEnter="FileTransferDragOver" PreviewDragOver="FileTransferDragOver" PreviewDragLeave="FileTransferDragLeave" PreviewDrop="FileTransferDrop">
           <Grid>
             <DataGrid x:Name="FileGrid" UseLayoutRounding="True" SnapsToDevicePixels="True" ContextMenuOpening="FileContextOpening" FontSize="{DynamicResource UIFontFileList}" RowHeight="{DynamicResource UIFileRowHeight}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="True" ColumnReordered="FileGridColumnReordered" CanUserResizeRows="False" SelectionMode="Extended" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None" RowHeaderWidth="0" Background="{StaticResource SurfaceInner}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalGridLinesBrush="{StaticResource Line}" EnableRowVirtualization="True" EnableColumnVirtualization="True" ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto" MouseDoubleClick="FileGridMouseDoubleClick" SelectionChanged="FileGridSelectionChanged" Sorting="FileGridSorting" PreviewMouseRightButtonDown="FileGridRightClick" PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
+                      VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.VirtualizationMode="Recycling"
                       IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" PreviewKeyDown="FileGridPreviewKeyDown" LostMouseCapture="FileGridLostMouseCapture">
               <DataGrid.ItemsPanel><ItemsPanelTemplate><controls:FileListRowsPresenter /></ItemsPanelTemplate></DataGrid.ItemsPanel>
+              <DataGrid.GroupStyle><GroupStyle>
+                <GroupStyle.ContainerStyle><Style TargetType="GroupItem">
+                  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="GroupItem">
+                    <StackPanel><ContentPresenter x:Name="PART_Header" /><ItemsPresenter x:Name="ItemsPresenter" /></StackPanel>
+                  </ControlTemplate></Setter.Value></Setter>
+                </Style></GroupStyle.ContainerStyle>
+                <GroupStyle.HeaderTemplate><DataTemplate>
+                <TextBlock Margin="8,6" FontWeight="{DynamicResource UIHeadingFontWeight}"><TextBlock.Text><MultiBinding StringFormat="{}{0} ({1})"><Binding Path="Name" /><Binding Path="ItemCount" /></MultiBinding></TextBlock.Text></TextBlock>
+              </DataTemplate></GroupStyle.HeaderTemplate></GroupStyle></DataGrid.GroupStyle>
               <DataGrid.Style><Style TargetType="DataGrid">
                 <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Visible" />
                 <Style.Triggers><Trigger Property="HasItems" Value="False"><Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" /></Trigger></Style.Triggers>
@@ -737,7 +758,10 @@
                 ContextMenuOpening="FileContextOpening" MouseDoubleClick="FileGridMouseDoubleClick" PreviewMouseRightButtonDown="FileGridRightClick"
                 PreviewMouseLeftButtonDown="FileGridDragMouseDown" PreviewMouseMove="FileGridDragMouseMove" PreviewMouseLeftButtonUp="FileGridDragMouseUp"
                 IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" LostMouseCapture="FileGridLostMouseCapture">
-              <ListBox.ItemsPanel><ItemsPanelTemplate><controls:FileTilePanel /></ItemsPanelTemplate></ListBox.ItemsPanel>
+              <ListBox.ItemsPanel><ItemsPanelTemplate><controls:FileTilePanel
+                  CellWidth="{DynamicResource FileViewCellWidth}" CellHeight="{DynamicResource FileViewCellHeight}"
+                  Grouped="{DynamicResource FileViewGrouped}" FillDown="{DynamicResource FileViewFillDown}"
+                  FullWidth="{DynamicResource FileViewFullWidth}" /></ItemsPanelTemplate></ListBox.ItemsPanel>
               <ListBox.ContextMenu><ContextMenu /></ListBox.ContextMenu>
               <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
                 <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />

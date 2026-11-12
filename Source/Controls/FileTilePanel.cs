@@ -12,7 +12,13 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
 {
     public static readonly DependencyProperty GroupedProperty = DependencyProperty.Register(nameof(Grouped), typeof(bool), typeof(FileTilePanel), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsMeasure));
     public bool Grouped { get => (bool)GetValue(GroupedProperty); set => SetValue(GroupedProperty, value); }
-    private Rect[] GroupBounds = [];
+    private sealed record ItemGroup(string Label, int Start, int Count)
+    {
+        public double Top { get; set; }
+        public double Bottom { get; set; }
+    }
+    private readonly List<ItemGroup> ItemGroups = [];
+    private bool GroupsDirty = true;
     private readonly List<(string Label, double Top)> GroupHeaders = [];
     public static readonly DependencyProperty CellWidthProperty = DependencyProperty.Register(nameof(CellWidth), typeof(double), typeof(FileTilePanel), new FrameworkPropertyMetadata(112d, FrameworkPropertyMetadataOptions.AffectsMeasure));
     public double CellWidth { get => (double)GetValue(CellWidthProperty); set => SetValue(CellWidthProperty, value); }
@@ -25,10 +31,27 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
     private int Across = 1;
     private int Down = 1;
     private int Count;
-    public Rect ItemBounds(int Index) => this.Grouped && Index >= 0 && Index < this.GroupBounds.Length ? this.GroupBounds[Index] : new(
-        (FillDown ? Index / Down : Index % Across) * this.ActualCellWidth,
-        (FillDown ? Index % Down : Index / Across) * CellHeight,
-        this.ActualCellWidth, CellHeight);
+    private int ResizeAnchor = -1;
+    public void RevealAfterResize(int Index) { this.ResizeAnchor = Index; InvalidateMeasure(); }
+    public Rect ItemBounds(int Index)
+    {
+        if (this.Grouped && Index >= 0 && Index < Count)
+        {
+            var Low = 0;
+            var High = this.ItemGroups.Count - 1;
+            while (Low <= High)
+            {
+                var Middle = Low + (High - Low) / 2;
+                var Group = this.ItemGroups[Middle];
+                if (Index < Group.Start) High = Middle - 1;
+                else if (Index >= Group.Start + Group.Count) Low = Middle + 1;
+                else return new Rect((Index - Group.Start) % Across * ActualCellWidth,
+                    Group.Top + (Index - Group.Start) / Across * CellHeight, ActualCellWidth, CellHeight);
+            }
+        }
+        return new Rect((FillDown ? Index / Down : Index % Across) * this.ActualCellWidth,
+            (FillDown ? Index % Down : Index / Across) * CellHeight, this.ActualCellWidth, CellHeight);
+    }
     private double ActualCellWidth => FullWidth ? Math.Max(1, ViewportWidth) : CellWidth;
 
     protected override Size MeasureOverride(Size Available)
@@ -37,6 +60,7 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
         if (Owner is null) return new();
         ViewportWidth = double.IsFinite(Available.Width) ? Available.Width : 800;
         ViewportHeight = double.IsFinite(Available.Height) ? Available.Height : 600;
+        if (Count != Owner.Items.Count) this.GroupsDirty = true;
         Count = Owner.Items.Count;
         Across = FullWidth ? 1 : Math.Max(1, (int)(ViewportWidth / CellWidth));
         Down = Math.Max(1, (int)(ViewportHeight / CellHeight));
@@ -45,24 +69,44 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
         this.GroupHeaders.Clear();
         if (this.Grouped)
         {
-            this.GroupBounds = new Rect[Count];
+            // Membership changes with the collection, not with zoom or scrolling.
+            // Keep one range per group instead of allocating a rectangle per file.
+            if (this.GroupsDirty)
+            {
+                this.ItemGroups.Clear();
+                for (var Start = 0; Start < Count;)
+                {
+                    var Label = (Owner.Items[Start] as FileEntry)?.ViewGroup ?? "";
+                    var End = Start + 1;
+                    while (End < Count && (Owner.Items[End] as FileEntry)?.ViewGroup == Label) End++;
+                    this.ItemGroups.Add(new ItemGroup(Label, Start, End - Start));
+                    Start = End;
+                }
+                this.GroupsDirty = false;
+            }
             var Top = 0d;
             var HeaderHeight = Math.Max(28, (Owner as Control)?.FontSize + 12 ?? 28);
-            for (var Start = 0; Start < Count;)
+            foreach (var Group in this.ItemGroups)
             {
-                var Label = (Owner.Items[Start] as FileEntry)?.ViewGroup ?? "";
-                var End = Start + 1;
-                while (End < Count && (Owner.Items[End] as FileEntry)?.ViewGroup == Label) End++;
-                this.GroupHeaders.Add(($"{Label} ({End - Start})", Top)); Top += HeaderHeight;
-                for (var Index = Start; Index < End; Index++)
-                    this.GroupBounds[Index] = new Rect((Index - Start) % Across * ActualCellWidth, Top + (Index - Start) / Across * CellHeight, ActualCellWidth, CellHeight);
-                Top += Math.Ceiling((double)(End - Start) / Across) * CellHeight;
-                Start = End;
+                this.GroupHeaders.Add(($"{Group.Label} ({Group.Count})", Top)); Top += HeaderHeight;
+                Group.Top = Top;
+                Top += Math.Ceiling((double)Group.Count / Across) * CellHeight;
+                Group.Bottom = Top;
             }
             ExtentWidth = ViewportWidth;
             ExtentHeight = Top;
             InvalidateVisual();
         }
+        // Resolve the zoom anchor using the new geometry before realizing items.
+        // Otherwise a deep folder first realizes the old offset, discards those
+        // controls, then realizes the anchor in a second synchronous layout.
+        if (this.ResizeAnchor >= 0 && this.ResizeAnchor < Count)
+        {
+            var Bounds = this.ItemBounds(this.ResizeAnchor);
+            HorizontalOffset = Math.Max(Bounds.Right - ViewportWidth, Math.Min(HorizontalOffset, Bounds.Left));
+            VerticalOffset = Math.Max(Bounds.Bottom - ViewportHeight, Math.Min(VerticalOffset, Bounds.Top));
+        }
+        this.ResizeAnchor = -1;
         HorizontalOffset = Math.Clamp(HorizontalOffset, 0, Math.Max(0, ExtentWidth - ViewportWidth));
         VerticalOffset = Math.Clamp(VerticalOffset, 0, Math.Max(0, ExtentHeight - ViewportHeight));
         ScrollOwner?.InvalidateScrollInfo();
@@ -72,9 +116,17 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
             : ((int)Math.Ceiling((VerticalOffset + ViewportHeight) / CellHeight) + 1) * Across - 1);
         if (this.Grouped)
         {
-            First = Array.FindIndex(this.GroupBounds, Bounds => Bounds.Bottom >= VerticalOffset);
-            if (First < 0) First = Count;
-            Last = Array.FindLastIndex(this.GroupBounds, Bounds => Bounds.Top <= VerticalOffset + ViewportHeight + CellHeight);
+            First = Count;
+            Last = -1;
+            foreach (var Group in this.ItemGroups)
+            {
+                if (Group.Bottom < VerticalOffset) continue;
+                if (Group.Top > VerticalOffset + ViewportHeight + CellHeight) break;
+                var FirstRow = Math.Max(0, (int)Math.Ceiling((VerticalOffset - Group.Top) / CellHeight) - 1);
+                var LastRow = (int)Math.Floor((VerticalOffset + ViewportHeight + CellHeight - Group.Top) / CellHeight);
+                First = Math.Min(First, Group.Start + FirstRow * Across);
+                Last = Math.Min(Group.Start + Group.Count - 1, Group.Start + (LastRow + 1) * Across - 1);
+            }
         }
         // Accessing InternalChildren connects the panel to its items generator.
         _ = this.InternalChildren;
@@ -132,6 +184,8 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
     }
     protected override void OnItemsChanged(object Sender, ItemsChangedEventArgs Args)
     {
+        this.GroupsDirty = true;
+        this.ResizeAnchor = -1;
         // Collection-view refreshes can invalidate all previously generated positions.
         if (Args.Action is System.Collections.Specialized.NotifyCollectionChangedAction.Remove
             or System.Collections.Specialized.NotifyCollectionChangedAction.Replace

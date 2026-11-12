@@ -377,6 +377,8 @@
   "FolderViewsReset": "已将此文件夹及全部子文件夹重置为详细信息视图。",
   "ViewMenu": "查看(&V)",
   "SortBy": "排序方式(&O)",
+  "GroupByDropdown": "分组依据",
+  "ViewOptions": "视图选项",
   "GroupBy": "分组依据(&P)",
   "Ascending": "递增(A)",
   "Descending": "递减(D)",

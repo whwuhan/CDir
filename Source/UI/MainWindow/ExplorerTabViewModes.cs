@@ -12,8 +12,6 @@ public partial class ExplorerTab
 {
     private bool SyncingFileViews;
     private FileViewMode? AppliedFileView;
-    private double AppliedFileViewFont;
-    private int AppliedFileViewIconSize;
     private int FileViewWheelRemainder;
     private string FileViewWheelFolder = "";
     private long FileViewWheelTime;
@@ -68,10 +66,14 @@ public partial class ExplorerTab
         if ((Mode, Size) == Previous) return;
         var Anchor = this.FileItemContainer(E.OriginalSource as DependencyObject)?.DataContext as FileEntry
             ?? this.FileGrid.CurrentItem as FileEntry ?? this.FileGrid.SelectedItem as FileEntry;
+        var AnchorIndex = Anchor is null ? -1 : this.ActiveFileItems.Items.IndexOf(Anchor);
+        var Panel = !this.IsDetailsView && Mode != FileViewMode.Details && AnchorIndex >= 0
+            ? FindVisualChild<FileTilePanel>(this.FileTiles) : null;
+        Panel?.RevealAfterResize(AnchorIndex);
         var Remainder = this.FileViewWheelRemainder;
         this.ChangeFileView(Mode, FileViewZoom.IsIconView(Mode) ? Size : 0, FocusPanel: false, SaveImmediately: false);
         this.FileViewWheelRemainder = Remainder;
-        if (Anchor is not null && this.ActiveFileItems.Items.Contains(Anchor)) this.RevealFile(Anchor);
+        if (Panel is null && Anchor is not null && this.ActiveFileItems.Items.Contains(Anchor)) this.RevealFile(Anchor);
     }
     private bool IsDetailsView => this.Settings.FileView == FileViewMode.Details;
     private Control ActiveFileControl => this.IsDetailsView ? this.FileGrid : this.FileTiles;
@@ -124,36 +126,40 @@ public partial class ExplorerTab
         var Mode = this.Settings.FileView;
         var IconSize = FileViewZoom.IsIconView(Mode) && this.Settings.FileViewIconSize is >= 16 and <= 256
             ? this.Settings.FileViewIconSize : FileViewZoom.DefaultSize(Mode);
-        this.Resources["FileViewNameHeight"] = this.FileGrid.FontSize * 2.8;
-        this.Resources["FileViewIconSize"] = (double)IconSize;
-        this.Resources["FileViewIconPixels"] = IconSize;
+        void SetResource(string Key, object Value) { if (!Equals(this.Resources[Key], Value)) this.Resources[Key] = Value; }
+        SetResource("FileViewNameHeight", this.FileGrid.FontSize * 2.8);
+        SetResource("FileViewIconSize", (double)IconSize);
+        SetResource("FileViewIconPixels", IconSize);
         this.FileGrid.Visibility = this.IsDetailsView ? Visibility.Visible : Visibility.Collapsed;
         this.FileTiles.Visibility = this.IsDetailsView ? Visibility.Collapsed : Visibility.Visible;
         this.ApplyGridLines();
-        if (!this.IsDetailsView && (this.AppliedFileView != Mode || this.AppliedFileViewFont != this.FileGrid.FontSize || this.AppliedFileViewIconSize != IconSize))
+        if (!this.IsDetailsView)
         {
             var Compact = Mode is FileViewMode.SmallIcons or FileViewMode.List;
             this.FileTiles.ItemTemplate = (DataTemplate)this.FindResource(Compact ? "CompactFileTemplate"
                 : Mode == FileViewMode.Tiles ? "TileFileTemplate" : Mode == FileViewMode.Content ? "ContentFileTemplate" : "IconFileTemplate");
-            var Panel = new FrameworkElementFactory(typeof(FileTilePanel));
             var Font = this.FileGrid.FontSize;
-            Panel.SetValue(FileTilePanel.CellWidthProperty, Compact ? 240d : Mode is FileViewMode.Tiles or FileViewMode.Content ? 300d : IconSize + 48d);
-            Panel.SetValue(FileTilePanel.CellHeightProperty, Compact ? Math.Max(IconSize + 4, Math.Max(28, Font + 10)) : Mode == FileViewMode.Content ? Math.Max(88, Font * 4 + 16)
+            // Resize the existing virtualized panel. Replacing ItemsPanel discards
+            // every visible container, thumbnail request and scroll position.
+            SetResource("FileViewCellWidth", Compact ? 240d : Mode is FileViewMode.Tiles or FileViewMode.Content ? 300d : IconSize + 48d);
+            SetResource("FileViewCellHeight", Compact ? Math.Max(IconSize + 4, Math.Max(28, Font + 10)) : Mode == FileViewMode.Content ? Math.Max(88, Font * 4 + 16)
                 : Mode == FileViewMode.Tiles ? Math.Max(72, Font * 3 + 16) : IconSize + Font * 2.8 + 20);
-            Panel.SetValue(FileTilePanel.GroupedProperty, !this.IsComputer && this.FileGroupProperty.Length > 0);
-            Panel.SetValue(FileTilePanel.FillDownProperty, Mode == FileViewMode.List);
-            Panel.SetValue(FileTilePanel.FullWidthProperty, Mode == FileViewMode.Content);
-            this.FileTiles.ItemsPanel = new ItemsPanelTemplate(Panel);
-            this.SyncTileSelection();
+            SetResource("FileViewGrouped", !this.IsComputer && this.FileGroupProperty.Length > 0);
+            SetResource("FileViewFillDown", Mode == FileViewMode.List);
+            SetResource("FileViewFullWidth", Mode == FileViewMode.Content);
+            if (this.AppliedFileView is null or FileViewMode.Details) this.SyncTileSelection();
         }
-        if (this.View is not null && (this.FileGroupProperty.Length > 0 || this.View.GroupDescriptions.Count > 0)) this.ApplySort();
+        // Only Details uses WPF group descriptions. Icon-size and tile-layout
+        // changes keep the existing sorted view and its selection intact.
+        if (this.View is not null && this.AppliedFileView != Mode
+            && (this.AppliedFileView is null || this.AppliedFileView == FileViewMode.Details || this.IsDetailsView)
+            && (this.FileGroupProperty.Length > 0 || this.View.GroupDescriptions.Count > 0)) this.ApplySort();
         this.AppliedFileView = Mode;
-        this.AppliedFileViewFont = this.FileGrid.FontSize;
-        this.AppliedFileViewIconSize = IconSize;
         this.UpdateFileViewMenu();
     }
     private void UpdateFileViewMenu()
     {
+        this.UpdateGroupingMenu();
         if (this.ColumnMenuButton.ContextMenu is not { } Menu) return;
         foreach (var Item in Menu.Items.OfType<MenuItem>())
         {
@@ -163,19 +169,20 @@ public partial class ExplorerTab
     }
     private void SyncTileSelection()
     {
-        if (this.SyncingFileViews || this.FileTiles is null) return;
+        if (this.RefreshingFileLayout || this.SyncingFileViews || this.FileTiles is null) return;
         this.SyncingFileViews = true;
         try
         {
             var Selection = this.SelectedEntries().ToHashSet();
+            var TileSelection = this.FileTiles.SelectedItems.Cast<FileEntry>().ToHashSet();
             foreach (var Old in this.FileTiles.SelectedItems.Cast<FileEntry>().Where(Entry => !Selection.Contains(Entry)).ToArray()) this.FileTiles.SelectedItems.Remove(Old);
-            foreach (var Entry in Selection.Where(Entry => !this.FileTiles.SelectedItems.Contains(Entry))) this.FileTiles.SelectedItems.Add(Entry);
+            foreach (var Entry in Selection.Where(Entry => !TileSelection.Contains(Entry))) this.FileTiles.SelectedItems.Add(Entry);
         }
         finally { this.SyncingFileViews = false; }
     }
     private void FileTilesSelectionChanged(object Sender, SelectionChangedEventArgs E)
     {
-        if (this.SyncingFileViews || this.IsDetailsView) return;
+        if (this.RefreshingFileLayout || this.SyncingFileViews || this.IsDetailsView) return;
         this.SyncingFileViews = true;
         try
         {

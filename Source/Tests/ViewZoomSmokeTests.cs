@@ -1,8 +1,11 @@
 using System.IO;
+using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using CDir.Controls;
 using CDir.Models;
@@ -13,6 +16,7 @@ public partial class ExplorerTab
 {
     private async Task RunViewZoomSmokeAsync(List<string> Passed)
     {
+        await this.RunVersionBadgeScaleSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
         {
             if (!Condition) throw new InvalidOperationException("View zoom check failed: " + Name);
@@ -138,6 +142,84 @@ public partial class ExplorerTab
             Page.ChangeFileView(FileViewMode.MediumIcons); Wheel(Page, 60);
             Check(Page.Settings.FileView == FileViewMode.MediumIcons && Page.Settings.FileViewIconSize == 0,
                 "Selecting a menu view clears an incomplete previous wheel gesture");
+
+            // In-memory entries keep this large-folder regression inside the owned
+            // test scope without creating or enumerating thousands of real files.
+            Page.ShowEntries(Enumerable.Range(0, 10000).Select(Index => new FileEntry
+            {
+                Name = $"Zoom {Index:00000}.txt", FullPath = Path.Combine(Other, $"Zoom {Index:00000}.txt"),
+                TypeName = Index < 5000 ? "Text" : "Other"
+            }).ToArray());
+            var Timings = new List<object>();
+            foreach (var Grouped in new[] { false, true })
+            {
+                Page.FileGroupProperty = Grouped ? nameof(FileEntry.TypeName) : "";
+                Page.RefreshBackgroundLayout();
+                Page.ChangeFileView(FileViewMode.LargeIcons, 70); await Settle();
+                var Item = (FileEntry)Page.FileTiles.Items[7500];
+                Page.ClearFileSelection(); Page.SelectPath(Item.FullPath); await Settle();
+                var Panel = FindVisualChild<FileTilePanel>(Page.FileTiles)!;
+                var Container = (ListBoxItem)Page.FileTiles.ItemContainerGenerator.ContainerFromItem(Item);
+                var Icon = FindVisualChild<ShellIcon>(Container);
+                var Resets = 0;
+                NotifyCollectionChangedEventHandler Changed = (_, _) => Resets++;
+                Page.View!.CollectionChanged += Changed;
+                var Samples = new List<double>();
+                try
+                {
+                    for (var Index = 0; Index < 24; Index++)
+                    {
+                        var Timer = Stopwatch.StartNew();
+                        Wheel(Page, Index % 2 == 0 ? 120 : -120, Target: Container);
+                        await Settle();
+                        Samples.Add(Timer.Elapsed.TotalMilliseconds);
+                    }
+                    Check(Resets == 0, $"10,000-file zoom (grouped={Grouped}) never refreshes or re-sorts the collection");
+                    Check(ReferenceEquals(Panel, FindVisualChild<FileTilePanel>(Page.FileTiles))
+                        && ReferenceEquals(Container, Page.FileTiles.ItemContainerGenerator.ContainerFromItem(Item))
+                        && ReferenceEquals(Icon, FindVisualChild<ShellIcon>(Container)),
+                        $"10,000-file zoom (grouped={Grouped}) reuses the panel, anchored container and icon");
+                    Check(Page.SelectedEntries().Single() == Item && Panel.VerticalOffset > 0
+                        && VisualTreeHelper.GetChildrenCount(Panel) < 300,
+                        $"10,000-file zoom (grouped={Grouped}) preserves off-screen selection and bounded virtualization");
+                    var Bounds = Panel.ItemBounds(Page.FileTiles.Items.IndexOf(Item));
+                    Check(Bounds.Top >= Panel.VerticalOffset && Bounds.Bottom <= Panel.VerticalOffset + Panel.ViewportHeight,
+                        $"10,000-file zoom (grouped={Grouped}) keeps the wheel anchor visible after resizing");
+                    Timings.Add(new { grouped = Grouped, files = 10000, events = Samples.Count,
+                        average_ms = Samples.Average(), maximum_ms = Samples.Max(), collection_changes = Resets,
+                        realized_items = VisualTreeHelper.GetChildrenCount(Panel) });
+                }
+                finally { Page.View.CollectionChanged -= Changed; }
+                if (Grouped)
+                {
+                    var Start = 0;
+                    var Top = 0d;
+                    var Header = Math.Max(28, Page.FileTiles.FontSize + 12);
+                    var Across = Math.Max(1, (int)(Panel.ViewportWidth / Panel.CellWidth));
+                    while (Start < Page.FileTiles.Items.Count)
+                    {
+                        var Label = ((FileEntry)Page.FileTiles.Items[Start]).ViewGroup;
+                        var End = Start + 1;
+                        while (End < Page.FileTiles.Items.Count && ((FileEntry)Page.FileTiles.Items[End]).ViewGroup == Label) End++;
+                        Top += Header;
+                        Check(Enumerable.Range(Start, End - Start).All(Index => Panel.ItemBounds(Index) == new Rect(
+                            (Index - Start) % Across * Panel.CellWidth, Top + (Index - Start) / Across * Panel.CellHeight,
+                            Panel.CellWidth, Panel.CellHeight)), "Cached group ranges match every file's expected grid position");
+                        Top += Math.Ceiling((double)(End - Start) / Across) * Panel.CellHeight;
+                        Start = End;
+                    }
+                    Page.ChangeFileView(FileViewMode.Details); await Settle();
+                    Check(Page.View.GroupDescriptions.Count > 0, "Zoom optimization retains native Details grouping");
+                    Page.ChangeFileView(FileViewMode.MediumIcons); await Settle();
+                    Check(Page.View.GroupDescriptions.Count == 0 && FindVisualChild<FileTilePanel>(Page.FileTiles)!.Grouped,
+                        "Returning from Details restores flat virtualized icon groups");
+                    ((System.Collections.ObjectModel.ObservableCollection<FileEntry>)Page.Entries).Remove((FileEntry)Page.FileTiles.Items[0]); await Settle();
+                    Check(Page.FileTiles.Items.Count == 9999 && double.IsFinite(Panel.ExtentHeight),
+                        "Grouped geometry invalidates after collection membership changes");
+                }
+            }
+            if (AppMain.ScreenshotPath is { } PerformanceOutput)
+                File.WriteAllText(Path.Combine(Path.GetDirectoryName(PerformanceOutput)!, "ViewZoomPerformance.json"), JsonSerializer.Serialize(Timings));
         }
         finally { Probe?.RequestExit(); }
     }

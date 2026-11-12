@@ -40,6 +40,11 @@ public partial class ExplorerTab
             var Paths = Probe.Tabs.Select(Tab => Tab.TabPath).ToArray();
             Check(Probe.Tabs.Count == 3 && Probe.Panes.Count == 2 && Probe.Tabs.Any(Tab => !Tab.IsVisible),
                 "The UI sharing fixture includes a hidden tab and another visible pane");
+            foreach (var Tab in Probe.Tabs)
+            {
+                await Tab.WaitUntilReadyAsync();
+                foreach (var Column in Tab.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible)) Column.Width = 700;
+            }
             await Source.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: async Dialog =>
             {
                 Dialog.Categories.SelectedItem = Dialog.UICategory;
@@ -48,6 +53,10 @@ public partial class ExplorerTab
                 Dialog.ShowBookmarkPathsCheck.IsChecked = true;
                 Dialog.ShowSidebarDriveUsageCheck.IsChecked = true;
                 Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = true;
+                await Source.AutoFitColumnsPreferenceUpdate;
+                Check(Probe.Tabs.All(Tab => Tab.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible)
+                    .All(Column => Column.Width.IsAbsolute && Column.Width.Value < 700)),
+                    "Enabling automatic fitting immediately refits every visible column in all tabs and split panes");
                 Dialog.SeparatePinnedTabsCheck.IsChecked = true;
                 Dialog.FontSizePickers["FileList"].SelectedItem = 16.0;
                 Dialog.ColumnChecks[nameof(FileEntry.Size)].IsChecked = false;

@@ -299,7 +299,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.UpdateAddressPath(PreserveEditing: this.AddressEditing && !RecordHistory && PreserveFilter && SamePath(OldPath, this.CurrentPath));
             if (!PreserveFilter) this.SearchBox.Text = "";
             this.ShowEntries(this.FolderEntries, SearchSelection);
-            // Fit newly opened folders, while watcher/manual refreshes keep personal widths.
+            // Fit newly opened folders; explicit refresh commands refit after the filtered list is ready.
             if (!Computer && !PreserveFilter && this.Settings.AutoFitColumnsOnNavigation)
                 await this.FitVisibleColumnsAsync(Version);
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
@@ -512,7 +512,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private Task ForwardAsync() => this.NavigateBrowseHistoryAsync(true);
     private async void UpClick(object Sender, RoutedEventArgs E) => await this.UpAsync();
     private async Task UpAsync() { if (!this.IsVirtualLocation && !string.IsNullOrEmpty(this.CurrentPath) && this.Files.GetParent(this.CurrentPath) is { } Parent) await this.NavigateAsync(Parent, TreeKey: this.NavigationTreeKey); }
-    private async void RefreshClick(object Sender, RoutedEventArgs E) { this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAsync(true); }
+    private async void RefreshClick(object Sender, RoutedEventArgs E) { this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAndFitColumnsAsync(); }
     private async Task RefreshAsync(bool RefreshTree = false)
     {
         if (string.IsNullOrEmpty(this.CurrentPath) || this.WindowClosed) return;
@@ -618,6 +618,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
 
     private void FileGridSelectionChanged(object Sender, SelectionChangedEventArgs E)
     {
+        if (this.RefreshingFileLayout) return;
         this.SyncTileSelection();
         if (!this.ApplyingSearchSelection) this.PendingSearchSelection.Clear();
         if (this.ApplyingMarqueeSelection) return;
@@ -951,7 +952,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.Settings.CalculateFolderSizes, this.ChangeCalculateFolderSizes,
             this.Settings.ShowBookmarkPaths, Value => this.ChangeSharedUI(() => this.ChangeShowBookmarkPaths(Value)),
             this.Settings.ShowSidebarDriveUsage, Value => this.ChangeSharedUI(() => this.ChangeShowSidebarDriveUsage(Value)),
-            this.Settings.AutoFitColumnsOnNavigation, Value => this.ChangeSharedUI(() => this.ChangeAutoFitColumnsOnNavigation(Value)),
+            this.Settings.AutoFitColumnsOnNavigation, Value => this.AutoFitColumnsPreferenceUpdate = this.ChangeAutoFitColumnsOnNavigationAsync(Value),
             this.Settings.SeparatePinnedTabs, Value => this.ChangeSharedUI(() => this.ChangeSeparatePinnedTabs(Value)),
             this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);

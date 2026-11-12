@@ -140,11 +140,35 @@ public partial class ExplorerTab
             Name = Column(A, nameof(FileEntry.Name)); Name.Width = 333;
             await A.NavigateAsync(Empty, RecordHistory: false); await Settle();
             Check(Math.Abs(Name.ActualWidth - 333) < 1, "Opening another folder preserves personal widths while automatic fitting is off");
-            await A.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: Dialog =>
+            var Hidden = Probe.Tabs.Single(Page => !ReferenceEquals(Page, A));
+            await Hidden.WaitUntilReadyAsync();
+            await Hidden.NavigateAsync(Folder, RecordHistory: false);
+            var HiddenName = Column(Hidden, nameof(FileEntry.Name)); HiddenName.Width = 300;
+            Hidden.SearchBox.Text = "File 000"; await Hidden.WaitForSearchSmokeAsync();
+            Hidden.FileGrid.SelectedItem = Hidden.Entries[0];
+            var HiddenSelection = Hidden.SelectedEntries().Select(Entry => Entry.FullPath).ToArray();
+            var Paths = Probe.Tabs.Select(Page => Page.TabPath).ToArray();
+            await A.RunPreferencesSmokeChecksAsync(Passed, InspectShortcuts: async Dialog =>
             {
                 Dialog.Categories.SelectedItem = Dialog.UICategory;
                 Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = true;
-                return Task.CompletedTask;
+                await A.AutoFitColumnsPreferenceUpdate; await Settle();
+                Check(Name.ActualWidth < 230 && HiddenName.Width.IsAbsolute && HiddenName.Width.Value < 230,
+                    "Enabling automatic fitting immediately shrinks the active empty folder and the hidden filtered tab");
+                Check(Dialog.IsVisible && ReferenceEquals(Probe.ActiveTab, A)
+                    && Probe.Tabs.Select(Page => Page.TabPath).SequenceEqual(Paths)
+                    && Hidden.SearchBox.Text == "File 000" && Hidden.SelectedEntries().Select(Entry => Entry.FullPath).SequenceEqual(HiddenSelection),
+                    "Immediate fitting preserves the open dialog active tab paths filter and selection");
+                Name.Width = 333; HiddenName.Width = 300;
+                Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = false;
+                await A.AutoFitColumnsPreferenceUpdate; await Settle();
+                Check(Math.Abs(Name.ActualWidth - 333) < 1 && HiddenName.Width.Value == 300,
+                    "Disabling automatic fitting leaves existing widths unchanged");
+                Hidden.SearchBox.Clear(); await Hidden.WaitForSearchSmokeAsync();
+                Dialog.AutoFitColumnsOnNavigationCheck.IsChecked = true;
+                await A.AutoFitColumnsPreferenceUpdate; await Settle();
+                Check(Name.ActualWidth < 230 && HiddenName.Width.Value >= TextWidth(Hidden, LongName, Hidden.FileGrid.FontSize) + 42,
+                    "Re-enabling automatic fitting immediately expands the hidden tab for its longest off-screen filename");
             });
             Check(A.Settings.AutoFitColumnsOnNavigation && Probe.Tabs.All(Page => Page.Settings.AutoFitColumnsOnNavigation),
                 "Enabling automatic fitting in Preferences synchronizes existing tabs");
@@ -155,8 +179,38 @@ public partial class ExplorerTab
             Name.Width = 444;
             await A.RefreshCurrentFolderAsync(RefreshTree: false); await Settle();
             Check(Math.Abs(Name.ActualWidth - 444) < 1, "Watcher refreshes preserve manually adjusted widths with automatic fitting enabled");
+            var RefreshedName = "zzzzz Newly refreshed file with an even longer descriptive Unicode 文件名称 " + new string('w', 65) + ".txt";
+            File.WriteAllText(Path.Combine(Folder, RefreshedName), "Refreshed fixture");
+            A.FileGrid.SelectedItem = A.Entries.Single(Entry => Entry.Name == "File 000.txt");
+            var RefreshSelection = A.SelectedEntries().Select(Entry => Entry.FullPath).ToArray();
+            HiddenName.Width = 555;
+            Check(await A.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: true),
+                "F5 dispatches the manual refresh command");
+            await Settle();
+            Check(A.Entries.Any(Entry => Entry.Name == RefreshedName)
+                && Name.ActualWidth >= TextWidth(A, RefreshedName, A.FileGrid.FontSize) + 42
+                && A.SelectedEntries().Select(Entry => Entry.FullPath).SequenceEqual(RefreshSelection)
+                && HiddenName.Width.Value == 555,
+                "F5 fits newly refreshed off-screen filenames and preserves selection and other tabs' widths");
+            A.SearchBox.Text = "File 000"; await A.WaitForSearchSmokeAsync(); Name.Width = 444;
+            await A.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: true, InFileList: false); await Settle();
+            Check(Name.ActualWidth < 230 && A.SearchBox.Text == "File 000" && A.FileGrid.Items.Count == 1
+                && A.SelectedEntries().Select(Entry => Entry.FullPath).SequenceEqual(RefreshSelection),
+                "F5 from a text field waits for the filtered refresh before fitting and preserves its filter and selection");
+            Name.Width = 444;
+            Check(await A.ExecuteBackgroundCommandAsync("CDir.Refresh"), "The background menu dispatches manual refresh");
+            await Settle();
+            Check(Name.ActualWidth < 230, "The manual refresh menu uses the same automatic fitting behavior as F5");
+            await A.ChangeAutoFitColumnsOnNavigationAsync(false); Name.Width = 444;
+            await A.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: true); await Settle();
+            Check(Math.Abs(Name.ActualWidth - 444) < 1, "F5 preserves manual widths when automatic fitting is disabled");
+            await A.ChangeAutoFitColumnsOnNavigationAsync(true);
+            A.SearchBox.Clear(); await A.WaitForSearchSmokeAsync();
             await A.NavigateAsync(Empty, RecordHistory: false); await Settle();
             Check(Name.ActualWidth < 230, "Opening an empty folder automatically shrinks columns to their headers");
+            Name.Width = 444;
+            await A.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: true); await Settle();
+            Check(Name.ActualWidth < 230, "F5 also refits an empty folder to its headers");
             Name.Width = 444;
             Check(!await A.NavigateAsync(Path.Combine(Root, "Missing folder"), RecordHistory: false)
                 && Math.Abs(Name.ActualWidth - 444) < 1, "Failed navigation leaves the existing folder widths unchanged");

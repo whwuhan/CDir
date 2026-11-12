@@ -93,9 +93,12 @@ public sealed class ShellIcon : Image
             VersionState.Ignored => ("−", "#8993A1"),
             _ => ("?", "#8993A1")
         };
-        var Size = Math.Min(10, Math.Min(ActualWidth, ActualHeight));
+        // Keep compact list/tree badges readable, and scale the whole vector
+        // badge with the displayed icon or thumbnail in larger views.
+        var IconExtent = Math.Min(ActualWidth, ActualHeight);
+        var Size = Math.Min(IconExtent, Math.Max(10, IconExtent / 4));
         var Center = new Point(ActualWidth - Size / 2, ActualHeight - Size / 2);
-        Context.DrawEllipse((Brush)new BrushConverter().ConvertFromString(Color)!, new Pen(Brushes.White, 0.8), Center, Size / 2, Size / 2);
+        Context.DrawEllipse((Brush)new BrushConverter().ConvertFromString(Color)!, new Pen(Brushes.White, Size * 0.08), Center, Size / 2, Size / 2);
         if (State == VersionState.Unknown && string.IsNullOrEmpty(this.VersionStatus.Error))
         {
             // Draw the pending ellipsis as geometry so all three dots remain
@@ -105,8 +108,8 @@ public sealed class ShellIcon : Image
             return;
         }
         var Text = new FormattedText(Glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal), 8, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        Context.DrawText(Text, new Point(Center.X - Text.Width / 2, Center.Y - Text.Height / 2 - 0.2));
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal), Size * 0.8, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        Context.DrawText(Text, new Point(Center.X - Text.Width / 2, Center.Y - Text.Height / 2 - Size * 0.02));
     }
 
     protected override void OnDpiChanged(DpiScale OldDpi, DpiScale NewDpi)

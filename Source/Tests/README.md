@@ -59,6 +59,8 @@
 
 表头和偏好设置分类可通过 `Source/Scripts/Test.ps1 -UIGroup columns` 单独验证。该组检查原生表头拖动已启用、显示顺序与隐藏状态保存回读、旧配置兼容、无效配置回退、至少保留一列、搜索绝对路径列的独立控制，以及列变化不触发重新搜索。偏好设置检查通过 General、UI 两个分类操作真实控件，并生成 `PreferencesUI-<语言>.png` 和 `ColumnsReordered.png` 截图。
 
+右上角分组菜单通过 `Source/Scripts/Test.ps1 -UIGroup grouping -PublishConfiguration` 单独验证，覆盖子菜单文字及字号、四种字段、递增/递减和无、右键菜单状态联动、搜索与多选、重启恢复，以及一万个文件/200 个选中项的单次刷新、重复操作零排序、详细列表与图标虚拟化和滚动末尾。输出 `GroupingPerformance.json` 分阶段耗时及 `Grouping-Submenu.png`、`Grouping-Details.png`、`Grouping-LargeIcons.png` 预览。布局或虚拟化实现变化时，合并选择 columns、view-zoom、navigation；只调整分组诊断时使用最小 grouping 组。
+
 地址栏分段模型增加 4 项后台回归，验证驱动器根、UNC 共享根、中文与空格名称、尾分隔符和路径标准化，并拒绝相对路径；分段不访问文件系统或网络共享。地址栏增加 8 项界面检查，验证点击真实路径段导航、后退/前进同步、编辑快捷键、Enter/Esc、失败路径、过长路径菜单，以及后台刷新时保留编辑草稿。
 
 显式选择 `language` 界面组时，四语用例通过真实语言选择器切换，验证界面资源、文件类型、常用位置、导航状态、筛选、排序、选中项目及右键菜单；验证本地化名称对话框的确认/取消，以及专用临时文件中的真实设置保存和回读。检查不会改写用户的设置文件。提供截图路径时，还会在同一输出目录生成 `LanguageChinese.png`、`LanguageJapanese.png`、`LanguageKorean.png`、`LanguageEnglish.png`。
@@ -90,3 +92,9 @@ Windows 自带回收站回归必须通过其 IShellFolder.GetUIObjectOf 获取�
 分割窗格使用 `-UIGroup panes`：覆盖四向范围预览、拖放取消、中心与过窄目标拒绝、完整窗格、窄窗口可用性、嵌套布局、跨窗格标签移动及空窗格合并、活动窗格快捷键、置顶状态、分隔比例保存、重启恢复与损坏布局回退。与标签或持久化同时修改时组合选择 `panes,tabs,lifecycle,shortcuts,address,sidebar` 和 `-ScriptGroup release -PublishConfiguration`；发布后仅需 `-UIGroup panes -Published` 捕获当前版本预览。
 
 表头自适应使用 `-UIGroup columns,shortcuts`，覆盖所有当前显示列、虚拟化屏幕外内容、当前筛选结果、字体与单 Tab 隔离、右键菜单、自定义/清除快捷键和窄列恢复。`panes` 同时验证 Alt+R 按叶窗格数量均分嵌套区域、最小尺寸保护、自定义绑定和持久化。Alt+Q 默认迁移通过 shortcuts 和 lifecycle 组验证；个人 Alt+1 重绑定在迁移后保留。
+
+名称自然排序回归包含在 navigation 界面组和 filesystem 后台组中。覆盖 wallpapers-0 到 wallpapers-15 的实际列表与展开目录树、表头升降序、文件夹优先、大小/类型同值时的名称排序、分组与取消分组、递归搜索，以及前缀、大小写和多段数字名称。navigation 额外输出 NaturalNameSort.png；名称显示比较共用 Windows StrCmpLogicalW，不改变路径相等性规则。
+
+Git/SVN 状态徽标缩放使用 view-zoom 界面组验证全部状态的 16/48/96/192/256 像素渲染、连续放大缩小、缩略图宽高比、150% 渲染和等待/错误区分，输出 VersionBadgeScaling.png。状态绑定和仓库刷新仍由 version-control 界面组覆盖。
+
+分组网格线包含在 grouping 界面组中：验证四种分组字段下实际行/列边界的物理像素、标题留白、开关与选择保持、纵横滚动、列重排/隐藏、24 号字体与 150% 渲染、取消分组、切换视图、短列表末尾留白及空搜索。输出 GroupedGridLines.png；同组的 10,000 项虚拟化检查启用网格线后运行。

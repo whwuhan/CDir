@@ -37,11 +37,22 @@ public partial class ExplorerTab
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 
-    private void ChangeAutoFitColumnsOnNavigation(bool Fit)
+    private Task AutoFitColumnsPreferenceUpdate = Task.CompletedTask;
+
+    private async Task ChangeAutoFitColumnsOnNavigationAsync(bool Fit)
     {
-        if (this.WindowClosed) return;
+        if (this.WindowClosed || this.Settings.AutoFitColumnsOnNavigation == Fit) return;
         this.Settings.AutoFitColumnsOnNavigation = Fit;
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
+        this.HostWindow.SynchronizeUIPreferences(this);
+        if (!Fit) return;
+        // Refit the current lists, including hidden tabs, without navigating or clearing filters.
+        foreach (var Page in this.HostWindow.Tabs.ToArray())
+        {
+            if (!Page.Settings.AutoFitColumnsOnNavigation) break;
+            await Page.FitVisibleColumnsAsync(Page.NavigationVersion);
+        }
+        this.HostWindow.PersistWorkspaceNow();
     }
 
     private void ChangeSeparatePinnedTabs(bool Separate)
@@ -111,7 +122,7 @@ public partial class ExplorerTab
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 
-    private void ApplyGridLines() => this.FileGridLines.Visibility = this.Settings.ShowGridLines && this.IsDetailsView && this.FileGroupProperty.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    private void ApplyGridLines() => this.FileGridLines.Visibility = this.Settings.ShowGridLines && this.IsDetailsView ? Visibility.Visible : Visibility.Collapsed;
 
     private void ChangeGridLines(bool ShowGridLines)
     {

@@ -20,6 +20,7 @@
     <Compile Include="../Models/VersionStatus.cs" Link="Models/VersionStatus.cs" />
     <Compile Include="../Services/VersionControlService.cs" Link="Services/VersionControlService.cs" />
     <Compile Include="../Services/FileSystemService.cs" Link="Services/FileSystemService.cs" />
+    <Compile Include="../Services/FileNameComparer.cs" Link="Services/FileNameComparer.cs" />
     <Compile Include="../Services/FileOperationHistory.cs" Link="Services/FileOperationHistory.cs" />
     <Compile Include="../Localization/LanguageService.cs" Link="Localization/LanguageService.cs" />
     <EmbeddedResource Include="../Localization/*.json" LogicalName="CDir.Localization.%(Filename)%(Extension)" />

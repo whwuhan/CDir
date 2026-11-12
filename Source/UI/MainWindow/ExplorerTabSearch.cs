@@ -200,13 +200,14 @@ public partial class ExplorerTab
             Dispatcher.Invoke(() =>
             {
                 if (!IsCurrent()) return;
+                var Today = DateTime.Today;
                 foreach (var Entry in Batch)
                 {
                     if (!Known.Add(Entry.FullPath)) continue;
                     Entry.Use12HourClock = this.Settings.Use12HourClock;
                     Entry.VersionStatus = this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Contains(Entry.FullPath))?.GetStatus(Entry.FullPath)
                         ?? VersionStatus.None;
-                    Entry.ViewGroup = this.GroupLabel(Entry);
+                    this.AssignFileGroup(Entry, Today);
                     Items.Add(Entry);
                 }
                 foreach (var Path in this.PendingSearchSelection.ToArray()) this.SelectPath(Path, Append: true);
