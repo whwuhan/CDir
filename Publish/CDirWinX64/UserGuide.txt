@@ -1,10 +1,12 @@
-﻿CDir File Manager
+CDir File Manager
 
 File views
 Hold Ctrl and turn the mouse wheel over the main file pane to change the view and icon size. Up enlarges the view; down moves toward Content. Intermediate icon sizes are remembered per folder and included when applying a view recursively. Search uses the same view. Ordinary scrolling and terminal font zoom keep their existing behavior.
 
 Open the dropdown to the right of search. Above Show Hidden Items, choose Extra Large Icons, Large Icons, Medium Icons, Small Icons, List, Details, Tiles, or Content. The view dropdown also offers Apply View To All Subfolders and Reset Folder Views in a separate section. Apply replaces existing descendant choices at every depth, including folders not yet visited or created; Reset restores Details for the current folder and all descendants. A later individual folder choice overrides its inherited view.
 Each folder saves its own view; selection, navigation, search, rename and drag-and-drop work in every view. List fills downward before starting the next column; Content shows metadata across the panel. Returning to a folder restores its view; folders without a saved view start in Details. Tabs showing the same folder share its selected view. Restarting restores folder preferences, the open views and their scroll positions.
+The top-right View Options dropdown includes Group By: Name, Date Modified, Type, Size, Ascending, Descending, and (None). Group headers show item counts; (None) restores the flat list. The dropdown and blank-space context menu share the same grouping state. Search and file selection are preserved, and each tab restores its grouping field and direction with the workspace. Large grouped lists and icon views load only visible items.
+
 Alt+E (Size All Columns To Fit) and automatic fitting on navigation work only in Details. Other views have no column widths to change. My Computer always shows drives in ascending drive-letter order, with C: before D: and later letters. Its light-gray ascending sort arrow does not respond to sorting clicks. Returning to a folder restores sortable headers. The directory-tree drive usage bars are slightly thicker for readability.
 
 Resize a restored window by dragging any outer edge or corner. Quick Access includes My Computer and Recycle Bin and uses the fixed order Home, Desktop, Documents, Downloads, Pictures, My Computer, Recycle Bin. My Computer shows drives in the current tab. Close Other Tabs preserves all pinned tabs and closes only the other unpinned tabs. Bulk close refreshes the tab strip and saves the final workspace once. Side-button presses and releases form one navigation gesture; rapid Back/Forward requests run in order.
@@ -231,7 +233,7 @@ Show Folder Paths in Preferences > UI is unchecked by default. Enable it to show
 
 Display options
 The dropdown to the right of search ends with a separator and Show Hidden Files And Folders, synchronized with Preferences > General. Turning off Show Grid Lines In The File List also removes separators beneath file rows. Preferences > UI includes Show Folder Paths and Show Drive Usage In My Computer. Drive usage is unchecked by default and controls the capacity text, fixed-width 64-DIP usage bar and percentages on the same row to the right of drive names.
-Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enable it to fit every displayed column to its header and folder contents whenever a folder opens, including new tabs. Background refreshes keep manually adjusted widths. The preference is saved and can be restored to its default.
+Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enabling it immediately fits every displayed column in all open tabs and panes to its header and current contents, preserving paths, filters and selection. It also fits columns whenever a folder opens, including new tabs, and after manual refresh with F5, the Refresh button, or the refresh menu. Filtered refreshes fit the completed search results. Background refreshes keep manually adjusted widths. The preference is saved and can be restored to its default.
 
 Tabs can be dragged to reorder within the pinned or ordinary group. When the separate pinned row is visible, dragging across rows pins or unpins the tab at the drop position. An insertion marker shows the destination and row edges scroll while dragging. Tab order and pin state are saved.
 
