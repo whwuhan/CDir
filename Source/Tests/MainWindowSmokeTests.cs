@@ -1,4 +1,4 @@
-﻿using CDir.UI.Dialogs;
+using CDir.UI.Dialogs;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -311,6 +311,8 @@ public partial class ExplorerTab
         }
         await this.RunInlineRenameSmokeChecksAsync(Passed);
         await this.RunOperationRefreshSmokeChecksAsync(Passed);
+        await this.RunGeneratedFilesRefreshSmokeAsync(Passed);
+        await this.RunShellCommandViewportSmokeAsync(Passed);
         await this.RunShellDeletionRefreshSmokeChecksAsync(Passed);
         await this.RunTreeFolderCreationSmokeChecksAsync(Passed);
     }

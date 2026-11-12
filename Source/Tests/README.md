@@ -1,5 +1,7 @@
 # 文件系统、语言与版本控制回归测试
 
+默认程序打开使用 `Source/Scripts/Test.ps1 -UIGroup shortcuts,operations,lifecycle -Group language -PublishConfiguration` 验证。shortcuts 在自有目录检查空格/F9 的四种视图路由、多选、搜索结果、文本输入隔离、旧快捷键迁移、无关联时调用 Windows openas、取消及失败处理；替换启动边界，不打开用户文件或改写默认程序关联。偏好设置仅保留五个快捷键分组，内置编辑器与其专用设置已移除。lifecycle 检查旧工作区兼容与实例/测试隔离。目录树 F5 的父子重复入口回归位于 sidebar 组，另以 navigation、columns 检查导航、筛选、选择和列宽。
+
 测试代码统一放在 `Source/Tests`：`Program.cs`、各后台测试文件由独立的 `CDirTests.csproj` 编译；各 `*SmokeTests.cs` 是 `CDir.UI.ExplorerTab` 的部分类，由主项目编译，通过 `--smoke-test` 入口运行。构建、测试和打包脚本统一位于 `Source/Scripts`。
 
 测试进程不注册为用户实例，`-Published` 即使使用日常 CDir 的同一路径，也不会被用户窗口计为另一个实例或暂停其自动保存。测试不得发现或克隆用户窗口；配置存储拒绝访问自有测试范围以外的路径及文件链接。修改测试隔离或持久化时，组合运行 `-UIGroup lifecycle -ScriptGroup release -PublishConfiguration`；发布脚本检查覆盖实时工作区、多标签及未保存类别的保留、旧配置备份、无效快照和不匹配进程路径的拒绝。
@@ -68,6 +70,10 @@
 系统图标增加 6 项界面检查：文件夹、磁盘、文本文件、可执行文件和快捷方式返回冻结位图且保留透明度；独立调用 Windows Shell 对比像素，验证不同程序及快捷方式的图标；并发请求复用缓存并遵守缓存和队列边界；两轮各 24 个未缓存请求不持续积累原生 GUI 句柄；文件列表保留 28 DIP 行高和 16 DIP 图标；控件快速重绑时不显示旧结果，空路径占位保持隐藏。测试不会执行临时程序或快捷方式。参考调用在释放 HICON 和结束 COM 后才完成任务；清理前先离开测试目录、等待图标队列结束，再核对临时路径与所有权标记并进行有限重试。若断言和清理同时失败，会保留两项错误。
 
 原生图标对比使用不带第三方状态叠加层的 Shell 基础图标，并保留快捷方式箭头，防止 Git/SVN 等扩展的缓存标记被当成程序确认的修改状态。
+
+右键外部命令完成后的视口保持使用 `-UIGroup operations,navigation -PublishConfiguration` 验证。operations 构造真实 Windows Shell 菜单，只在隔离测试进程中替换原生命令调用，模拟工程生成后完整执行 ExecuteShellCommandAsync 的完成分支，不启动用户的 Unreal 工具或外部应用。覆盖四种视图、17 个滚动位置/排序场景、选中项滚出视口、末行留白、横向滚动、选中文件的修改日期重排、展开树保持以及后续真实文件系统通知；被动刷新不重新导航或定位选中项，显式定位仍可滚动显示文件。选择与确保可见的语义参照 Windows Shell 的独立 SVSI_SELECT / SVSI_ENSUREVISIBLE 标志。
+
+工程文件生成期间的图标稳定性使用 `-UIGroup operations,navigation,shell-icons -PublishConfiguration -FatalBugFix` 验证。operations 在自有目录中连续改写模拟的 UAGame.sln 和 Intermediate 时间戳，覆盖详细列表、大图标、列表和平铺：元数据原地更新，文件/文件夹对象及图标控件保持不变，位置、尺寸、选择和滚动稳定；真实监视器通知不产生集合增删，并检查修改日期排序、日期分组及实际新增/删除。shell-icons 另外验证同路径缩略图连续刷新不会退回通用/类型图标，保留快速重绑和取消隔离检查；不会在用户工程运行 Unreal 生成工具。
 
 侧栏组覆盖类别菜单、删除确认的确认/取消/关闭、目录递归展开与收起、收藏入口添加与排序、跨类别拖动及拖出移除。目录树指示线通过真实渲染验证：磁盘根节点不绘制传入线，展开分支（包括最后一个同级节点）的竖线延伸到子树底部，折叠的末尾节点在标题中点收尾；同时检查深层滚动、不同字号、150% 渲染、收藏子目录及容器重新挂载。截图包括 `TreeGuides.png`、`TreeGuidesDeepScrolled.png`、`TreeGuidesBookmark.png`。使用 `Source/Scripts/Test.ps1 -UIGroup sidebar` 单独运行。
 

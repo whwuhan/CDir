@@ -244,6 +244,11 @@ public partial class ExplorerTab
             await Settle();
             Check(!this.DirectoryTreeSection.IsExpanded && !((FolderNode)this.FolderTree.SelectedItem).IsExpanded,
                 "Background refresh preserves manually collapsed folders and sections");
+            this.SidebarScroll.ScrollToBottom();
+            await Settle();
+            await this.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: false);
+            await Settle();
+            CheckRevealed(Target, "F5 Refresh Of Already Selected Folder");
             Check(await this.NavigateAsync(Deep), "Navigate directly to a previously unopened deep folder");
             await Settle();
             CheckRevealed(Deep, "Direct Navigation");

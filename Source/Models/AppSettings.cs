@@ -7,6 +7,14 @@ internal sealed class AppSettings
 
     internal void UpgradeShortcutDefaults()
     {
+        string[] RemovedCommands = ["QuickEditText", "ToggleTextWrap", "ToggleEditorTabPin", "TextEditorSave"];
+        if (this.Shortcuts is not null && RemovedCommands.Any(this.Shortcuts.ContainsKey))
+        {
+            this.Shortcuts = new(this.Shortcuts, StringComparer.Ordinal);
+            if (!this.Shortcuts.ContainsKey("OpenWithDefault") && this.Shortcuts.TryGetValue("QuickEditText", out var LegacyGesture))
+                this.Shortcuts["OpenWithDefault"] = LegacyGesture;
+            foreach (var Id in RemovedCommands) this.Shortcuts.Remove(Id);
+        }
         if (this.ShortcutDefaultsRevision >= 1) return;
         if (this.Shortcuts?.GetValueOrDefault("ToggleSidebar") == "Alt+1"
             && !this.Shortcuts.Any(Item => Item.Key != "ToggleSidebar" && Item.Value == "Alt+Q"))

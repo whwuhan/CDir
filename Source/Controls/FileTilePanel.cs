@@ -190,7 +190,13 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
         if (Args.Action is System.Collections.Specialized.NotifyCollectionChangedAction.Remove
             or System.Collections.Specialized.NotifyCollectionChangedAction.Replace
             or System.Collections.Specialized.NotifyCollectionChangedAction.Move)
-            RemoveInternalChildRange(Args.Position.Index, Args.ItemUICount);
+        {
+            // Move reports the destination in Position, which can be -1 when
+            // offscreen. Remove the old realized container, and leave moves of
+            // entirely virtualized items alone (ItemUICount == 0).
+            var Position = Args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move ? Args.OldPosition : Args.Position;
+            if (Args.ItemUICount > 0) RemoveInternalChildRange(Position.Index, Args.ItemUICount);
+        }
         InvalidateMeasure();
     }
     public void Reveal(int Index)

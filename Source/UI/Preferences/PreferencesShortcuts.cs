@@ -19,6 +19,8 @@ internal sealed partial class PreferencesWindow
     internal Dictionary<string, FrameworkElement> ShortcutRows { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, Button> ShortcutClearButtons { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, Button> ShortcutResetButtons { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, StackPanel> ShortcutGroups { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, TextBlock> ShortcutGroupHeadings { get; } = new(StringComparer.Ordinal);
     private Dictionary<string, string> PreferenceShortcuts = [];
     private Func<string, string, bool> OnShortcutChanged = null!;
     private readonly KeyboardShortcut[] EditableShortcuts = KeyboardShortcut.All.Where(Shortcut => !Shortcut.IsFixed)
@@ -53,9 +55,27 @@ internal sealed partial class PreferencesWindow
         this.ShortcutEmptyHint = new TextBlock { Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)this.FindResource("Muted") };
         this.ShortcutEmptyHint.SetResourceReference(TextBlock.TextProperty, "TextNoShortcutResults");
         Panel.Children.Add(this.ShortcutEmptyHint);
+        foreach (var Group in KeyboardShortcut.Groups)
+        {
+            var Section = new StackPanel { Margin = new Thickness(0, 0, 0, 24) };
+            var SectionHeading = new TextBlock { TextWrapping = TextWrapping.Wrap };
+            SectionHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
+            SectionHeading.SetResourceReference(TextBlock.TextProperty, "Text" + Group);
+            SectionHeading.SetResourceReference(TextBlock.ForegroundProperty, "HighlightText");
+            var Header = new Border
+            {
+                Padding = new Thickness(13, 8, 12, 8),
+                Margin = new Thickness(0, 0, 0, 12), Child = SectionHeading
+            };
+            Header.SetResourceReference(Border.BackgroundProperty, "Accent");
+            Section.Children.Add(Header);
+            this.ShortcutGroups.Add(Group, Section);
+            this.ShortcutGroupHeadings.Add(Group, SectionHeading);
+            Panel.Children.Add(Section);
+        }
         foreach (var Shortcut in this.EditableShortcuts)
         {
-            var Row = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            var Row = new Grid { Margin = new Thickness(13, 0, 0, 12) };
             Row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
             Row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -106,7 +126,7 @@ internal sealed partial class PreferencesWindow
             Row.Children.Add(Editor);
             Row.Children.Add(Clear);
             Row.Children.Add(Reset);
-            Panel.Children.Add(Row);
+            this.ShortcutGroups[Shortcut.Group].Children.Add(Row);
             this.ShortcutRows.Add(Shortcut.Id, Row);
             this.ShortcutEditors.Add(Shortcut.Id, Editor);
             this.ShortcutClearButtons.Add(Shortcut.Id, Clear);
@@ -166,12 +186,15 @@ internal sealed partial class PreferencesWindow
         var Visible = 0;
         foreach (var Shortcut in this.EditableShortcuts)
         {
-            var SearchText = LanguageService.Text(Shortcut.ResourceKey) + " " + Shortcut.Id + " " + this.PreferenceShortcuts[Shortcut.Id];
+            var SearchText = LanguageService.Text(Shortcut.Group) + " " + LanguageService.Text(Shortcut.ResourceKey) + " " + Shortcut.Id + " " + this.PreferenceShortcuts[Shortcut.Id];
             var Matches = Terms.All(Term => SearchText.Contains(Term, StringComparison.CurrentCultureIgnoreCase)
                 || SearchText.Replace("+", "").Contains(Term.Replace("+", ""), StringComparison.CurrentCultureIgnoreCase));
             this.ShortcutRows[Shortcut.Id].Visibility = Matches ? Visibility.Visible : Visibility.Collapsed;
             if (Matches) Visible++;
         }
+        foreach (var Group in this.ShortcutGroups)
+            Group.Value.Visibility = this.EditableShortcuts.Any(Shortcut => Shortcut.Group == Group.Key && this.ShortcutRows[Shortcut.Id].Visibility == Visibility.Visible)
+                ? Visibility.Visible : Visibility.Collapsed;
         this.ShortcutEmptyHint.Visibility = Visible == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

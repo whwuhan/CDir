@@ -16,6 +16,7 @@ public partial class ExplorerTab
         await this.RunSelectionEscapeSmokeChecksAsync(Passed);
         await this.RunMouseHistorySmokeChecksAsync(Passed);
         await this.RunRoutedShortcutSmokeChecksAsync(Passed);
+        await this.RunDefaultAppOpenSmokeChecksAsync(Passed);
         await this.RunFileClipboardSmokeChecksAsync(Passed);
         await this.RunNewWindowShortcutSmokeChecksAsync(Passed);
         await this.RunSidebarAndSearchShortcutSmokeChecksAsync(Passed);
@@ -25,9 +26,9 @@ public partial class ExplorerTab
             if (!Condition) throw new InvalidOperationException("Shortcuts UI smoke test failed: " + Name);
             Passed.Add(Name);
         }
-        Check(KeyboardShortcut.All.Count == 34 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
-            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 34,
-            "All thirty-four bindings have valid unique defaults including customizable Preferences");
+        Check(KeyboardShortcut.All.Count == 35 && KeyboardShortcut.All.All(Item => KeyboardShortcut.TryNormalize(Item.DefaultGesture, Item.TerminalOnly, out _))
+            && KeyboardShortcut.All.Select(Item => Item.DefaultGesture).Distinct().Count() == 35,
+            "All thirty-five bindings have valid unique defaults");
         Check(KeyboardShortcut.Resolve(new Dictionary<string, string> { ["Search"] = "Alt+Q" }) is var Migrated
             && Migrated["Search"] == "Alt+Q" && Migrated["ToggleSidebar"] == "",
             "An existing personal Alt+Q binding is preserved when adding the new sidebar command");
@@ -79,8 +80,9 @@ public partial class ExplorerTab
                 Dialog.Categories.SelectedItem = Dialog.ShortcutsCategory;
                 Dialog.UpdateLayout();
                 Check(Dialog.ShortcutsPanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
-                    && Dialog.ShortcutEditors.Count == 25 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible),
-                    "The keyboard shortcuts page lists the twenty-five customizable bindings");
+                    && Dialog.ShortcutEditors.Count == 26 && Dialog.ShortcutRows.Values.All(Row => Row.IsVisible)
+                    && Dialog.ShortcutGroups.Count == 5,
+                    "The keyboard shortcuts page lists twenty-six customizable bindings in five groups");
                 foreach (var Language in LanguageService.SupportedLanguages)
                 {
                     Dialog.LanguagePicker.SelectedValue = Language.Code;
@@ -89,19 +91,23 @@ public partial class ExplorerTab
                         && Dialog.ShortcutRows["NewFolder"].Visibility == Visibility.Visible
                         && Dialog.ShortcutRows["Refresh"].Visibility == Visibility.Collapsed,
                         Language.Code + " searches localized action names and updates the category caption");
-                    var EnglishCaptions = ((Panel)Dialog.ShortcutsPanel).Children.OfType<Grid>()
-                        .Select(Row => Dialog.ShortcutRows.Single(Pair => ReferenceEquals(Pair.Value, Row)).Key)
-                        .Select(Id => LanguageService.EnglishText(KeyboardShortcut.All.Single(Item => Item.Id == Id).ResourceKey)).ToArray();
-                    Check(EnglishCaptions.SequenceEqual(EnglishCaptions.OrderBy(Text => Text, StringComparer.OrdinalIgnoreCase))
-                        && EnglishCaptions[0] == "Back" && EnglishCaptions[^1] == "Up" && LanguageService.CurrentLanguage == Language.Code,
-                        Language.Code + " keeps shortcuts in ascending English action-name order without changing the interface language");
+                    foreach (var Group in Dialog.ShortcutGroups)
+                    {
+                        var EnglishCaptions = Group.Value.Children.OfType<Grid>()
+                            .Select(Row => Dialog.ShortcutRows.Single(Pair => ReferenceEquals(Pair.Value, Row)).Key)
+                            .Select(Id => LanguageService.EnglishText(KeyboardShortcut.All.Single(Item => Item.Id == Id).ResourceKey)).ToArray();
+                        Check(EnglishCaptions.Length > 0 && EnglishCaptions.SequenceEqual(EnglishCaptions.OrderBy(Text => Text, StringComparer.OrdinalIgnoreCase))
+                            && Dialog.ShortcutGroupHeadings[Group.Key].Text == LanguageService.Text(Group.Key) && LanguageService.CurrentLanguage == Language.Code,
+                            Language.Code + " keeps localized group headings and sorted actions: " + Group.Key);
+                    }
                 }
                 Dialog.LanguagePicker.SelectedValue = "en-US";
                 Dialog.ShortcutSearch.Text = "ctrl + shift + n";
                 Check(Dialog.ShortcutRows["NewFolder"].Visibility == Visibility.Visible && Dialog.ShortcutRows["Refresh"].Visibility == Visibility.Collapsed,
                     "Key search ignores case and supports spaces around plus signs");
                 Dialog.ShortcutSearch.Text = "__no_matching_shortcut__";
-                Check(Dialog.ShortcutRows.Values.All(Row => Row.Visibility == Visibility.Collapsed) && Dialog.ShortcutEmptyHint.IsVisible,
+                Check(Dialog.ShortcutRows.Values.All(Row => Row.Visibility == Visibility.Collapsed) && Dialog.ShortcutEmptyHint.IsVisible
+                    && Dialog.ShortcutGroups.Values.All(Group => Group.Visibility == Visibility.Collapsed),
                     "An unmatched search shows the empty-state hint");
                 Dialog.ShortcutSearch.Text = "";
                 Dialog.UpdateLayout();
@@ -127,6 +133,13 @@ public partial class ExplorerTab
                     "Searching for a hidden fixed shortcut shows no customizable results");
                 Dialog.ShortcutSearch.Text = "";
                 var Editor = Dialog.ShortcutEditors["Search"];
+                Check(Dialog.SetShortcut("OpenWithDefault", "F9"), "Opening with the default app can use a custom shortcut");
+                Dialog.ShortcutEditors["OpenWithDefault"].RaiseEvent(new KeyEventArgs(this.UnmodifiedSmokeKeyboard, PresentationSource.FromVisual(Dialog), 0, Key.Space)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+                Check(this.ShortcutBindings["OpenWithDefault"] == "Space" && this.Settings.Shortcuts!["OpenWithDefault"] == "Space",
+                    "The shortcut recorder accepts Space for opening with the default app and saves it");
+                Check(Dialog.SetShortcut("OpenWithDefault", "") && this.ShortcutBindings["OpenWithDefault"] == ""
+                    && Dialog.SetShortcut("OpenWithDefault", "Space"), "Opening with the default app can be disabled and restored");
                 foreach (var (Id, Modifiers, Expected) in new[]
                 {
                     ("NextTab", ModifierKeys.Control, "Ctrl+Tab"),
@@ -210,12 +223,17 @@ public partial class ExplorerTab
                 Dialog.UpdateLayout();
                 if (AppMain.ScreenshotPath is not null)
                 {
-                    var Bitmap = new RenderTargetBitmap((int)Dialog.ActualWidth, (int)Dialog.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-                    Bitmap.Render(Dialog);
-                    var Encoder = new PngBitmapEncoder();
-                    Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
-                    using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(AppMain.ScreenshotPath)!, "PreferencesShortcuts-zh-CN.png"));
-                    Encoder.Save(Stream);
+                    foreach (var Language in new[] { "zh-CN", "en-US" })
+                    {
+                        Dialog.LanguagePicker.SelectedValue = Language;
+                        Dialog.UpdateLayout();
+                        var Bitmap = new RenderTargetBitmap((int)Dialog.ActualWidth, (int)Dialog.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                        Bitmap.Render(Dialog);
+                        var Encoder = new PngBitmapEncoder();
+                        Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
+                        using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(AppMain.ScreenshotPath)!, "PreferencesShortcuts-" + Language + ".png"));
+                        Encoder.Save(Stream);
+                    }
                 }
             });
             this.FileGrid.SelectedItems.Clear();
@@ -234,7 +252,7 @@ public partial class ExplorerTab
                 while (!Dialog.RestoreDefaultsButton.IsEnabled) await Task.Delay(20);
                 Check(this.Settings.Shortcuts is null && KeyboardShortcut.All.All(Item => this.ShortcutBindings[Item.Id] == Item.DefaultGesture)
                     && KeyboardShortcut.All.Where(Item => !Item.IsFixed).All(Item => Dialog.ShortcutEditors[Item.Id].Text == Item.DefaultGesture)
-                    && Dialog.ShortcutEditors.Count == 25, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
+                    && Dialog.ShortcutEditors.Count == 26, "Restore Default Settings resets every shortcut and only refreshes customizable rows");
                 Check(Dialog.CopyOnDropCheck.IsChecked == true && this.Settings.CopyOnDrop,
                     "Restore Default Settings turns drag-copy mode on");
             });

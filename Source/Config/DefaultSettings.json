@@ -66,6 +66,7 @@
     "Rename": "F2",
     "Delete": "Delete",
     "Open": "Enter",
+    "OpenWithDefault": "Space",
     "ToggleTerminal": "Alt+X",
     "ToggleSidebar": "Alt+Q",
     "AutoFitColumns": "Alt+E",

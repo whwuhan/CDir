@@ -13,6 +13,9 @@ namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    // Isolated UI checks exercise command completion without launching an editor
+    // or project generator against the user's files.
+    private Func<ShellContextMenu, uint, bool>? InvokeShellCommandForTests;
     private Action<string[], bool> DeleteShellItems = ShellContextMenu.Delete;
     private bool ShellMenuOpen;
     private FileEntry[]? PendingFileContextEntries;
@@ -128,12 +131,15 @@ public partial class ExplorerTab
             return;
         }
         SharedFileHistory.Audit(Verb, Menu.SelectionPaths, "Started");
-        if (Menu.Invoke(Id))
+        if (AppMain.SmokeTest && this.InvokeShellCommandForTests is { } Invoke ? Invoke(Menu, Id) : Menu.Invoke(Id))
         {
             SharedFileHistory.Audit(Verb, Menu.SelectionPaths, "Invoked");
             this.InvalidateVersionStatuses();
             this.ScheduleVersionRefresh();
-            await this.RefreshAsync(true);
+            // Shell selection and "ensure visible" are independent operations.
+            // A project generator completing is a content update, not a request
+            // to reopen the folder and scroll back to its selected project.
+            await this.RefreshCurrentFolderAsync(RefreshTree: true);
         }
     }
 

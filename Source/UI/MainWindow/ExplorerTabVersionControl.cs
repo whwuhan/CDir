@@ -60,7 +60,7 @@ public partial class ExplorerTab
         };
     }
 
-    private IEnumerable<FolderNode> AllVersionNodes()
+    private IEnumerable<FolderNode> AllVersionNodes(IEnumerable<FolderNode>? Roots = null)
     {
         IEnumerable<FolderNode> Visit(FolderNode Node)
         {
@@ -68,7 +68,7 @@ public partial class ExplorerTab
             foreach (var Child in Node.Children)
                 foreach (var Descendant in Visit(Child)) yield return Descendant;
         }
-        return this.Roots.Concat(this.SidebarBookmarkRoots()).SelectMany(Visit);
+        return (Roots ?? this.Roots.Concat(this.SidebarBookmarkRoots())).SelectMany(Visit);
     }
 
     private IEnumerable<FolderNode> VisibleVersionNodes()

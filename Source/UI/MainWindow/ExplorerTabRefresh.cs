@@ -14,16 +14,16 @@ public partial class ExplorerTab
 
     // Refresh the current location without navigating, rebuilding its controls, or
     // collapsing the sidebar. A later navigation/operation always wins an old read.
-    private async Task RefreshCurrentFolderAsync(bool RefreshTree)
+    private async Task RefreshCurrentFolderAsync(bool RefreshTree, bool NavigationTreeOnly = false)
     {
         // A watcher read must not supersede the refresh awaited by a completed
         // operation. Serialize reads so completion also means the visible rows are current.
         await this.FolderRefreshGate.WaitAsync();
-        try { await this.RefreshCurrentFolderCoreAsync(RefreshTree); }
+        try { await this.RefreshCurrentFolderCoreAsync(RefreshTree, NavigationTreeOnly); }
         finally { this.FolderRefreshGate.Release(); }
     }
 
-    private async Task RefreshCurrentFolderCoreAsync(bool RefreshTree)
+    private async Task RefreshCurrentFolderCoreAsync(bool RefreshTree, bool NavigationTreeOnly)
     {
         if (this.WindowClosed || this.CurrentPath.Length == 0) return;
         if (this.InlineRenameTarget is not null) { this.FolderRefreshPending = true; return; }
@@ -34,7 +34,9 @@ public partial class ExplorerTab
         var Search = this.SearchVersion;
         var Path = this.CurrentPath;
         var ShowHidden = this.Settings.ShowHidden;
-        var Nodes = RefreshTree ? this.AllVersionNodes().Where(Node => Node.IsLoaded && Node.LoadTask is null)
+        var Roots = this.NavigationTreeKey == "folder-tree" ? this.Roots.ToArray()
+            : this.NavigationSection(this.NavigationTreeKey) is { } Section ? this.CategoryFolderRoots(Section) : [];
+        var Nodes = RefreshTree ? this.AllVersionNodes(NavigationTreeOnly ? Roots : null).Where(Node => Node.IsLoaded && Node.LoadTask is null)
             .Select(Node => (Node, Version: Node.LoadVersion)).ToArray() : [];
         this.RefreshTimer.Stop();
         try
@@ -44,6 +46,13 @@ public partial class ExplorerTab
                 && Search == this.SearchVersion && Request == this.FolderRefreshVersion && SamePath(Path, this.CurrentPath);
             if (this.InlineRenameTarget is not null) { this.FolderRefreshPending = true; return; }
             if (!Current()) return;
+            // Explicit refresh also remeasures completed folder totals. Retaining
+            // row objects must not retain the previous scan's completion markers.
+            if (RefreshTree && NavigationTreeOnly)
+            {
+                this.CancelFolderSizes();
+                foreach (var Entry in this.Entries) Entry.ResetFolderSize();
+            }
             this.FolderEntries = Updated;
             this.FolderRefreshPending = false;
             // The main panel must reflect deletion before scanning unrelated expanded trees.
@@ -96,6 +105,11 @@ public partial class ExplorerTab
         this.CancelFolderSizes();
         if (this.Entries is not ObservableCollection<FileEntry> Items)
         { this.ShowEntries(Updated); return; }
+        // Metadata commits can reorder a sorted/grouped view before collection
+        // reconciliation. Capture the user's viewport before either can move it.
+        var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
+        var Vertical = Viewer?.VerticalOffset ?? 0;
+        var Horizontal = Viewer?.HorizontalOffset ?? 0;
         var Selected = this.SelectedEntries().Select(Entry => Entry.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var Existing = Items.ToDictionary(Entry => Entry.FullPath, StringComparer.OrdinalIgnoreCase);
         var Desired = Updated.Select(Entry =>
@@ -103,18 +117,33 @@ public partial class ExplorerTab
             if (Existing.TryGetValue(Entry.FullPath, out var Previous))
             {
                 if (Previous.Name == Entry.Name && Previous.FullPath == Entry.FullPath && Previous.IsDirectory == Entry.IsDirectory
-                    && (Previous.IsDirectory || Previous.Size == Entry.Size) && Previous.Modified == Entry.Modified && Previous.IsHidden == Entry.IsHidden
                     && Previous.TypeKey == Entry.TypeKey && Previous.Extension == Entry.Extension
-                    && Previous.OriginalLocation == Entry.OriginalLocation && Previous.DateDeleted == Entry.DateDeleted) return Previous;
+                    && Previous.OriginalLocation == Entry.OriginalLocation && Previous.DateDeleted == Entry.DateDeleted)
+                {
+                    // Commit only changes which affect the active ordering/group.
+                    // Ordinary timestamp/size updates must not remove and reinsert
+                    // rows, reset the view, or disturb virtualized icon containers.
+                    bool Changed(string Property) => Property == nameof(FileEntry.Modified) && Previous.Modified != Entry.Modified
+                        || Property == nameof(FileEntry.Size) && !Previous.IsDirectory && Previous.Size != Entry.Size;
+                    var Reposition = Changed(this.SortProperty) || Changed(this.FileGroupProperty);
+                    var List = Reposition ? this.View as System.Windows.Data.ListCollectionView : null;
+                    List?.EditItem(Previous);
+                    try
+                    {
+                        Previous.UpdateMetadata(Entry);
+                        Previous.Use12HourClock = this.Settings.Use12HourClock;
+                        this.AssignFileGroup(Previous, DateTime.Today);
+                    }
+                    finally { List?.CommitEdit(); }
+                    return Previous;
+                }
                 Entry.VersionStatus = Previous.VersionStatus;
                 Entry.IsCut = Previous.IsCut;
             }
             Entry.Use12HourClock = this.Settings.Use12HourClock;
+            this.AssignFileGroup(Entry, DateTime.Today);
             return Entry;
         }).ToArray();
-        var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
-        var Vertical = Viewer?.VerticalOffset ?? 0;
-        var Horizontal = Viewer?.HorizontalOffset ?? 0;
         var WasApplying = this.ApplyingSearchSelection;
         this.ApplyingSearchSelection = true;
         try
@@ -128,8 +157,8 @@ public partial class ExplorerTab
         if (Viewer is not null)
         {
             this.ActiveFileControl.UpdateLayout();
-            if (Math.Abs(Viewer.VerticalOffset - Vertical) > 0.5) Viewer.ScrollToVerticalOffset(Vertical);
-            if (Math.Abs(Viewer.HorizontalOffset - Horizontal) > 0.5) Viewer.ScrollToHorizontalOffset(Horizontal);
+            if (Math.Abs(Viewer.VerticalOffset - Vertical) > 0.001) Viewer.ScrollToVerticalOffset(Vertical);
+            if (Math.Abs(Viewer.HorizontalOffset - Horizontal) > 0.001) Viewer.ScrollToHorizontalOffset(Horizontal);
         }
         this.UpdateActions();
         this.UpdateCounts();

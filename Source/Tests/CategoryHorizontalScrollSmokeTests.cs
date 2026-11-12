@@ -84,6 +84,33 @@ public partial class ExplorerTab
                 Check(Viewer.ScrollableWidth > 100 && Viewer.ComputedHorizontalScrollBarVisibility == Visibility.Visible
                     && Viewer.ScrollableHeight == 0 && FindVisualChild<ScrollViewer>(ChildTree)!.ScrollableWidth == 0,
                     "The entire category has one horizontal scroll area, including its bookmark root and descendants: " + Section.Header);
+                var ChildItem = (TreeViewItem)ChildTree.ItemContainerGenerator.ContainerFromIndex(0);
+                var ChildHeader = (FrameworkElement)ChildItem.Template.FindName("PART_Header", ChildItem);
+                foreach (var Offset in new[] { 0.0, 96.0 })
+                {
+                    Viewer.ScrollToHorizontalOffset(Offset); await Settle();
+                    var Expected = Viewer.HorizontalOffset;
+                    var Changes = 0;
+                    void Changed(object Sender, ScrollChangedEventArgs E)
+                    {
+                        if (ReferenceEquals(E.OriginalSource, Viewer) && E.HorizontalChange != 0) Changes++;
+                    }
+                    Viewer.ScrollChanged += Changed;
+                    try
+                    {
+                        foreach (var Target in new FrameworkElement[] { Header, Label, ChildItem, ChildHeader, ChildLabel })
+                        {
+                            Target.BringIntoView(); await Settle();
+                            Check(Math.Abs(Viewer.HorizontalOffset - Expected) < 0.01 && Changes == 0,
+                                $"Automatic root, child and path reveals preserve horizontal position without a transient jump: {Section.Header}, {Target.GetType().Name}, {Offset}");
+                        }
+                        ChildItem.BringIntoView(new Rect(0, 0, 180, TreeHeaderHeight(ChildItem))); await Settle();
+                        Check(Math.Abs(Viewer.HorizontalOffset - Expected) < 0.01 && Changes == 0,
+                            $"An explicit child header rectangle preserves the category horizontal position: {Section.Header}, {Offset}");
+                    }
+                    finally { Viewer.ScrollChanged -= Changed; }
+                }
+                Viewer.ScrollToLeftEnd(); await Settle();
                 var NaturalName = new FormattedText(NameLabel.Text, System.Globalization.CultureInfo.CurrentUICulture, NameLabel.FlowDirection,
                     new Typeface(NameLabel.FontFamily, NameLabel.FontStyle, NameLabel.FontWeight, NameLabel.FontStretch),
                     NameLabel.FontSize, NameLabel.Foreground, VisualTreeHelper.GetDpi(NameLabel).PixelsPerDip).WidthIncludingTrailingWhitespace;
