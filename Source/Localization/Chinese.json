@@ -296,7 +296,7 @@
   "ShortcutHint": "按功能名称或按键组合搜索。点击快捷键输入框后按下新组合键，更改会立即生效并保存。",
   "ShortcutFixedHint": "此快捷键遵循 Windows 标准，固定且不可修改或清除。",
   "ShortcutRecordHint": "按下组合键进行设置。终端缩放也可按住 Ctrl 或 Alt 并滚动滚轮来绑定。点击“清除”取消绑定，Esc 取消，Tab 移至下一个控件。",
-  "ShortcutInvalid": "请使用 Ctrl 或 Alt 加按键、功能键或导航键。Esc、Tab、Windows 键和 Alt+F4 为保留按键。",
+  "ShortcutInvalid": "请使用 Ctrl 或 Alt 加按键、功能键、导航键或空格键。Esc、Tab、Windows 键和 Alt+F4 为保留按键。",
   "ShortcutConflict": "此快捷键已分配给“{0}”。请先清除或修改该绑定。",
   "ShortcutSaveError": "无法保存快捷键，已保留原来的绑定。",
   "NoShortcutResults": "没有匹配的快捷键",
@@ -392,5 +392,10 @@
   "GroupSmall": "小",
   "GroupMedium": "中等",
   "GroupLarge": "大",
+  "OpenWithDefault": "使用默认程序打开",
+  "ShortcutWindowsAndTabs": "窗口与标签页",
+  "ShortcutNavigation": "导航",
+  "ShortcutFileOperations": "文件操作",
+  "ShortcutInterface": "界面",
   "FolderType": "文件夹"
 }

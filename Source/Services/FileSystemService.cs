@@ -355,12 +355,26 @@ public sealed class FileSystemService
 
     internal Action<ProcessStartInfo> StartFileProcess = Info => { using var Child = System.Diagnostics.Process.Start(Info); };
 
-    public void OpenPath(string Path, string? WorkingDirectory = null)
+    public void OpenPath(string Path, string? WorkingDirectory = null, nint OwnerWindow = default)
     {
         var Normalized = this.NormalizePath(Path);
         var Directory = WorkingDirectory is null ? System.IO.Path.GetDirectoryName(Normalized)!
             : this.NormalizePath(WorkingDirectory);
-        this.StartFileProcess(new ProcessStartInfo(Normalized) { UseShellExecute = true, WorkingDirectory = Directory });
+        try
+        {
+            try { this.StartFileProcess(new ProcessStartInfo(Normalized) { UseShellExecute = true, WorkingDirectory = Directory }); }
+            catch (Win32Exception Error) when (Error.NativeErrorCode == 1155)
+            {
+                // Let Windows supply its app picker and association choices.
+                // Pass the file separately so Unicode, spaces and shell characters stay literal.
+                this.StartFileProcess(new ProcessStartInfo(Normalized)
+                {
+                    UseShellExecute = true, WorkingDirectory = Directory, Verb = "openas",
+                    ErrorDialog = true, ErrorDialogParentHandle = OwnerWindow
+                });
+            }
+        }
+        catch (Win32Exception Error) when (Error.NativeErrorCode == 1223) { } // The user cancelled the Windows picker.
     }
 
     public void OpenTerminal(string Directory)

@@ -23,6 +23,11 @@ public partial class ExplorerTab
         var SettingsFile = Path.Combine(Root, "Settings.json");
         var WorkspaceFile = SettingsFile + ".workspace.json";
         DurableJsonStore.Write(SettingsFile, JsonSerializer.Serialize(new AppSettings { LastPath = First }));
+        DurableJsonStore.Write(WorkspaceFile, JsonSerializer.Serialize(new
+        {
+            Tabs = new[] { new { Settings = new { LastPath = First, Shortcuts = new Dictionary<string, string> { ["QuickEditText"] = "F9" }, SeparatePinnedEditorTabs = true } } },
+            EditorWindows = new[] { new { Tabs = new[] { new { Path = Path.Combine(Second, "Selected.txt"), Text = "Legacy draft" } } } }
+        }));
         MainWindow? Probe = null;
         async Task Open()
         {
@@ -35,6 +40,9 @@ public partial class ExplorerTab
         {
             await Open();
             var A = Probe!.ActiveTab!;
+            Check(SamePath(A.CurrentPath, First) && A.ShortcutBindings["OpenWithDefault"] == "F9"
+                && !Probe.OwnedWindows.Cast<Window>().Any(Window => Window.GetType().Name.Contains("TextEditor")),
+                "Legacy workspaces restore file tabs and migrate their custom open key without restoring the removed editor");
             A.SetTabAlias("Kept first");
             var B = Probe.AddTab();
             await B.WaitUntilReadyAsync();

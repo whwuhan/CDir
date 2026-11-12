@@ -43,6 +43,8 @@ public sealed class ShellIcon : Image
     private CancellationTokenSource? PendingLoad;
     private int LoadVersion;
     private bool RefreshQueued;
+    private IconIdentity? DisplayedIdentity;
+    private sealed record IconIdentity(string? Path, bool IsDirectory, bool IsDrive, bool OpenFolder, bool Thumbnails);
 
     public ShellIcon()
     {
@@ -69,7 +71,11 @@ public sealed class ShellIcon : Image
 
     private static void IconPropertyChanged(DependencyObject Target, DependencyPropertyChangedEventArgs E)
     {
-        if (Target is ShellIcon { IsLoaded: true } Icon) { Icon.QueueRefresh(); Icon.UpdateVersionTooltip(); }
+        if (Target is not ShellIcon { IsLoaded: true } Icon) return;
+        // A folder timestamp (or a file in Details view) cannot change a thumbnail.
+        if (E.Property == ThumbnailStampProperty && (!Icon.ShowThumbnails || Icon.IsDirectory || Icon.IconSize <= 16)) return;
+        Icon.QueueRefresh();
+        Icon.UpdateVersionTooltip();
     }
 
     private static void VersionStatusChanged(DependencyObject Target, DependencyPropertyChangedEventArgs E) => ((ShellIcon)Target).UpdateVersionTooltip();
@@ -154,6 +160,7 @@ public sealed class ShellIcon : Image
         if (this.HideWhenEmpty && string.IsNullOrWhiteSpace(this.Path))
         {
             this.Source = null;
+            this.DisplayedIdentity = null;
             return;
         }
         var Version = this.LoadVersion;
@@ -163,9 +170,12 @@ public sealed class ShellIcon : Image
             : ShellIconService.GetFallbackIcon(this.IsDirectory, PixelSize);
         var Cancellation = new CancellationTokenSource();
         this.PendingLoad = Cancellation;
+        var Thumbnails = this.ShowThumbnails && !this.IsDirectory && PixelSize > 32 && this.IconSize > 16;
+        var Identity = new IconIdentity(this.Path, this.IsDirectory, this.IsDrive, this.OpenFolder && this.IsDirectory, Thumbnails);
+        var RetainImage = this.Source is not null && this.DisplayedIdentity == Identity;
+        this.DisplayedIdentity = Identity;
         try
         {
-            var Thumbnails = this.ShowThumbnails && !this.IsDirectory && PixelSize > 32 && this.IconSize > 16;
             var Pending = ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, Thumbnails, this.ThumbnailStamp, Cancellation.Token);
             // A cache hit paints immediately, without flashing a generic icon.
             if (Pending.IsCompletedSuccessfully)
@@ -173,8 +183,11 @@ public sealed class ShellIcon : Image
                 if (this.IsLoaded && Version == this.LoadVersion) this.Source = Pending.Result ?? Fallback;
                 return;
             }
-            this.Source = Fallback;
-            if (Thumbnails)
+            // Keep a same-file image while refreshing its timestamp/size. Falling
+            // back to a square stock icon can resize a wide preview and shift its
+            // neighboring text on every external write. Recycled paths still clear.
+            if (!RetainImage) this.Source = Fallback;
+            if (Thumbnails && !RetainImage)
             {
                 // The fast icon lane provides a sharp associated-type icon while
                 // the independent preview workers wait for a media provider.

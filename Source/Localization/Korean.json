@@ -296,7 +296,7 @@
   "ShortcutHint": "작업 이름이나 키 조합으로 검색합니다. 입력란을 선택하고 새 키 조합을 누르면 즉시 적용되고 저장됩니다.",
   "ShortcutFixedHint": "이 Windows 표준 단축키는 고정되어 있어 변경하거나 해제할 수 없습니다.",
   "ShortcutRecordHint": "키 조합을 눌러 지정합니다. 터미널 확대/축소는 Ctrl 또는 Alt를 누른 채 마우스 휠로도 지정할 수 있습니다. 해제 버튼으로 할당을 제거합니다. Esc는 취소, Tab은 다음 컨트롤로 이동합니다.",
-  "ShortcutInvalid": "Ctrl 또는 Alt와 키, 기능 키 또는 탐색 키를 사용하세요. Esc, Tab, Windows 키 및 Alt+F4는 예약되어 있습니다.",
+  "ShortcutInvalid": "Ctrl 또는 Alt와 키, 기능 키, 탐색 키 또는 스페이스바를 사용하세요. Esc, Tab, Windows 키 및 Alt+F4는 예약되어 있습니다.",
   "ShortcutConflict": "이 바로 가기 키는 “{0}”에 지정되어 있습니다. 먼저 해당 할당을 해제하거나 변경하세요.",
   "ShortcutSaveError": "바로 가기 키를 저장하지 못했습니다. 이전 할당이 유지됩니다.",
   "NoShortcutResults": "일치하는 바로 가기 키가 없습니다",
@@ -392,5 +392,10 @@
   "GroupSmall": "작음",
   "GroupMedium": "보통",
   "GroupLarge": "큼",
+  "OpenWithDefault": "기본 앱으로 열기",
+  "ShortcutWindowsAndTabs": "창 및 탭",
+  "ShortcutNavigation": "탐색",
+  "ShortcutFileOperations": "파일 작업",
+  "ShortcutInterface": "인터페이스",
   "FolderType": "폴더"
 }

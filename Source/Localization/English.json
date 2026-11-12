@@ -296,7 +296,7 @@
   "ShortcutHint": "Search by action or key combination. Select a shortcut field and press the new keys. Changes apply and save immediately.",
   "ShortcutFixedHint": "This standard Windows shortcut is fixed and cannot be changed or cleared.",
   "ShortcutRecordHint": "Press a key combination to assign it. For terminal zoom, hold Ctrl or Alt and turn the mouse wheel. Use the clear button to remove it. Esc cancels; Tab moves to the next control.",
-  "ShortcutInvalid": "Use Ctrl or Alt with a key, a function key, or a navigation key. Esc, Tab, Windows keys, and Alt+F4 are reserved.",
+  "ShortcutInvalid": "Use Ctrl or Alt with a key, a function key, a navigation key, or the space bar. Esc, Tab, Windows keys, and Alt+F4 are reserved.",
   "ShortcutConflict": "This shortcut is already assigned to “{0}”. Clear or change that binding first.",
   "ShortcutSaveError": "Could not save the shortcut. The previous binding has been kept.",
   "NoShortcutResults": "No matching shortcuts",
@@ -392,5 +392,10 @@
   "GroupSmall": "Small",
   "GroupMedium": "Medium",
   "GroupLarge": "Large",
+  "OpenWithDefault": "Open With Default App",
+  "ShortcutWindowsAndTabs": "Windows And Tabs",
+  "ShortcutNavigation": "Navigation",
+  "ShortcutFileOperations": "File Operations",
+  "ShortcutInterface": "Interface",
   "FolderType": "Folder"
 }

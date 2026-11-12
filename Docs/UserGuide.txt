@@ -1,5 +1,8 @@
 CDir File Manager
 
+Open with default apps
+Select files in the main panel and press Space to open them with their Windows default apps. If no app is associated, Windows shows its app picker. Customize, clear, or reset Open With Default App under Preferences > Keyboard Shortcuts. The built-in text editor has been removed. F5 keeps the selected sidebar tree when a folder and its parent are both bookmarked, and scrolls the exact selected folder header into view below pinned category and ancestor headers. Shortcut preferences remain grouped by function and searchable by action, key, or group.
+
 File views
 Hold Ctrl and turn the mouse wheel over the main file pane to change the view and icon size. Up enlarges the view; down moves toward Content. Intermediate icon sizes are remembered per folder and included when applying a view recursively. Search uses the same view. Ordinary scrolling and terminal font zoom keep their existing behavior.
 
@@ -128,6 +131,7 @@ Ctrl+C in the sidebar tree copies the selected folder's absolute path. This tree
 While preparing to drag a main-panel folder to a category, the sidebar tree remains unchanged until release or the end of the drag.
 Ctrl+A                  Select all in the file list
 Enter                   Open selected item
+Space                   Open selected files with their Windows default apps (customizable)
 F2                      Rename
 Delete                  Move to Recycle Bin
 

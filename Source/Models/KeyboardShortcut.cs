@@ -6,6 +6,16 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
 {
     internal bool IsFixed => this.FixedGesture is not null;
     internal string DefaultGesture => this.FixedGesture ?? DefaultSettings.Current.Shortcuts[this.Id];
+    internal static IReadOnlyList<string> Groups { get; } = Array.AsReadOnly<string>(
+        ["ShortcutWindowsAndTabs", "ShortcutNavigation", "ShortcutFileOperations", "ShortcutInterface", "Terminal"]);
+    internal string Group => this.Id switch
+    {
+        "NewWindow" or "NewTab" or "ToggleTabPin" or "CloseTab" or "NextTab" or "PreviousTab" => "ShortcutWindowsAndTabs",
+        "Back" or "Forward" or "Up" or "Refresh" or "EditPath" or "EditPathAlternate" or "Search" or "CopyCurrentFolderPath" => "ShortcutNavigation",
+        "Preferences" or "ToggleSidebar" or "AutoFitColumns" or "DistributePanesEvenly" => "ShortcutInterface",
+        _ when this.TerminalOnly || this.Id == "ToggleTerminal" => "Terminal",
+        _ => "ShortcutFileOperations"
+    };
 
     internal static IReadOnlyList<KeyboardShortcut> All { get; } = Array.AsReadOnly<KeyboardShortcut>(
     [
@@ -34,6 +44,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         new("Rename", "Rename", FileListOnly: true),
         new("Delete", "Recycle", FileListOnly: true),
         new("Open", "Open", FileListOnly: true),
+        new("OpenWithDefault", "OpenWithDefault", FileListOnly: true),
         new("ToggleTerminal", "Terminal", true),
         new("ToggleSidebar", "ToggleSidebar", true),
         new("AutoFitColumns", "AutoFitColumns", true),
@@ -71,7 +82,7 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         && (Modifiers & ~(ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)) == 0
         && !(Modifiers == ModifierKeys.Alt && Key == Key.F4)
         && ((Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0
-            || Key is >= Key.F1 and <= Key.F24 || Key is Key.Enter or Key.Delete or Key.Insert or Key.Home or Key.End or Key.PageUp or Key.PageDown);
+            || Key is >= Key.F1 and <= Key.F24 || Key is Key.Space or Key.Enter or Key.Delete or Key.Insert or Key.Home or Key.End or Key.PageUp or Key.PageDown);
 
     internal static bool TryParse(string? Text, out Key Key, out ModifierKeys Modifiers)
     {
@@ -122,6 +133,10 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
 
     internal static Dictionary<string, string> Resolve(IReadOnlyDictionary<string, string>? Overrides)
     {
+        // Preserve personal bindings from the removed quick editor command.
+        if (Overrides is not null && !Overrides.ContainsKey("OpenWithDefault")
+            && Overrides.TryGetValue("QuickEditText", out var LegacyGesture))
+            Overrides = new Dictionary<string, string>(Overrides, StringComparer.Ordinal) { ["OpenWithDefault"] = LegacyGesture };
         var Result = All.ToDictionary(Item => Item.Id, Item => Item.DefaultGesture, StringComparer.Ordinal);
         foreach (var Item in All)
         {
@@ -131,11 +146,12 @@ internal sealed record KeyboardShortcut(string Id, string ResourceKey, bool Work
         }
         // Damaged or manually edited settings must not leave commands competing for a key.
         // A newly introduced default must not take over an existing personal binding.
-        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin", "AutoFitColumns", "DistributePanesEvenly", "Preferences" })
+        foreach (var NewCommand in new[] { "ToggleSidebar", "ToggleTabPin", "AutoFitColumns", "DistributePanesEvenly", "Preferences", "OpenWithDefault" })
             if (Overrides is not null && !Overrides.ContainsKey(NewCommand)
                 && Result.Any(Pair => Pair.Key != NewCommand && Pair.Value == Result[NewCommand]))
                 Result[NewCommand] = "";
-        if (Result.Values.Where(Value => Value.Length > 0).GroupBy(Value => Value).Any(Group => Group.Count() > 1))
+        if (All.Any(Item => Result[Item.Id].Length > 0 && All.Any(Other => Other.Id != Item.Id
+            && Result[Item.Id] == Result[Other.Id])))
             return All.ToDictionary(Item => Item.Id, Item => Item.DefaultGesture, StringComparer.Ordinal);
         return Result;
     }

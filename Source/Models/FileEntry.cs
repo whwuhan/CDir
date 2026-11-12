@@ -60,8 +60,34 @@ public sealed class FileEntry : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new(nameof(Size)));
         PropertyChanged?.Invoke(this, new(nameof(DisplaySize)));
     }
-    public DateTime Modified { get; init; }
-    public bool IsHidden { get; init; }
+    private DateTime CurrentModified;
+    public DateTime Modified { get => this.CurrentModified; init => this.CurrentModified = value; }
+    private bool CurrentIsHidden;
+    public bool IsHidden { get => this.CurrentIsHidden; init => this.CurrentIsHidden = value; }
+
+    // Filesystem notifications often only change metadata (for example while
+    // generating IDE projects). Keep the bound item and its realized icon alive.
+    internal void UpdateMetadata(FileEntry Updated)
+    {
+        if (this.Modified != Updated.Modified)
+        {
+            this.CurrentModified = Updated.Modified;
+            PropertyChanged?.Invoke(this, new(nameof(Modified)));
+            PropertyChanged?.Invoke(this, new(nameof(DisplayModified)));
+            if (this.IsDirectory) this.ResetFolderSize();
+        }
+        if (!this.IsDirectory && this.Size != Updated.Size)
+        {
+            this.CurrentSize = Updated.Size;
+            PropertyChanged?.Invoke(this, new(nameof(Size)));
+            PropertyChanged?.Invoke(this, new(nameof(DisplaySize)));
+        }
+        if (this.IsHidden != Updated.IsHidden)
+        {
+            this.CurrentIsHidden = Updated.IsHidden;
+            PropertyChanged?.Invoke(this, new(nameof(IsHidden)));
+        }
+    }
     public string? OriginalLocation { get; init; }
     public DateTime? DateDeleted { get; init; }
     internal byte[]? ShellId { get; init; }

@@ -20,6 +20,8 @@ public partial class ExplorerTab
         var InitialTree = this.DirectoryTreeSection.IsExpanded;
         var InitialFavoritesSource = this.FavoritesList.ItemsSource;
         var InitialFavorites = this.FavoritesSection.IsExpanded;
+        var InitialBookmarkPaths = this.Settings.ShowBookmarkPaths;
+        var InitialSidebarWidth = this.SidebarColumn.Width;
         var FixtureId = Guid.NewGuid().ToString("N");
         var Fixture = Path.Combine(Path.GetTempPath(), "CDirCategoryTree-" + FixtureId);
         var Alpha = Directory.CreateDirectory(Path.Combine(Fixture, "Alpha 中文")).FullName;
@@ -60,6 +62,45 @@ public partial class ExplorerTab
             .Select(Node => (Node, Node.IsExpanded, Node.IsLoaded, Node.Children.Count)).ToArray();
         FolderNode[] SidebarSelection() => this.Roots.Concat(this.SidebarBookmarkRoots()).SelectMany(Visit).Where(Node => Node.IsSelected).ToArray();
         bool OnlySelected(FolderNode Expected) => SidebarSelection() is { Length: 1 } Selection && ReferenceEquals(Selection[0], Expected);
+        bool HeaderVisible(FrameworkElement Header)
+        {
+            var Top = Header.TranslatePoint(new Point(), this.SidebarScroll).Y;
+            var Height = Header is TreeViewItem Item ? TreeHeaderHeight(Item) : Header.ActualHeight;
+            var PinnedBottom = this.StickySidebar.Visibility == Visibility.Visible
+                ? this.StickySidebar.TranslatePoint(new Point(0, this.StickySidebar.ActualHeight), this.SidebarScroll).Y : 0;
+            var Visible = Header.IsVisible && Top >= Math.Max(0, PinnedBottom) - 1 && Top + Height <= this.SidebarScroll.ViewportHeight + 1;
+            if (!Visible) AppMain.RecordSmokeProgress($"Bookmark header geometry: {Header.DataContext}, top={Top}, height={Height}, pinned={PinnedBottom}, viewport={this.SidebarScroll.ViewportHeight}, offset={this.SidebarScroll.VerticalOffset}");
+            return Visible;
+        }
+        async Task ScrollAway(FrameworkElement Header)
+        {
+            this.SidebarScroll.ScrollToBottom();
+            await Settle();
+            Check(!HeaderVisible(Header), "The selected bookmark header is outside the visible sidebar before explicit refresh");
+        }
+        async Task RefreshWithoutHorizontalJump(Expander Section, double Offset)
+        {
+            var Viewer = (ScrollViewer)Section.Template.FindName("CategoryScroll", Section);
+            Viewer.ScrollToHorizontalOffset(Offset);
+            await Settle();
+            Check(Viewer.ScrollableWidth > 96 && Math.Abs(Viewer.HorizontalOffset - Offset) < 0.01,
+                "The refresh regression starts with overflowing paths at the requested horizontal position");
+            var Changes = 0;
+            void Changed(object Sender, ScrollChangedEventArgs E)
+            {
+                if (ReferenceEquals(E.OriginalSource, Viewer) && E.HorizontalChange != 0) Changes++;
+            }
+            Viewer.ScrollChanged += Changed;
+            try
+            {
+                Check(await this.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: false),
+                    "F5 dispatches refresh from a category bookmark");
+                await Settle();
+                Check(Math.Abs(Viewer.HorizontalOffset - Offset) < 0.01 && Changes == 0,
+                    "F5 reveals the selected header vertically without any horizontal jump: " + Offset);
+            }
+            finally { Viewer.ScrollChanged -= Changed; }
+        }
         TreeViewItem? RenderedNode(ItemsControl Owner, FolderNode Target)
         {
             foreach (var Node in Owner.Items.OfType<FolderNode>())
@@ -374,6 +415,100 @@ public partial class ExplorerTab
                 && BookmarkState(Category.Folders.Select(Folder => Folder.Node)).SequenceEqual(CategoryBeforeQuickAccess)
                 && BookmarkState(Other.Folders.Select(Folder => Folder.Node)).SequenceEqual(OtherBeforeQuickAccess),
                 "My Computer navigation and a full refresh preserve Quick Access and all categories");
+
+            // A parent bookmark and an independent child bookmark share a path,
+            // but F5 must reveal only the tree whose node was clicked.
+            this.AddFoldersToCategory(Category, [new FileEntry { FullPath = ChildPath, IsDirectory = true }]);
+            await Settle();
+            var DirectChildRoot = Category.Folders.Single(Folder => SamePath(Folder.FullPath, ChildPath)).Node;
+            var DirectChildContainer = List.ItemContainerGenerator.ContainerFromIndex(Category.Folders.IndexOf(
+                Category.Folders.Single(Folder => ReferenceEquals(Folder.Node, DirectChildRoot))));
+            var DirectChildButton = FindVisualChild<Button>(DirectChildContainer)!;
+            var PaddingPath = Directory.CreateDirectory(Path.Combine(Fixture, "Scroll padding")).FullName;
+            for (var Index = 0; Index < 80; Index++) Directory.CreateDirectory(Path.Combine(PaddingPath, $"Folder {Index:00}"));
+            this.AddFoldersToCategory(Other, [new FileEntry { FullPath = PaddingPath, IsDirectory = true }]);
+            var PaddingRoot = Other.Folders.Single(Folder => SamePath(Folder.FullPath, PaddingPath)).Node;
+            await this.EnsureChildrenAsync(PaddingRoot);
+            PaddingRoot.IsExpanded = true;
+            OtherSection.IsExpanded = true;
+            this.CollapseTreeBranches([Root, DirectChildRoot]);
+            await this.OpenCategoryFolderAsync(DirectChildButton, Navigate: true);
+            var ParentBeforeRefresh = BookmarkState([Root]);
+            var OtherBeforeRefresh = BookmarkState(Other.Folders.Select(Folder => Folder.Node));
+            var ComputerBeforeRefresh = ComputerState();
+            var RefreshHistory = this.History.ToArray();
+            this.SidebarColumn.Width = new GridLength(360);
+            this.ChangeShowBookmarkPaths(true);
+            await Settle();
+            await ScrollAway(DirectChildButton);
+            var BeforePassiveRefresh = this.SidebarScroll.VerticalOffset;
+            await this.RefreshAsync();
+            await Settle();
+            Check(!HeaderVisible(DirectChildButton) && Math.Abs(this.SidebarScroll.VerticalOffset - BeforePassiveRefresh) < 0.5,
+                "A passive refresh preserves a manually scrolled bookmark viewport");
+            await RefreshWithoutHorizontalJump(Section, 0);
+            await Settle();
+            Check(DirectChildRoot.IsExpanded && DirectChildRoot.IsLoaded && OnlySelected(DirectChildRoot)
+                && BookmarkState([Root]).SequenceEqual(ParentBeforeRefresh)
+                && BookmarkState(Other.Folders.Select(Folder => Folder.Node)).SequenceEqual(OtherBeforeRefresh)
+                && ComputerState().SequenceEqual(ComputerBeforeRefresh) && this.History.SequenceEqual(RefreshHistory),
+                "F5 expands the clicked independent child bookmark and refreshes content without opening its overlapping parent or changing history");
+            Check(HeaderVisible(DirectChildButton), "F5 scrolls the already selected independent bookmark header into view below pinned headers");
+            await this.SyncPanelTreesAsync(this.NavigationVersion);
+            Check(OnlySelected(DirectChildRoot) && BookmarkState([Root]).SequenceEqual(ParentBeforeRefresh),
+                "Main-panel synchronization keeps the clicked child bookmark when its parent is also bookmarked");
+            var AddedPath = Directory.CreateDirectory(Path.Combine(ChildPath, "Added Before F5")).FullName;
+            await this.HandleShortcutAsync(Key.F5, ModifierKeys.None, InText: false, InFileList: false);
+            Check(OnlySelected(DirectChildRoot) && DirectChildRoot.Children.Any(Node => SamePath(Node.FullPath, AddedPath))
+                && this.Entries.Any(Entry => SamePath(Entry.FullPath, AddedPath)) && !Root.IsExpanded,
+                "F5 refreshes newly added child folders inside the selected bookmark without expanding its parent");
+
+            // Select the same path through the parent's tree instead. Choosing the
+            // longest matching path alone would incorrectly switch to the shortcut.
+            await this.EnsureChildrenAsync(Root);
+            Root.IsExpanded = true;
+            this.CollapseTreeBranches([DirectChildRoot]);
+            await Settle();
+            var NestedChild = Root.Children.Single(Node => SamePath(Node.FullPath, ChildPath));
+            await this.OpenSidebarTreeFolderAsync(RenderedNode(Tree, NestedChild)!, Navigate: true);
+            await ScrollAway(RenderedNode(Tree, NestedChild)!);
+            Directory.Delete(AddedPath);
+            await RefreshWithoutHorizontalJump(Section, 96);
+            await Settle();
+            Check(OnlySelected(NestedChild) && NestedChild.IsExpanded && !DirectChildRoot.IsExpanded
+                && !NestedChild.Children.Any(Node => SamePath(Node.FullPath, AddedPath))
+                && !this.Entries.Any(Entry => SamePath(Entry.FullPath, AddedPath)),
+                "F5 preserves the selected nested node instead of switching to an overlapping direct bookmark and removes deleted children");
+            this.CaptureAddressBreadcrumbPreview("TreeRefreshScroll.png");
+            Check(HeaderVisible(RenderedNode(Tree, NestedChild)!), "F5 reveals the selected category descendant instead of only its root");
+            var DeepNode = NestedChild.Children.Single(Node => SamePath(Node.FullPath, Deep));
+            await this.OpenSidebarTreeFolderAsync(RenderedNode(Tree, DeepNode)!, Navigate: true);
+            await ScrollAway(RenderedNode(Tree, DeepNode)!);
+            await RefreshWithoutHorizontalJump(Section, 0);
+            await Settle();
+            Check(OnlySelected(DeepNode) && HeaderVisible(RenderedNode(Tree, DeepNode)!),
+                "F5 reveals the exact deep category node without hiding it under pinned ancestors");
+
+            var QuickDirectChild = new FavoriteLocation("Quick Child", ChildPath);
+            this.FavoritesList.ItemsSource = new[] { new FavoriteLocation("Quick Parent", Alpha), QuickDirectChild };
+            await Settle();
+            var QuickDirectButton = FindVisualChild<Button>(this.FavoritesList.ItemContainerGenerator.ContainerFromIndex(1))!;
+            await this.OpenCategoryFolderAsync(QuickDirectButton, Navigate: true);
+            await ScrollAway(QuickDirectButton);
+            await RefreshWithoutHorizontalJump(this.FavoritesSection, 96);
+            await Settle();
+            Check(OnlySelected(QuickDirectChild.Node) && QuickDirectChild.Node.IsExpanded
+                && !this.FavoritesList.Items.OfType<FavoriteLocation>().First().Node.IsExpanded,
+                "F5 keeps the clicked Quick Access child tree when Quick Access also contains its parent");
+            Check(HeaderVisible(QuickDirectButton), "F5 scrolls the exact Quick Access root header into view");
+            var QuickDirectTree = FindVisualChild<TreeView>(this.FavoritesList.ItemContainerGenerator.ContainerFromIndex(1))!;
+            var QuickDeepNode = QuickDirectChild.Node.Children.Single(Node => SamePath(Node.FullPath, Deep));
+            await this.OpenSidebarTreeFolderAsync(RenderedNode(QuickDirectTree, QuickDeepNode)!, Navigate: true);
+            await ScrollAway(RenderedNode(QuickDirectTree, QuickDeepNode)!);
+            await RefreshWithoutHorizontalJump(this.FavoritesSection, 0);
+            await Settle();
+            Check(OnlySelected(QuickDeepNode) && HeaderVisible(RenderedNode(QuickDirectTree, QuickDeepNode)!),
+                "F5 scrolls the selected Quick Access descendant into view");
             this.FolderTree.Focus();
         }
         finally
@@ -386,6 +521,8 @@ public partial class ExplorerTab
             this.FavoritesList.ItemsSource = InitialFavoritesSource;
             this.FavoritesSection.IsExpanded = InitialFavorites;
             this.DirectoryTreeSection.IsExpanded = InitialTree;
+            this.ChangeShowBookmarkPaths(InitialBookmarkPaths);
+            this.SidebarColumn.Width = InitialSidebarWidth;
             this.SidebarScroll.ScrollToTop();
             if (!AppMain.IsInsideSmokeScope(Fixture) || !File.Exists(Marker) || File.ReadAllText(Marker) != FixtureId
                 || (File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)

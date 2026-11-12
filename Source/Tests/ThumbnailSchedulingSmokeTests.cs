@@ -107,8 +107,28 @@ public partial class ExplorerTab
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Check(ReferenceEquals(Probe.Source, Preview),
                 "A visible item replaces its associated icon as soon as its slow preview completes");
+            var Fallback = ShellIconService.GetFallbackIcon(false, ProbePixels);
+            var Downgrades = 0;
+            var SourceProperty = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(ShellIcon));
+            void SourceChanged(object? Sender, EventArgs E)
+            {
+                if (ReferenceEquals(Probe.Source, Fallback) || ReferenceEquals(Probe.Source, ExpectedIcon)) Downgrades++;
+            }
+            SourceProperty.AddValueChanged(Probe, SourceChanged);
+            try
+            {
+                for (var Stamp = 1; Stamp <= 3; Stamp++)
+                {
+                    Probe.ThumbnailStamp = Stamp;
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                    await this.WaitForShellIconIdleAsync();
+                }
+                Check(Downgrades == 0 && Probe.Source is BitmapSource,
+                    "Repeated same-file thumbnail refreshes retain the displayed preview without stock/type-icon size changes");
+            }
+            finally { SourceProperty.RemoveValueChanged(Probe, SourceChanged); }
             Probe.Path = ImagePath;
-            var Expected = await ShellIconService.GetIconAsync(ImagePath, false, ProbePixels, ShowThumbnails: true);
+            var Expected = await ShellIconService.GetIconAsync(ImagePath, false, ProbePixels, ShowThumbnails: true, ThumbnailStamp: Probe.ThumbnailStamp);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Deadline = Environment.TickCount64 + 3000;
             while (!ReferenceEquals(Probe.Source, Expected) && Environment.TickCount64 < Deadline) await Task.Delay(20);

@@ -296,7 +296,7 @@
   "ShortcutHint": "操作名またはキーの組み合わせで検索できます。入力欄を選択して新しいキーを押すと、すぐに適用・保存されます。",
   "ShortcutFixedHint": "この Windows 標準ショートカットは固定されており、変更や解除はできません。",
   "ShortcutRecordHint": "キーの組み合わせを押して設定します。ターミナルの拡大縮小は Ctrl または Alt とマウスホイールでも設定できます。解除ボタンで割り当てを解除します。Esc でキャンセル、Tab で次の項目に移動します。",
-  "ShortcutInvalid": "Ctrl または Alt とキー、ファンクションキー、またはナビゲーションキーを使用してください。Esc、Tab、Windows キー、Alt+F4 は予約されています。",
+  "ShortcutInvalid": "Ctrl または Alt とキー、ファンクションキー、ナビゲーションキー、またはスペースキーを使用してください。Esc、Tab、Windows キー、Alt+F4 は予約されています。",
   "ShortcutConflict": "このショートカットは「{0}」に割り当てられています。先にその割り当てを解除または変更してください。",
   "ShortcutSaveError": "ショートカットを保存できませんでした。以前の割り当てを保持しました。",
   "NoShortcutResults": "一致するショートカットはありません",
@@ -392,5 +392,10 @@
   "GroupSmall": "小",
   "GroupMedium": "中",
   "GroupLarge": "大",
+  "OpenWithDefault": "既定のアプリで開く",
+  "ShortcutWindowsAndTabs": "ウィンドウとタブ",
+  "ShortcutNavigation": "ナビゲーション",
+  "ShortcutFileOperations": "ファイル操作",
+  "ShortcutInterface": "インターフェイス",
   "FolderType": "フォルダー"
 }

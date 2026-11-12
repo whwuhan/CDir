@@ -366,7 +366,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         finally { if (LoadVersion == Node.LoadVersion) Node.LoadTask = null; }
     }
 
-    private async Task SyncTreeAsync(string Path, int Version, bool Reveal)
+    private async Task SyncTreeAsync(string Path, int Version, bool Reveal, bool ScrollToSelection = false)
     {
         this.SyncingTree = true;
         try
@@ -417,7 +417,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             // Address/history navigation must still reveal an already selected folder
             // after the user has manually scrolled it out of view.
-            if (Reveal && WasSelected && Version == this.NavigationVersion && !this.WindowClosed)
+            if (Reveal && (WasSelected || ScrollToSelection) && Version == this.NavigationVersion && !this.WindowClosed)
             {
                 ItemsControl Owner = this.FolderTree;
                 TreeViewItem? Item = null;
@@ -427,7 +427,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
                     if (Item is null) break;
                     Owner = Item;
                 }
-                if (Item is not null) this.QueueTreeItemIntoView(Item);
+                if (Item is not null) this.QueueSidebarNodeIntoView(Item, Node, PositionHeader: ScrollToSelection);
             }
         }
         finally { if (Version == this.NavigationVersion) this.SyncingTree = false; }
@@ -445,13 +445,51 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     }
     private void QueueTreeItemIntoView(TreeViewItem Item)
     {
+        if (Item.DataContext is FolderNode Node) this.QueueSidebarNodeIntoView(Item, Node);
+    }
+    private void QueueSidebarNodeIntoView(FrameworkElement Item, FolderNode Node, bool PositionHeader = false)
+    {
         Dispatcher.BeginInvoke(() =>
         {
-            if (this.WindowClosed || !Item.IsVisible || Item.DataContext is not FolderNode { IsSelected: true } Node
+            if (this.WindowClosed || !Item.IsVisible || !Node.IsSelected
                 || !SamePath(Node.FullPath, this.CurrentPath)) return;
-            Item.BringIntoView(new Rect(0, 0, Math.Min(180, Item.ActualWidth), 24));
-            if (FindAncestor<TreeView>(Item) is { } Tree) FindVisualChild<ScrollViewer>(Tree)?.ScrollToHorizontalOffset(0);
+            var Height = !PositionHeader ? 24 : Item is TreeViewItem TreeItem ? TreeHeaderHeight(TreeItem) : Item.ActualHeight;
+            this.RevealSidebarHeaderVertically(Item, new Rect(0, 0, Item.ActualWidth, Height));
+            if (!PositionHeader) return;
+            this.SidebarScroll.UpdateLayout();
+            this.UpdateStickySidebar();
+            var Top = Item.TranslatePoint(new Point(), this.SidebarScroll).Y;
+            var PinnedBottom = this.StickySidebar.Visibility == Visibility.Visible
+                ? this.StickySidebar.TranslatePoint(new Point(0, this.StickySidebar.ActualHeight), this.SidebarScroll).Y : 0;
+            var Viewport = this.SidebarScroll.ViewportHeight;
+            // Pinned ancestor rows may grow during this layout. Place an obscured
+            // header in the visible middle without scheduling a later scroll which
+            // could override the user's next manual scroll or sidebar gesture.
+            if (Top < PinnedBottom + 2 || Top + Height > Viewport)
+            {
+                var Target = Math.Clamp(Math.Max(PinnedBottom + 2, Viewport / 2), 0, Math.Max(0, Viewport - Height));
+                this.SidebarScroll.ScrollToVerticalOffset(this.SidebarScroll.VerticalOffset + Top - Target);
+                this.SidebarScroll.UpdateLayout();
+            }
         }, DispatcherPriority.Loaded);
+    }
+    private void SidebarHeaderRequestBringIntoView(object Sender, RequestBringIntoViewEventArgs E)
+    {
+        if (E.TargetObject is not FrameworkElement Target || !this.SidebarScroll.IsAncestorOf(Target)) return;
+        // Intercept before either the tree or category ScrollViewer makes a wide
+        // header visible. Focus/selection must never move a manually scrolled column.
+        E.Handled = true;
+        if (this.WindowClosed || this.SuppressTreeSelectionScroll || !Target.IsVisible) return;
+        var Bounds = E.TargetRect.IsEmpty ? new Rect(Target.RenderSize) : E.TargetRect;
+        this.RevealSidebarHeaderVertically(Target, Bounds);
+    }
+    private void RevealSidebarHeaderVertically(FrameworkElement Target, Rect Bounds)
+    {
+        var Top = Target.TranslatePoint(Bounds.TopLeft, this.SidebarScroll).Y;
+        var Height = Math.Min(Bounds.Height, this.SidebarScroll.ViewportHeight);
+        if (Top < 0) this.SidebarScroll.ScrollToVerticalOffset(this.SidebarScroll.VerticalOffset + Top);
+        else if (Top + Height > this.SidebarScroll.ViewportHeight)
+            this.SidebarScroll.ScrollToVerticalOffset(this.SidebarScroll.VerticalOffset + Top + Height - this.SidebarScroll.ViewportHeight);
     }
     private static TItem? FindVisualChild<TItem>(DependencyObject Parent) where TItem : DependencyObject
     {
@@ -518,27 +556,15 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (string.IsNullOrEmpty(this.CurrentPath) || this.WindowClosed) return;
         if (this.IsComputer) { await this.NavigateAsync(this.CurrentPath, RecordHistory: false, PreserveFilter: true, TreeKey: this.NavigationTreeKey); return; }
         if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(); return; }
-        if (!RefreshTree) { await this.RefreshCurrentFolderAsync(false); return; }
-        var Selected = this.SelectedEntries().Select(X => X.FullPath).ToArray();
-        if (RefreshTree)
-        {
-            ++this.TreeExpansionVersion;
-            var WasSyncing = this.SyncingTree;
-            this.SyncingTree = true;
-            try
-            {
-                var Roots = this.NavigationTreeKey == "folder-tree" ? this.Roots.ToArray()
-                    : this.NavigationSection(this.NavigationTreeKey) is { } Section ? this.CategoryFolderRoots(Section) : [];
-                foreach (var Root in Roots) ResetNode(Root);
-            }
-            finally { this.SyncingTree = WasSyncing; }
-        }
-        if (await this.NavigateAsync(this.CurrentPath, RecordHistory: false, PreserveFilter: true, RevealTree: false,
-            SyncNavigationTree: RefreshTree, TreeKey: this.NavigationTreeKey))
-            foreach (var Path in Selected) this.SelectPath(Path, Append: true);
+        var Version = this.NavigationVersion;
+        var Key = this.NavigationTreeKey;
+        // Keep the selected node's identity: overlapping bookmark roots can expose
+        // the same path in several independent trees. Rebuilding loses its origin.
+        await this.RefreshCurrentFolderAsync(RefreshTree, NavigationTreeOnly: true);
+        if (RefreshTree && Version == this.NavigationVersion && Key == this.NavigationTreeKey
+            && !this.Loading && !this.OperationBusy && this.InlineRenameTarget is null)
+            await this.SyncNavigationTreeAsync(Key, this.CurrentPath, Version, Reveal: true, ScrollToSelection: true);
     }
-    private static void InvalidateLoads(FolderNode Node) { Node.LoadVersion++; Node.LoadTask = null; foreach (var Child in Node.Children) InvalidateLoads(Child); }
-    private static void ResetNode(FolderNode Node) { InvalidateLoads(Node); Node.IsLoaded = false; Node.IsExpanded = false; Node.Children.Clear(); Node.Children.Add(new FolderNode("", "", NameKey: "TreeExpandHint")); }
     private void ClearSearchClick(object Sender, RoutedEventArgs E) => this.SearchBox.Clear();
     private void ApplySort()
     {
@@ -660,7 +686,22 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.FileGrid.SelectedItem is not FileEntry Entry || this.Loading) return;
         if (this.IsRecycleBin) { await this.ExecuteRecycleSelectionAsync("properties"); return; }
         if (Entry.IsDirectory) await this.NavigateAsync(Entry.FullPath, TreeKey: this.NavigationTreeKey);
-        else { try { SharedFileHistory.Audit("Open", [Entry.FullPath], "Invoked"); this.Files.OpenPath(Entry.FullPath, this.FileSystemWorkingDirectory); } catch (System.Exception Ex) { this.ShowNotice(LanguageService.Text("OpenFileError", FriendlyError(Ex)), true); } }
+        else this.OpenFileWithDefaultApp(Entry);
+    }
+    private void OpenFileWithDefaultApp(FileEntry Entry)
+    {
+        try
+        {
+            SharedFileHistory.Audit("Open", [Entry.FullPath], "Invoked");
+            this.Files.OpenPath(Entry.FullPath, this.FileSystemWorkingDirectory,
+                new System.Windows.Interop.WindowInteropHelper(this.HostWindow).Handle);
+        }
+        catch (Exception Error) { this.ShowNotice(LanguageService.Text("OpenFileError", FriendlyError(Error)), true); }
+    }
+    private void OpenSelectedFilesWithDefaultApp()
+    {
+        if (this.Loading || this.OperationBusy || this.IsVirtualLocation) return;
+        foreach (var Entry in this.SelectedEntries().Where(Entry => !Entry.IsDirectory)) this.OpenFileWithDefaultApp(Entry);
     }
     private async void OpenClick(object Sender, RoutedEventArgs E) => await this.OpenSelectedAsync();
     private async void FileGridMouseDoubleClick(object Sender, MouseButtonEventArgs E)
@@ -885,7 +926,6 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             return;
         }
         var Shortcut = KeyboardShortcut.Match(this.ShortcutBindings, Key, Modifiers);
-        if ((Shortcut?.Id is "NewWindow" or "ToggleSidebar" or "Preferences") && E.IsRepeat) { E.Handled = true; return; }
         if (Shortcut?.TerminalOnly == true)
         {
             E.Handled = this.HandleTerminalFontGesture(KeyboardShortcut.Format(Key, Modifiers));
@@ -899,6 +939,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         var InFileList = this.IsFileInput(InputSource);
         if (!CanHandleShortcut(Shortcut, Key, Modifiers, InText, InFileList)) return;
         E.Handled = true;
+        if ((Shortcut?.Id is "NewWindow" or "ToggleSidebar" or "Preferences" or "OpenWithDefault") && E.IsRepeat) return;
         await this.HandleShortcutAsync(Key, Modifiers, InText, InFileList);
     }
     private void ConfigureWatcher()

@@ -168,7 +168,7 @@
               <controls:AnimatedDisclosure IsExpanded="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
                 <ScrollViewer x:Name="CategoryScroll" HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
                               VerticalScrollBarVisibility="Disabled" Focusable="False" PreviewMouseWheel="FolderTreeMouseWheel" ScrollChanged="CategoryScrollChanged">
-                <ContentPresenter x:Name="SectionContent" ContentSource="Content" Margin="0,4,0,0"
+                <ContentPresenter x:Name="SectionContent" ContentSource="Content" Margin="0,4,0,0" RequestBringIntoView="SidebarHeaderRequestBringIntoView"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
                 </ScrollViewer>
               </controls:AnimatedDisclosure>
@@ -256,7 +256,7 @@
             <ToggleButton x:Name="Expander" Style="{StaticResource DirectoryTreeExpander}" VerticalAlignment="Center"
                           IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press" />
             <Border x:Name="PART_Header" Grid.Column="1" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"
-                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True" RequestBringIntoView="SidebarHeaderRequestBringIntoView">
               <ContentPresenter x:Name="HeaderHost" ContentSource="Header" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="Center" RecognizesAccessKey="True" />
             </Border>
@@ -278,6 +278,7 @@
       </Setter.Value></Setter>
       <EventSetter Event="Expanded" Handler="TreeItemExpanded" />
       <EventSetter Event="Selected" Handler="TreeItemSelected" />
+      <EventSetter Event="RequestBringIntoView" Handler="SidebarHeaderRequestBringIntoView" />
       <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{StaticResource TreeSelected}" /><Setter Property="Foreground" Value="{StaticResource HighlightText}" /></Trigger></Style.Triggers>
     </Style>
     <Style x:Key="FileMetadataText" TargetType="TextBlock" BasedOn="{x:Static DataGridTextColumn.DefaultElementStyle}">

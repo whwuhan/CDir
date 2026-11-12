@@ -78,6 +78,11 @@ public partial class ExplorerTab
                 var Result = SendTraySmokeMessage(Handle, 0x319, Handle, new IntPtr(((long)Command | 0x8000) << 16));
                 var End = Environment.TickCount64 + 10000;
                 while (this.Loading && Environment.TickCount64 < End) await Task.Delay(20);
+                // Loading can clear before the fire-and-forget navigation releases
+                // its gate. Wait for queued browser commands before asserting the path.
+                if (!await this.BrowseHistoryGate.WaitAsync(TimeSpan.FromSeconds(10)))
+                    throw new TimeoutException("The native browser command did not finish.");
+                this.BrowseHistoryGate.Release();
                 Check(Result == (IntPtr)1 && SamePath(this.CurrentPath, Expected),
                     "Mouse-driver browser command navigates the active tab: " + Command);
             }
@@ -88,6 +93,9 @@ public partial class ExplorerTab
                 this.FileGrid.RaiseEvent(BrowserInput);
                 var End = Environment.TickCount64 + 10000;
                 while (this.Loading && Environment.TickCount64 < End) await Task.Delay(20);
+                if (!await this.BrowseHistoryGate.WaitAsync(TimeSpan.FromSeconds(10)))
+                    throw new TimeoutException("The browser key navigation did not finish.");
+                this.BrowseHistoryGate.Release();
                 Check(BrowserInput.Handled && SamePath(this.CurrentPath, Expected),
                     "Dedicated browser key navigates the active tab: " + Key);
             }

@@ -251,6 +251,19 @@ public partial class ExplorerTab
             ScrollInteraction.HandleWheel(FindVisualChild<ScrollContentPresenter>(Inner), 120, ModifierKeys.Shift);
             await Settle();
             Check(Inner.HorizontalOffset == 0, "Shift wheel up moves the hovered tree left");
+            var LongItem = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Root);
+            foreach (var Offset in new[] { 0.0, 96.0 })
+            {
+                Inner.ScrollToHorizontalOffset(Offset); await Settle();
+                var Expected = Inner.HorizontalOffset;
+                LongItem.BringIntoView(); await Settle();
+                Check(Math.Abs(Inner.HorizontalOffset - Expected) < 0.01,
+                    "Automatically revealing a long My Computer node preserves its horizontal position: " + Offset);
+                LongItem.BringIntoView(new Rect(0, 0, 180, TreeHeaderHeight(LongItem))); await Settle();
+                Check(Math.Abs(Inner.HorizontalOffset - Expected) < 0.01,
+                    "Revealing a My Computer header rectangle preserves its horizontal position: " + Offset);
+            }
+            Inner.ScrollToLeftEnd(); await Settle();
             // Exercise the actual native-message route at a tree row without moving
             // the user's pointer or injecting input into any desktop window.
             var NativeRow = (TreeViewItem)this.FolderTree.ItemContainerGenerator.ContainerFromItem(Root);

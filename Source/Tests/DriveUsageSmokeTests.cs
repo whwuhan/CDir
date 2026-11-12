@@ -181,6 +181,10 @@ public partial class ExplorerTab
         var PreviousLanguage = LanguageService.CurrentLanguage;
         var PreviousPaths = this.Settings.ShowBookmarkPaths;
         var PreviousUsage = this.Settings.ShowSidebarDriveUsage;
+        var TreeViewer = FindVisualChild<ScrollViewer>(this.FolderTree)!;
+        var FavoriteViewer = (ScrollViewer)this.FavoritesSection.Template.FindName("CategoryScroll", this.FavoritesSection);
+        var PreviousTreeHorizontal = TreeViewer.HorizontalOffset;
+        var PreviousFavoriteHorizontal = FavoriteViewer.HorizontalOffset;
         var Nodes = new[] { new FolderNode("Longest drive name (Q:)", @"Q:\", true), new FolderNode("R:", @"R:\", true), new FolderNode("Unavailable drive", @"T:\", true) };
         foreach (var Node in Nodes) { Node.IsLoaded = true; Node.Children.Clear(); this.Roots.Add(Node); }
         void Check(bool Condition, string Name)
@@ -225,6 +229,10 @@ public partial class ExplorerTab
         }
         try
         {
+            // Navigation now preserves deliberate horizontal scrolling. Alignment
+            // checks compare two independent sections at their explicit left edge.
+            TreeViewer.ScrollToLeftEnd();
+            FavoriteViewer.ScrollToLeftEnd();
             Check(!new AppSettings().ShowSidebarDriveUsage
                 && !System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.ShowSidebarDriveUsage,
                 "Fresh and older settings hide My Computer drive usage by default");
@@ -342,6 +350,8 @@ public partial class ExplorerTab
                     Language.Code + " refreshes sidebar capacity and percentage formatting immediately");
             }
             this.ChangeLanguage(PreviousLanguage, Persist: false);
+            TreeViewer.ScrollToHorizontalOffset(PreviousTreeHorizontal);
+            FavoriteViewer.ScrollToHorizontalOffset(PreviousFavoriteHorizontal);
             foreach (var (Used, Expected) in new[] { (0L, "0.0"), (55L, "5.5"), (100L, "10.0"), (1000L, "100.0") })
             {
                 Nodes[0].UpdateDriveUsage(new(@"Q:\", Used * GB, 1000 * GB));

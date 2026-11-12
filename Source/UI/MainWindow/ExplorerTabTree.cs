@@ -145,13 +145,13 @@ public partial class ExplorerTab
         this.PanelTreeSyncTask = this.SyncPanelTreesAsync(this.NavigationVersion);
     }
 
-    private async Task SyncNavigationTreeAsync(string Key, string Current, int Version, bool Reveal)
+    private async Task SyncNavigationTreeAsync(string Key, string Current, int Version, bool Reveal, bool ScrollToSelection = false)
     {
         if (this.IsVirtualLocation) return;
         if (Version != this.NavigationVersion || this.WindowClosed) return;
         if (Key == "folder-tree")
         {
-            await this.SyncTreeAsync(Current, Version, Reveal);
+            await this.SyncTreeAsync(Current, Version, Reveal, ScrollToSelection);
             return;
         }
         if (Version != this.NavigationVersion || this.WindowClosed) return;
@@ -160,14 +160,25 @@ public partial class ExplorerTab
         try
         {
             FolderNode? Selected = null;
-            foreach (var Root in this.CategoryFolderRoots(Section))
+            var Branch = new List<FolderNode>();
+            static bool HasSelection(FolderNode Node) => Node.IsSelected || Node.Children.Any(HasSelection);
+            bool ContainsCurrent(FolderNode Root)
             {
                 var Relative = Path.GetRelativePath(Root.FullPath, Current);
-                var Matches = Relative == "." || !Path.IsPathRooted(Relative) && Relative != ".."
+                return Relative == "." || !Path.IsPathRooted(Relative) && Relative != ".."
                     && !Relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-                if (!Matches) continue;
+            }
+            var Matches = this.CategoryFolderRoots(Section).Where(ContainsCurrent).ToArray();
+            // Prefer the actual selected branch, even when another shortcut points
+            // directly at the same child. Otherwise choose the closest matching root.
+            var Preferred = Matches.FirstOrDefault(HasSelection)
+                ?? Matches.OrderByDescending(Root => Root.FullPath.Length).FirstOrDefault();
+            foreach (var Root in Matches.Where(Root => ReferenceEquals(Root, Preferred)))
+            {
+                var Relative = Path.GetRelativePath(Root.FullPath, Current);
                 if (Reveal) Section.IsExpanded = true;
                 var Node = Root;
+                Branch.Add(Node);
                 if (Relative != ".")
                     foreach (var Part in Relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
                     {
@@ -181,6 +192,7 @@ public partial class ExplorerTab
                             Node.Children.Add(Next);
                         }
                         Node = Next;
+                        Branch.Add(Node);
                     }
                 if (Reveal)
                 {
@@ -192,6 +204,29 @@ public partial class ExplorerTab
             }
             if (Version != this.NavigationVersion || Key != this.NavigationTreeKey || this.WindowClosed) return;
             this.SelectSidebarNode(Selected);
+            if (!Reveal || !ScrollToSelection || Selected is null || Preferred is null) return;
+            // Retaining selection does not raise another Selected event. Explicit
+            // reveals must locate the header in this exact bookmark's own tree.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            if (Version != this.NavigationVersion || Key != this.NavigationTreeKey || this.WindowClosed || !Selected.IsSelected) return;
+            Section.UpdateLayout();
+            if (this.SidebarRootHeader(Section, Preferred) is not { } RootHeader) return;
+            if (Branch.Count == 1)
+            {
+                if (FindVisualChild<Button>(RootHeader) is { } Header) this.QueueSidebarNodeIntoView(Header, Selected, PositionHeader: true);
+            }
+            else if (FindVisualChild<TreeView>(RootHeader) is { } Tree)
+            {
+                ItemsControl Owner = Tree;
+                TreeViewItem? Item = null;
+                foreach (var Part in Branch.Skip(1))
+                {
+                    Item = Owner.ItemContainerGenerator.ContainerFromItem(Part) as TreeViewItem;
+                    if (Item is null) break;
+                    Owner = Item;
+                }
+                if (Item is not null) this.QueueSidebarNodeIntoView(Item, Selected, PositionHeader: true);
+            }
         }
         finally { if (Version == this.NavigationVersion) this.SyncingTree = false; }
     }

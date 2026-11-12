@@ -99,8 +99,16 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
         if (E.Action == NotifyCollectionChangedAction.Reset) this.Top = 0;
         this.Synchronize();
     }
-    private double TopFor(int Index) => Index < this.Top ? Index
-        : Index + 1 > this.Top + this.RowsPerPage ? Index + 1 - this.RowsPerPage : this.Top;
+    private double TopFor(int Index)
+    {
+        // The underlying logical virtualizer only counts fully visible rows.
+        // A fractional reveal target makes MakeVisible advance to the next row
+        // while Synchronize moves it back, causing an endless layout oscillation.
+        // Keep fractional thumb/tail scrolling, but reveal items on whole rows.
+        var VisibleRows = Math.Max(1, Math.Floor(this.RowsPerPage));
+        return Index < this.Top ? Index
+            : Index + 1 > Math.Floor(this.Top) + VisibleRows ? Index + 1 - VisibleRows : this.Top;
+    }
     protected override void BringIndexIntoView(int Index)
     {
         if (this.Grouped) { base.BringIndexIntoView(Index); return; }
