@@ -40,6 +40,20 @@ public partial class ExplorerTab
         foreach (var Column in this.FileGrid.Columns.Where(Item => Item.Visibility == Visibility.Visible).ToArray()) this.AutoFitColumn(Column);
     }
 
+    private async Task RefreshAndFitColumnsAsync()
+    {
+        await this.RefreshAsync(true);
+        if (!this.Settings.AutoFitColumnsOnNavigation || this.WindowClosed) return;
+        var Version = this.NavigationVersion;
+        var Search = this.SearchVersion;
+        // A filtered refresh completes its search asynchronously. Fit the final list.
+        await this.SearchTask;
+        if (Version != this.NavigationVersion || Search != this.SearchVersion
+            || !this.Settings.AutoFitColumnsOnNavigation || this.WindowClosed) return;
+        await this.FitVisibleColumnsAsync(Version);
+        this.HostWindow.PersistWorkspaceNow();
+    }
+
     private async Task FitVisibleColumnsAsync(int Version)
     {
         if (!this.IsDetailsView) return;

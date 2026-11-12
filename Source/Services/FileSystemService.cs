@@ -70,7 +70,7 @@ public sealed class FileSystemService
             }
             catch (System.Exception Ex) when (IsFileSystemError(Ex)) { /* A child may disappear or be unreadable. */ }
         }
-        return Result.OrderBy(Item => Item.Name, PathComparer).ToArray();
+        return Result.OrderBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
     }
 
     public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden)
@@ -88,7 +88,7 @@ public sealed class FileSystemService
             catch (System.Exception Ex) when (IsFileSystemError(Ex)) { /* Keep other readable entries visible. */ }
         }
         return Result.OrderByDescending(Item => Item.IsDirectory)
-            .ThenBy(Item => Item.Name, PathComparer).ToArray();
+            .ThenBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
     }
 
     private static FileEntry ReadEntry(FileSystemInfo Info, FileAttributes Attributes)

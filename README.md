@@ -1,4 +1,4 @@
-﻿# CDir
+# CDir
 
 ## English
 
@@ -8,7 +8,7 @@ CDir is a compact Windows file manager for everyday file browsing, organization,
 
 Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語, and 한국어. It is distributed as a portable application with no account system, telemetry, or update checks.
 
-![CDir v2.2.25 interface preview](Docs/Images/CDirPreview.png)
+![CDir v2.2.31 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -25,6 +25,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 
 - Sidebar and status-bar drive meters share a one-screen-pixel frame with no inner gap. Usage colors are green `#079C19`, orange `#FFBF00`, and red `#FF3800`.
 
+- The top-right View Options dropdown includes Group By: Name, Date Modified, Type, Size, Ascending, Descending, and (None). Group headers show item counts; (None) restores the flat list. The dropdown and blank-space context menu share the same grouping state. Search and file selection are preserved, and each tab restores its grouping field and direction with the workspace. Large grouped lists and icon views load only visible items.
 - Blank-space menus include Windows-style View, Sort By, Group By, Refresh, folder customization and terminal actions alongside installed Shell extensions. Medium and larger items use Windows image/video thumbnails. The view dropdown can apply or reset a view recursively through every descendant, including future folders.
 - Large items use high-resolution system icons. Images and videos show cached previews first; uncached previews load in the background while a sharp file-type icon remains visible. Pending preview requests are canceled when their items leave the visible view.
 
@@ -77,7 +78,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - Horizontal and vertical scrollbars are 12 DIP. Sidebar tree scrollbars appear during scrolling, hover or dragging, then hide about one second after scrolling stops outside their area. Fixed `Shift+Wheel` horizontally scrolls the area beneath the pointer and is not customizable; the ordinary wheel scrolls vertically.
 - Quick Access, My Computer, and each custom category support independent horizontal scrolling. Use Shift+Wheel, a horizontal wheel, or the horizontal scrollbar to view full names, paths, and drive capacity. Bookmark roots and expanded descendants move together while category titles stay fixed; the ordinary wheel continues to scroll vertically.
 - The column dropdown ends with Show Hidden Files And Folders, synchronized with Preferences > General. Turning off file-list grid lines also removes separators beneath file rows.
-- Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enable it to fit every displayed column to its header and folder contents whenever a folder opens; background refreshes preserve manual widths.
+- Preferences > UI > Auto Fit Columns When Opening Folders is unchecked by default. Enabling it immediately fits every displayed column in all open tabs and panes to its header and current contents, then fits again whenever a folder opens or you manually refresh with F5, the Refresh button, or the refresh menu; background refreshes preserve manual widths.
 - Preferences > UI > Show Drive Usage In My Computer is unchecked by default; enable it for capacity text, a fixed-width 64-DIP usage bar and percentages on the same row to the right of drive names. Drive root paths are not repeated beside drive names.
 - Preferences > UI > Show Folder Paths is off by default. Enable it for absolute paths beside every directory-tree folder, including expanded descendants and pinned parents; hover shows the full path immediately. Folder paths and drive capacity panels share an aligned right-hand column. Pinned parents are limited to expanded branches and category headers yield at the next section.
 - Drag pinned or ordinary tabs to reorder their own group. With the separate pinned row visible, drag across rows to pin or unpin at the drop position. The insertion marker shows the destination, row edges scroll during a drag, and both group orders are saved.
@@ -262,7 +263,7 @@ CDir 是一款简洁的 Windows 文件管理器，用于日常文件浏览、整
 
 CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本語和한국어，以便携应用形式分发，没有账号系统、遥测或更新检查。
 
-![CDir v2.2.25 界面预览](Docs/Images/CDirPreview.png)
+![CDir v2.2.31 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -279,6 +280,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 - 侧栏和状态栏用量条统一使用一个屏幕像素的细边框，填充紧贴边框；绿色为 `#079C19`、橙色为 `#FFBF00`、红色为 `#FF3800`。
 
+- 右上角“视图选项”下拉菜单新增“分组依据”：名称、修改日期、类型、大小、递增、递减和“(无)”。组标题显示项目数量，“(无)”恢复普通列表；与空白处右键菜单共用分组状态。分组切换保留搜索和文件选择，重启随工作区恢复各标签页的分组字段及方向。大目录的分组详细列表和图标视图只加载可见项目。
 - 空白处右键菜单补齐查看、排序、分组、刷新、自定义文件夹和终端操作，并保留本机 Shell 扩展；中等及更大图标使用 Windows 图片/视频缩略图。右上角视图菜单可将视图递归应用到所有层级的子目录（含未来新建目录），或递归重置。
 - 大图标使用高分辨率系统图标，避免把小图标直接放大。图片和视频优先显示已有预览；未缓存的预览在后台加载，等待期间先显示清晰的文件类型图标。离开或滚出可视区域的待处理预览会取消，减少无效等待。
 
@@ -296,7 +298,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - “恢复默认设置”先弹出范围选择：默认只重置当前 Preferences 分类，也可选择全部偏好设置；取消或按 Escape 不作更改。单独重置分类时保留其他分类的设置。
 - 用 `Alt+W` 置顶或取消置顶当前标签页（可在 Preferences > Keyboard Shortcuts 自定义），或点击名称与关闭按钮之间的图钉。置顶标签按置顶顺序排列在左侧，取消置顶后进入普通标签最左侧。Preferences > UI 的“在单独一行显示置顶标签页”默认不勾选，开启后将置顶标签放在普通标签上方；置顶状态、顺序和布局选项重启后保留。标签关闭按钮的悬停和按下颜色与窗口关闭按钮一致。
 - 列显示下拉菜单末尾的“显示隐藏文件/文件夹”与 Preferences → General 同步；关闭文件列表网格线时，文件条目下方的分割线也会隐藏。
-- Preferences → UI → “打开文件夹时自动适配列宽”默认关闭；开启后每次打开文件夹会根据表头和文件夹内容调整全部显示列，后台刷新保留手动列宽。
+- Preferences → UI → “打开文件夹时自动适配列宽”默认关闭；勾选后立即根据表头和当前内容调整所有已打开标签页及窗格的显示列宽，此后每次打开文件夹或通过 F5、刷新按钮及刷新菜单手动刷新时继续自动适配；后台刷新保留手动列宽。
 - Preferences → UI → 显示“我的电脑”中的磁盘用量默认不勾选，开启后在盘符名称右侧同一行显示磁盘容量、固定 64 逻辑像素宽的用量条和百分比；关闭时一起隐藏。磁盘名称旁不再重复根路径。
 - Preferences → UI → 显示文件夹路径默认关闭；启用后在所有目录树文件夹（包括展开的子目录和置顶父目录）名称右侧显示绝对路径，悬停立即显示完整路径。路径与磁盘容量面板使用对齐的右侧列。父级置顶仅保留展开分支，分类标题在下一分类进入时退让。
 - 文件夹大小默认不计算。在“偏好设置 → General → 在后台计算文件夹大小”中勾选后，Size 列逐步显示包含隐藏文件在内的递归合计大小；取消勾选立即停止计算并清空文件夹合计，文件自身大小始终显示。统计任务串行、分批执行；切换目录或标签、隐藏 Size 列时取消未完成的统计。`—` 表示未知，`≥` 表示仅统计了部分内容；不会递归进入链接或联接目录。子目录内容变化后可按 `F5` 重新计算。

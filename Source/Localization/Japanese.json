@@ -377,6 +377,8 @@
   "FolderViewsReset": "このフォルダーとすべてのサブフォルダーを詳細表示にリセットしました。",
   "ViewMenu": "表示",
   "SortBy": "並べ替え",
+  "GroupByDropdown": "グループ化",
+  "ViewOptions": "表示オプション",
   "GroupBy": "グループ化",
   "Ascending": "昇順",
   "Descending": "降順",

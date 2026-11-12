@@ -86,10 +86,12 @@ public partial class ExplorerTab
             Check(RenderGuides().Rows.Length >= 5 && this.FileGridLines.IsVisible,
                 "Loading a saved enabled preference restores the rendered grid");
 
+            // Preferences may refit columns immediately; compare with the current layout.
+            var BeforeResize = RenderGuides();
             this.FileGrid.Columns[0].Width = new DataGridLength(this.FileGrid.Columns[0].ActualWidth + 40);
             await Settle();
             var Resized = RenderGuides();
-            Check(Math.Abs(Resized.Columns[0] - Guides.Columns[0] - 40) <= 1,
+            Check(Math.Abs(Resized.Columns[0] - BeforeResize.Columns[0] - 40) <= 1,
                 "Vertical grid lines follow resized column boundaries");
             this.FileGrid.Columns[0].Width = new DataGridLength(this.FileGrid.ActualWidth + 120);
             await Settle();

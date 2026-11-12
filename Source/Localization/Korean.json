@@ -377,6 +377,8 @@
   "FolderViewsReset": "이 폴더와 모든 하위 폴더를 자세히 보기로 초기화했습니다.",
   "ViewMenu": "보기",
   "SortBy": "정렬 기준",
+  "GroupByDropdown": "그룹화 기준",
+  "ViewOptions": "보기 옵션",
   "GroupBy": "그룹화 기준",
   "Ascending": "오름차순",
   "Descending": "내림차순",

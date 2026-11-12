@@ -15,6 +15,7 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
     private double AvailableHeight;
     private int UpdatingBase;
     private DataGrid? Grid => ItemsControl.GetItemsOwner(this) as DataGrid;
+    private bool Grouped => this.Grid?.IsGrouping == true;
     private int Count => this.Grid?.Items.Count ?? 0;
     private double RowHeight
     {
@@ -44,6 +45,9 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
 
     private void Synchronize()
     {
+        // WPF's hierarchical virtualizer owns group headers and nested rows.
+        // The flat-list tail offset cannot represent that variable-height layout.
+        if (this.Grouped) { this.Top = 0; this.Shift.Y = 0; return; }
         this.Top = Math.Clamp(this.Top, 0, this.Maximum);
         var BaseTop = Math.Floor(Math.Min(this.Top, Math.Max(0, base.ExtentHeight - base.ViewportHeight)));
         if (Math.Abs(base.VerticalOffset - BaseTop) > .001)
@@ -81,6 +85,7 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
     protected override void OnViewportOffsetChanged(Vector Old, Vector Current)
     {
         base.OnViewportOffsetChanged(Old, Current);
+        if (this.Grouped) { this.Shift.Y = 0; return; }
         if (this.UpdatingBase != 0) return;
         this.Top = Math.Clamp(Current.Y, 0, this.Maximum);
         this.Shift.Y = 0;
@@ -98,6 +103,7 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
         : Index + 1 > this.Top + this.RowsPerPage ? Index + 1 - this.RowsPerPage : this.Top;
     protected override void BringIndexIntoView(int Index)
     {
+        if (this.Grouped) { base.BringIndexIntoView(Index); return; }
         var Target = this.TopFor(Index);
         this.UpdatingBase++;
         try { base.BringIndexIntoView(Index); }
@@ -106,6 +112,7 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
     }
     private Rect MakeRowVisible(Visual Visual, Rect Bounds)
     {
+        if (this.Grouped) return base.MakeVisible(Visual, Bounds);
         var Target = this.Top;
         for (DependencyObject? Node = Visual; Node is not null && !ReferenceEquals(Node, this); Node = VisualTreeHelper.GetParent(Node))
             if (Node is DataGridRow Row && this.Grid is { } Grid)
@@ -123,24 +130,24 @@ public sealed class FileListRowsPresenter : DataGridRowsPresenter, IScrollInfo
         return Result;
     }
     private double WheelRows => SystemParameters.WheelScrollLines < 0 ? this.RowsPerPage : SystemParameters.WheelScrollLines;
-    public override void LineUp() => this.SetTop(this.Top - 1);
-    public override void LineDown() => this.SetTop(this.Top + 1);
-    public override void PageUp() => this.SetTop(this.Top - this.RowsPerPage);
-    public override void PageDown() => this.SetTop(this.Top + this.RowsPerPage);
-    public override void MouseWheelUp() => this.SetTop(this.Top - this.WheelRows);
-    public override void MouseWheelDown() => this.SetTop(this.Top + this.WheelRows);
+    public override void LineUp() { if (this.Grouped) base.LineUp(); else this.SetTop(this.Top - 1); }
+    public override void LineDown() { if (this.Grouped) base.LineDown(); else this.SetTop(this.Top + 1); }
+    public override void PageUp() { if (this.Grouped) base.PageUp(); else this.SetTop(this.Top - this.RowsPerPage); }
+    public override void PageDown() { if (this.Grouped) base.PageDown(); else this.SetTop(this.Top + this.RowsPerPage); }
+    public override void MouseWheelUp() { if (this.Grouped) base.MouseWheelUp(); else this.SetTop(this.Top - this.WheelRows); }
+    public override void MouseWheelDown() { if (this.Grouped) base.MouseWheelDown(); else this.SetTop(this.Top + this.WheelRows); }
 
     bool IScrollInfo.CanHorizontallyScroll { get => base.CanHorizontallyScroll; set => base.CanHorizontallyScroll = value; }
     bool IScrollInfo.CanVerticallyScroll { get => base.CanVerticallyScroll; set => base.CanVerticallyScroll = value; }
     double IScrollInfo.ExtentWidth => base.ExtentWidth;
-    double IScrollInfo.ExtentHeight => this.Count == 0 ? 0 : this.Maximum + this.RowsPerPage;
+    double IScrollInfo.ExtentHeight => this.Grouped ? base.ExtentHeight : this.Count == 0 ? 0 : this.Maximum + this.RowsPerPage;
     double IScrollInfo.ViewportWidth => base.ViewportWidth;
-    double IScrollInfo.ViewportHeight => this.RowsPerPage;
+    double IScrollInfo.ViewportHeight => this.Grouped ? base.ViewportHeight : this.RowsPerPage;
     double IScrollInfo.HorizontalOffset => base.HorizontalOffset;
-    double IScrollInfo.VerticalOffset => this.Top;
+    double IScrollInfo.VerticalOffset => this.Grouped ? base.VerticalOffset : this.Top;
     ScrollViewer IScrollInfo.ScrollOwner { get => base.ScrollOwner; set => base.ScrollOwner = value; }
     void IScrollInfo.SetHorizontalOffset(double Offset) => base.SetHorizontalOffset(Offset);
-    void IScrollInfo.SetVerticalOffset(double Offset) => this.SetTop(Offset);
+    void IScrollInfo.SetVerticalOffset(double Offset) { if (this.Grouped) base.SetVerticalOffset(Offset); else this.SetTop(Offset); }
     Rect IScrollInfo.MakeVisible(Visual Visual, Rect Bounds) => this.MakeRowVisible(Visual, Bounds);
     void IScrollInfo.LineUp() => this.LineUp();
     void IScrollInfo.LineDown() => this.LineDown();

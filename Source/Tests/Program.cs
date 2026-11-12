@@ -151,6 +151,22 @@ internal sealed partial class RegressionRunner
             var Folders = this.Service.GetDirectories(Directory, false);
             Check(Folders.Count == 1 && Folders[0].Name == "子文件夹", "Tree enumeration should include directories only.");
         });
+        this.Test("Natural name sorting matches numbered folders and files", () =>
+        {
+            var Directory = this.MakeDirectory("natural-sort");
+            string[] Names = ["FR", "wallpapers-0", "wallpapers-1", "wallpapers-2", "wallpapers-9", "wallpapers-10", "wallpapers-15", "wallpapers-100"];
+            foreach (var Name in Names.Reverse())
+            {
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(Directory, Name));
+                System.IO.File.WriteAllText(System.IO.Path.Combine(Directory, Name + ".txt"), "Owned natural sort fixture");
+            }
+            Check(this.Service.GetDirectories(Directory, false).Select(Item => Item.Name).SequenceEqual(Names), "Tree folders must use numeric name order.");
+            var Expected = Names.Concat(Names.Select(Name => Name + ".txt"));
+            Check(this.Service.GetEntries(Directory, false).Select(Item => Item.Name).SequenceEqual(Expected), "Entries must keep folders first and naturally sort both kinds.");
+            Check(FileNameComparer.Instance.Compare("Item2", "item10") < 0, "Name order must ignore case.");
+            Check(FileNameComparer.Instance.Compare("item", "item extra") < 0, "A shared prefix must precede its longer name.");
+            Check(FileNameComparer.Instance.Compare("part2-item9", "part2-item10") < 0, "Every embedded numeric run must compare numerically.");
+        });
         this.Test("Respect hidden-file and hidden-directory setting", () =>
         {
             var Directory = this.MakeDirectory("hidden");

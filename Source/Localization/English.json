@@ -377,6 +377,8 @@
   "FolderViewsReset": "Reset this folder and all its subfolders to the details view.",
   "ViewMenu": "View",
   "SortBy": "Sort By",
+  "GroupByDropdown": "Group By",
+  "ViewOptions": "View Options",
   "GroupBy": "Group By",
   "Ascending": "Ascending",
   "Descending": "Descending",

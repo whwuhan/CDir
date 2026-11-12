@@ -34,6 +34,8 @@ public partial class ExplorerTab
             Menu.Items.Add(Item);
         }
         Menu.Items.Add(new Separator());
+        Menu.Items.Add(this.CreateGroupingMenu());
+        Menu.Items.Add(new Separator());
         foreach (var Reset in new[] { false, true })
         {
             var Action = new MenuItem { Tag = Reset ? "ResetFolderViews" : "ApplyViewToSubfolders", IsEnabled = !this.IsVirtualLocation,

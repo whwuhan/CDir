@@ -26,6 +26,7 @@ public sealed class FileEntry : INotifyPropertyChanged
     }
     private string OriginalTypeName = string.Empty;
     public string ViewGroup { get; set; } = "";
+    internal long ViewGroupOrder { get; set; }
     public string Name { get; init; } = string.Empty;
     public string FullPath { get; init; } = string.Empty;
     public bool IsDirectory { get; init; }
