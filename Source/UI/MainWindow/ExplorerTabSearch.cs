@@ -99,6 +99,7 @@ public partial class ExplorerTab
 
     private void ShowEntries(IReadOnlyList<FileEntry> Entries, IEnumerable<string>? Selection = null, bool RevealSelection = true)
     {
+        CDir.Services.SmoothWheelScroll.Cancel(FindVisualChild<ScrollViewer>(this.ActiveFileControl));
         this.EndMarqueeSelection();
         this.Entries = Entries as ObservableCollection<FileEntry> ?? new ObservableCollection<FileEntry>(Entries);
         this.RefreshCutFeedback();

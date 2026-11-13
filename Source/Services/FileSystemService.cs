@@ -73,11 +73,13 @@ public sealed class FileSystemService
         return Result.OrderBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
     }
 
-    public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden, bool SortByName = true)
+    public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden, bool SortByName = true, CancellationToken Cancellation = default)
     {
+        Cancellation.ThrowIfCancellationRequested();
         var Result = new List<FileEntry>();
         foreach (var Info in new DirectoryInfo(Path).EnumerateFileSystemInfos("*", Enumeration))
         {
+            Cancellation.ThrowIfCancellationRequested();
             try
             {
                 var Attributes = Info.Attributes;
@@ -89,6 +91,7 @@ public sealed class FileSystemService
         }
         // The UI applies its chosen comparator once; other callers retain the
         // public folders-first natural order by default.
+        Cancellation.ThrowIfCancellationRequested();
         if (!SortByName) return Result;
         return Result.OrderByDescending(Item => Item.IsDirectory)
             .ThenBy(Item => Item.Name, FileNameComparer.Instance).ToArray();

@@ -12,7 +12,9 @@ public partial class ExplorerTab
     internal void ShowRecoveryError() => this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     internal void ActivateRecoveredPreferences()
     {
-        this.ChangeLanguage(this.Settings.Language ?? DefaultSettings.Current.Language, Persist: false);
+        var Language = this.Settings.Language ?? DefaultSettings.Current.Language;
+        if (LanguageService.CurrentLanguage != Language) this.ChangeLanguage(Language, Persist: false);
+        else this.ApplyLanguageResources();
         this.ApplyUIFonts();
         this.HostWindow.UpdatePinnedTabLayout(this.Settings.SeparatePinnedTabs);
     }

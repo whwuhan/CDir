@@ -498,7 +498,7 @@
             </ContextMenu>
           </Border.ContextMenu>
           <Grid ClipToBounds="True">
-            <ScrollViewer x:Name="SidebarScroll" Margin="12,16,10,12" ClipToBounds="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="SidebarScrollChanged">
+            <ScrollViewer x:Name="SidebarScroll" Margin="12,16,10,12" ClipToBounds="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="SidebarScrollChanged" PreviewMouseWheel="SidebarPreviewMouseWheel">
               <ItemsControl x:Name="SidebarSectionsList">
                 <ItemsControl.Resources>
                   <DataTemplate DataType="{x:Type models:SidebarCategory}">

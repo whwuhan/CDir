@@ -19,6 +19,8 @@ public partial class ExplorerTab
     private readonly ConcurrentDictionary<string, string> VersionMetadataStamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> VersionPrimedRoots = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<VersionSnapshot> VersionSnapshots = [];
+    private IReadOnlyList<VersionSnapshot>? CachedStatusSnapshots;
+    private readonly Dictionary<string, VersionStatus> VersionStatusByPath = new(StringComparer.Ordinal);
     private CancellationTokenSource? VersionCancellation;
     private long VersionEpoch;
     private int VersionInvalidationQueued;
@@ -62,13 +64,14 @@ public partial class ExplorerTab
 
     private IEnumerable<FolderNode> AllVersionNodes(IEnumerable<FolderNode>? Roots = null)
     {
-        IEnumerable<FolderNode> Visit(FolderNode Node)
+        var RootNodes = (Roots ?? this.Roots.Concat(this.SidebarBookmarkRoots())).ToArray();
+        var Pending = new Stack<FolderNode>(RootNodes.Length);
+        for (var Index = RootNodes.Length - 1; Index >= 0; Index--) Pending.Push(RootNodes[Index]);
+        while (Pending.TryPop(out var Node))
         {
             if (!Node.IsPlaceholder) yield return Node;
-            foreach (var Child in Node.Children)
-                foreach (var Descendant in Visit(Child)) yield return Descendant;
+            for (var Index = Node.Children.Count - 1; Index >= 0; Index--) Pending.Push(Node.Children[Index]);
         }
-        return (Roots ?? this.Roots.Concat(this.SidebarBookmarkRoots())).SelectMany(Visit);
     }
 
     private IEnumerable<FolderNode> VisibleVersionNodes()
@@ -221,7 +224,24 @@ public partial class ExplorerTab
 
     private void ApplyVersionSnapshots()
     {
-        VersionStatus Status(string Path) => this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Covers(Path))?.GetStatus(Path) ?? VersionStatus.None;
+        if (!ReferenceEquals(this.CachedStatusSnapshots, this.VersionSnapshots))
+        {
+            this.VersionStatusByPath.Clear();
+            this.CachedStatusSnapshots = this.VersionSnapshots;
+        }
+        VersionStatus Status(string Path)
+        {
+            if (this.VersionSnapshots.Count == 0) return VersionStatus.None;
+            if (this.VersionStatusByPath.TryGetValue(Path, out var Cached)) return Cached;
+            var Status = VersionStatus.None;
+            foreach (var Snapshot in this.VersionSnapshots)
+                if (Snapshot.Covers(Path)) { Status = Snapshot.GetStatus(Path); break; }
+            // Bound path retention even when a long recursive search continually
+            // replaces its displayed batch without changing repository snapshots.
+            if (this.VersionStatusByPath.Count >= 65536) this.VersionStatusByPath.Clear();
+            this.VersionStatusByPath[Path] = Status;
+            return Status;
+        }
         foreach (var Entry in this.Entries) Entry.VersionStatus = Status(Entry.FullPath);
         foreach (var Node in this.AllVersionNodes()) Node.VersionStatus = Status(Node.FullPath);
         this.AddressIcon.VersionStatus = Status(this.CurrentPath);

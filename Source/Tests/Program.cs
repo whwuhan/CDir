@@ -151,6 +151,55 @@ internal sealed partial class RegressionRunner
             var Folders = this.Service.GetDirectories(Directory, false);
             Check(Folders.Count == 1 && Folders[0].Name == "子文件夹", "Tree enumeration should include directories only.");
         });
+        this.Test("Canceled directory enumeration stops before touching an unavailable path", () =>
+        {
+            using var Cancellation = new CancellationTokenSource(); Cancellation.Cancel();
+            Throws<OperationCanceledException>(() => this.Service.GetEntries(System.IO.Path.Combine(this.Root, "Not created"), false, Cancellation: Cancellation.Token));
+        });
+        this.Test("Cached metadata text preserves every language clock and folder-total transition", () =>
+        {
+            var OriginalLanguage = LanguageService.CurrentLanguage;
+            var Modified = new DateTime(2026, 11, 13, 14, 5, 6);
+            string SizeText(long Bytes)
+            {
+                if (Bytes < 1024) return Bytes.ToString("N0", LanguageService.Culture) + " B";
+                string[] Units = ["KB", "MB", "GB", "TB", "PB", "EB"];
+                double Value = Bytes; var Unit = -1;
+                do { Value /= 1024; Unit++; } while (Value >= 1024 && Unit < Units.Length - 1);
+                return Value.ToString("0.#", LanguageService.Culture) + " " + Units[Unit];
+            }
+            var Entry = new FileEntry { Name = "Metadata.txt", Size = 1536, Modified = Modified };
+            var Folder = new FileEntry { Name = "Folder", IsDirectory = true };
+            try
+            {
+                foreach (var Language in LanguageService.SupportedLanguages)
+                {
+                    LanguageService.SetLanguage(Language.Code); Entry.RefreshLanguage(); Folder.RefreshLanguage();
+                    Check(Entry.DisplaySize == SizeText(Entry.Size!.Value), "A warm size value must follow the current culture.");
+                    foreach (var Clock in new[] { false, true })
+                    {
+                        Entry.Use12HourClock = Clock;
+                        var Expected = Entry.Modified.ToString(Clock ? "yyyy/MM/dd hh:mm:ss tt" : "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
+                        Check(Entry.DisplayModified == Expected && Entry.DisplayModified == Expected, "Timestamp formatting must be identical.");
+                    }
+                    foreach (var Bytes in new long[] { -1, 0, 1, 1023, 1024, 1536, 1048576, long.MaxValue })
+                    {
+                        Entry.UpdateMetadata(new FileEntry { Size = Bytes, Modified = Modified.AddSeconds(Bytes % 60) });
+                        Check(Entry.DisplaySize == SizeText(Bytes), "Metadata updates must invalidate size text immediately.");
+                        Check(Entry.DisplayModified == Entry.Modified.ToString("yyyy/MM/dd hh:mm:ss tt", CultureInfo.InvariantCulture),
+                            "Metadata updates must invalidate modified text immediately.");
+                    }
+                    Folder.UpdateFolderSize(1536, false); Check(Folder.DisplaySize == "≥ " + SizeText(1536), "Partial total prefix must remain visible.");
+                    Folder.UpdateFolderSize(1536, true); Check(Folder.DisplaySize == SizeText(1536), "A completed total must remove the partial prefix.");
+                    Folder.ResetFolderSize(); Check(Folder.DisplaySize == "—", "Reset totals must display the original placeholder.");
+                }
+                var Events = new List<string?>(); Entry.PropertyChanged += (_, E) => Events.Add(E.PropertyName);
+                Entry.UpdateMetadata(new FileEntry { Size = 42, Modified = Modified.AddYears(1), IsHidden = true });
+                Check(Events.SequenceEqual(new[] { "Modified", "DisplayModified", "Size", "DisplaySize", "IsHidden" }),
+                    "The exact metadata notification sequence must remain unchanged.");
+            }
+            finally { LanguageService.SetLanguage(OriginalLanguage); }
+        });
         this.Test("Natural name sorting matches numbered folders and files", () =>
         {
             var Directory = this.MakeDirectory("natural-sort");

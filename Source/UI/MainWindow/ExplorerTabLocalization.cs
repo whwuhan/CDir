@@ -137,10 +137,20 @@ public partial class ExplorerTab
     }
 
     private void UpdateFavorites()
-        => this.FavoritesList.ItemsSource = this.ReadFavorites();
+    {
+        // Paths are discovered once on the startup worker. Relabeling must not
+        // probe redirected/offline known folders or discard their loaded trees.
+        var Favorites = this.FavoritesList.Items.OfType<FavoriteLocation>().ToArray();
+        foreach (var Favorite in Favorites) Favorite.Node.RefreshLanguage();
+        this.FavoritesList.ItemsSource = Favorites.Select(Favorite => Favorite.NameKey is { } Key
+            ? Favorite with { Name = LanguageService.Text(Key) } : Favorite).ToArray();
+    }
+
+    private Func<FavoriteLocation[]>? ReadFavoritesForTests;
 
     private FavoriteLocation[] ReadFavorites()
     {
+        if (AppMain.SmokeTest && this.ReadFavoritesForTests is { } Read) return Read();
         var Home = AppMain.SmokeTest ? AppMain.StartupPath ?? AppMain.SmokeRoot! : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return AppMain.SmokeTest ? CreateQuickAccess(Home, "", "", "", "")
             : CreateQuickAccess(Home, Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
@@ -150,17 +160,17 @@ public partial class ExplorerTab
 
     private static FavoriteLocation[] CreateQuickAccess(string Home, string Desktop, string Documents, string Downloads, string Pictures)
     {
-        var Favorites = new List<FavoriteLocation> { new(LanguageService.Text("FavoriteHome"), Home) };
+        var Favorites = new List<FavoriteLocation> { new(LanguageService.Text("FavoriteHome"), Home, "FavoriteHome") };
         void AddFavorite(string Key, string FolderPath)
         {
-            if (Directory.Exists(FolderPath)) Favorites.Add(new(LanguageService.Text(Key), FolderPath));
+            if (Directory.Exists(FolderPath)) Favorites.Add(new(LanguageService.Text(Key), FolderPath, Key));
         }
         AddFavorite("FavoriteDesktop", Desktop);
         AddFavorite("FavoriteDocuments", Documents);
         AddFavorite("FavoriteDownloads", Downloads);
         AddFavorite("FavoritePictures", Pictures);
-        Favorites.Add(new(LanguageService.Text("DirectoryTree"), ShellLocations.Computer));
-        Favorites.Add(new(LanguageService.Text("RecycleBin"), ShellLocations.RecycleBin));
+        Favorites.Add(new(LanguageService.Text("DirectoryTree"), ShellLocations.Computer, "DirectoryTree"));
+        Favorites.Add(new(LanguageService.Text("RecycleBin"), ShellLocations.RecycleBin, "RecycleBin"));
         return Favorites.ToArray();
     }
 

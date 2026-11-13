@@ -28,6 +28,42 @@ internal sealed partial class RegressionRunner
             return System.IO.Path.GetFullPath(Path);
         }
 
+        this.Test("Badge lookup normalizes paths without confusing repository metadata or sibling prefixes", () =>
+        {
+            var Path = this.MakeDirectory("BadgePaths");
+            var Snapshot = new VersionSnapshot(Path, "Git", []);
+            Snapshot.Set("子目录/Tracked.txt", VersionState.Modified);
+            Snapshot.Set("Ignored", VersionState.Ignored); Snapshot.Aggregate();
+            State(Snapshot, "子目录/../子目录/Tracked.txt", VersionState.Modified);
+            State(Snapshot, "子目录/", VersionState.Modified);
+            State(Snapshot, "Ignored/Deep/File.txt", VersionState.Ignored);
+            State(Snapshot, ".git/index", VersionState.None);
+            State(Snapshot, "子目录/.svn/wc.db", VersionState.None);
+            Check(Snapshot.GetStatus(Path + " sibling/File.txt").State == VersionState.None, "A sibling path is outside this snapshot.");
+            Snapshot.WithCoverage(System.IO.Path.Combine(Path, "子目录"));
+            State(Snapshot, "Other/File.txt", VersionState.Unknown);
+        });
+
+        this.Test("Snapshot prefix reuse preserves coverage changes root boundaries and path normalization", () =>
+        {
+            var Root = this.MakeDirectory("Snapshot prefixes");
+            var Snapshot = new VersionSnapshot(Root, "SVN", []);
+            string[] Inputs = [Root, Root + "\\", Root.ToUpperInvariant(), System.IO.Path.Combine(Root, "Alpha", "Child.txt"),
+                System.IO.Path.Combine(Root, "Alpha", "..", "Beta"), Root + " sibling\\Child.txt"];
+            foreach (var Scope in new[] { Root, System.IO.Path.Combine(Root, "Alpha"), System.IO.Path.Combine(Root, "Beta"), Root })
+            {
+                Snapshot.WithCoverage(Scope);
+                foreach (var Input in Inputs)
+                {
+                    var Normalized = System.IO.Path.GetFullPath(Input);
+                    var Expected = string.Equals(Snapshot.CoverageRoot, System.IO.Path.TrimEndingDirectorySeparator(Normalized), StringComparison.OrdinalIgnoreCase)
+                        || Normalized.StartsWith(Snapshot.CoverageRoot.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+                    Check(Snapshot.Covers(Input) == Expected, "Coverage must match the original normalized-prefix predicate after every scope change.");
+                    Check(Snapshot.Contains(Input) == (string.Equals(Snapshot.Root, System.IO.Path.TrimEndingDirectorySeparator(Input), StringComparison.OrdinalIgnoreCase)
+                        || Input.StartsWith(Snapshot.Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)), "Root membership must be unchanged.");
+                }
+            }
+        });
         this.Test("Git snapshots reuse unchanged state and invalidate precisely on file changes or watcher removal", () =>
         {
             var Path = NewGit("GitCache");

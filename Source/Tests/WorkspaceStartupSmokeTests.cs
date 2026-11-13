@@ -35,6 +35,13 @@ public partial class ExplorerTab
         var SlowProbe = new MainWindow(SettingsFile, RestoreWorkspace: true, InitialWorkspace: SlowState)
             { Owner = this.HostWindow, ShowActivated = false, ShowInTaskbar = false };
         var SlowPage = SlowProbe.ActiveTab!;
+        var FavoritesReads = 0;
+        SlowPage.ReadFavoritesForTests = () =>
+        {
+            if (SlowPage.Dispatcher.CheckAccess()) throw new InvalidOperationException("Known folders must never be probed on the UI thread.");
+            Interlocked.Increment(ref FavoritesReads);
+            return CreateQuickAccess(SlowFolder, "", "", "", "");
+        };
         SlowPage.Roots.Add(new FolderNode("Slow sidebar", SlowFolder) { LoadTask = SidebarRead.Task });
         try
         {
@@ -57,6 +64,21 @@ public partial class ExplorerTab
             Check(SlowPage.CurrentPath == NextFolder && SlowPage.SelectedEntries().Length == 0
                 && SlowProbe.CaptureWorkspace()!.Tabs[0].Settings.LastPath == NextFolder,
                 "Late startup completion preserves the user's new folder instead of restoring stale selection or history");
+            var Favorite = SlowPage.FavoritesList.Items.OfType<FavoriteLocation>().First();
+            await SlowPage.EnsureChildrenAsync(Favorite.Node);
+            Favorite.Node.IsExpanded = true;
+            var Children = Favorite.Node.Children.ToArray();
+            var OriginalLanguage = CDir.Localization.LanguageService.CurrentLanguage;
+            try
+            {
+                SlowPage.ChangeLanguage("ja-JP", Persist: false);
+                var Relabeled = SlowPage.FavoritesList.Items.OfType<FavoriteLocation>().First();
+                Check(FavoritesReads == 1 && Relabeled.Name == CDir.Localization.LanguageService.Text("FavoriteHome")
+                    && Relabeled.Node.Name == Relabeled.Name && ReferenceEquals(Relabeled.Node, Favorite.Node)
+                    && Relabeled.Node.IsExpanded && Relabeled.Node.Children.SequenceEqual(Children),
+                    "Startup recovery and relabeling reuse one background known-folder read and preserve the loaded shortcut tree");
+            }
+            finally { SlowPage.ChangeLanguage(OriginalLanguage, Persist: false); }
         }
         finally { SidebarRead.TrySetResult(); SlowProbe.RequestExit(); }
         File.WriteAllText(Path.Combine(SlowFolder, "Previously selected.txt"), "Owned saved selection fixture");

@@ -31,6 +31,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private IReadOnlyList<FileEntry> Entries = [];
     private int HistoryIndex = -1;
     private int NavigationVersion;
+    private CancellationTokenSource? NavigationReadCancellation;
+    private int RefreshDispatchQueued;
+    private long RefreshDispatchCount;
     private string CurrentPath = "";
     private string? NavigatingPath;
     private bool Loading;
@@ -71,9 +74,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyUIFonts();
         AppMain.RecordSmokeProgress("Loading window XAML");
         InitializeComponent();
-        this.PreviewMouseDown += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
+        this.PreviewMouseDown += (_, _) => { this.StartupInteraction |= this.IsInitialContentReady; this.CancelWheelScrolling(); };
         this.PreviewMouseWheel += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
-        this.PreviewKeyDown += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
+        this.PreviewKeyDown += (_, _) => { this.StartupInteraction |= this.IsInitialContentReady; this.CancelWheelScrolling(); };
         this.ShowBookmarkPaths = this.Settings.ShowBookmarkPaths;
         this.ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage;
         CutClipboardChanged += this.RefreshCutFeedback;
@@ -93,7 +96,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.RefreshTimer.Stop();
             if (this.CurrentSearch.IsActive) { this.FolderRefreshPending = true; return; }
             if (this.WindowClosed) return;
-            if (this.Loading || this.OperationBusy) { this.RefreshTimer.Start(); return; }
+            if (this.Loading || this.OperationBusy || this.FolderRefreshGate.CurrentCount == 0) { this.RefreshTimer.Start(); return; }
             await this.RefreshAsync();
         };
         this.ApplyGridLines();
@@ -234,6 +237,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (RecordHistory && !HistoryIndex.HasValue) ++this.BrowseHistoryEpoch;
         this.CancelInlineRename();
         this.DismissFileDragFeedback();
+        SmoothWheelScroll.Cancel(FindVisualChild<ScrollViewer>(this.ActiveFileControl));
+        this.NavigationReadCancellation?.Cancel();
         if (ShellLocations.IsRecycleBin(Raw)) return await this.NavigateRecycleBinAsync(HistoryIndex, RecordHistory);
         if (ShellLocations.IsComputer(Raw)) TreeKey = "quick-access";
         // A background refresh must not cancel a user's pending breadcrumb click.
@@ -244,6 +249,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         }
         if (this.WindowClosed) return false;
         var Version = ++this.NavigationVersion;
+        using var ReadCancellation = new CancellationTokenSource();
+        this.NavigationReadCancellation = ReadCancellation;
+        var ReadToken = ReadCancellation.Token;
         this.CancelFolderSizes();
         this.RecycleReadCancellation?.Cancel();
         this.NavigatingTreeKey = TreeKey;
@@ -265,6 +273,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
                 throw new UnauthorizedAccessException("UI checks may only navigate inside their owned test scope.");
             var Result = await Task.Run(() =>
             {
+                ReadToken.ThrowIfCancellationRequested();
                 if (Computer)
                 {
                     var Drives = AppMain.SmokeTest ? ComputerRoots.Select(Node => new DriveEntry(Node.Name, Node.FullPath, "")) : this.Files.GetRoots();
@@ -273,8 +282,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
                 }
                 var Path = Normalized;
                 if (System.IO.File.Exists(Path)) { SelectPath = Path; Path = System.IO.Path.GetDirectoryName(Path)!; }
-                return (Path: Path, Entries: this.Files.GetEntries(Path, ShowHidden, SortByName: false));
-            });
+                return (Path: Path, Entries: this.Files.GetEntries(Path, ShowHidden, SortByName: false, Cancellation: ReadToken));
+            }, ReadToken);
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
             this.CurrentPath = Result.Path;
             this.ApplyRememberedFolderView(this.HostWindow.FolderViewFor(this.CurrentPath));
@@ -314,6 +323,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.QueueSearch(Debounce: false, Selection: SelectPath is null ? SearchSelection : [SelectPath]);
             return true;
         }
+        catch (OperationCanceledException) when (ReadToken.IsCancellationRequested) { return false; }
         catch (System.Exception Ex)
         {
             if (Version == this.NavigationVersion && !this.WindowClosed)
@@ -324,7 +334,11 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             }
             return false;
         }
-        finally { if (Version == this.NavigationVersion) { this.NavigatingPath = null; this.NavigatingTreeKey = null; this.SyncingTree = false; this.Loading = false; this.UpdateActions(); this.UpdateStickySidebar(); } }
+        finally
+        {
+            if (ReferenceEquals(this.NavigationReadCancellation, ReadCancellation)) this.NavigationReadCancellation = null;
+            if (Version == this.NavigationVersion) { this.NavigatingPath = null; this.NavigatingTreeKey = null; this.SyncingTree = false; this.Loading = false; this.UpdateActions(); this.UpdateStickySidebar(); }
+        }
     }
 
     private async Task EnsureChildrenAsync(FolderNode Node)
@@ -987,13 +1001,18 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private void ScheduleRefresh()
     {
         if (this.WindowClosed || Dispatcher.HasShutdownStarted) return;
-        Dispatcher.BeginInvoke(() =>
+        // A generated-file burst needs one dispatcher callback, not one per
+        // notification. Keep the first timer deadline so continuous writes also
+        // become visible instead of postponing refresh indefinitely.
+        if (Interlocked.Exchange(ref this.RefreshDispatchQueued, 1) != 0) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
+            Interlocked.Exchange(ref this.RefreshDispatchQueued, 0);
+            this.RefreshDispatchCount++;
             if (this.WindowClosed) return;
             // Search results are a snapshot. Background writes must not restart a full recursive scan.
             if (this.CurrentSearch.IsActive) { this.FolderRefreshPending = true; return; }
-            this.RefreshTimer.Stop();
-            this.RefreshTimer.Start();
+            if (!this.RefreshTimer.IsEnabled) this.RefreshTimer.Start();
         });
     }
     internal async void PreferencesClick(object Sender, RoutedEventArgs E)
@@ -1038,6 +1057,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.CancelAddressNavigation();
         this.CancelSidebarFolderClick();
         this.CancelSearch();
+        this.NavigationReadCancellation?.Cancel();
         this.NavigationVersion++;
         this.CancelFolderSizes();
         this.Watcher?.Dispose();

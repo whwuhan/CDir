@@ -21,7 +21,7 @@ public partial class ExplorerTab
             Passed.Add(Name);
         }
         var Root = Path.GetDirectoryName(ImagePath)!;
-        var ProbePixels = Math.Clamp((int)Math.Ceiling(128 * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256);
+        var ProbePixels = ShellIcon.RasterSize(Math.Clamp((int)Math.Ceiling(128 * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256));
         foreach (var Size in new[] { 48, 96, 192, 256 })
         {
             foreach (var Folder in new[] { false, true })

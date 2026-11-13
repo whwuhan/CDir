@@ -76,10 +76,10 @@
                   </Border.ContextMenu>
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="22" /><ColumnDefinition Width="22" /></Grid.ColumnDefinitions>
-                    <Button Click="SelectTabClick" Padding="6,2" MinWidth="78" MaxWidth="190" HorizontalContentAlignment="Left" ToolTip="{Binding Page.TabPath}" AutomationProperties.Name="{Binding Page.TabTitle}">
+                    <Button Click="SelectTabClick" Padding="6,2" MinWidth="78" HorizontalContentAlignment="Left" ToolTip="{Binding Page.TabPath}" AutomationProperties.Name="{Binding Page.TabTitle}">
                       <StackPanel Orientation="Horizontal">
                         <controls:ShellIcon Path="{Binding Page.TabPath}" IsDirectory="True" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" />
-                        <TextBlock Text="{Binding Page.TabTitle}" TextTrimming="CharacterEllipsis" MaxWidth="135" FontSize="{DynamicResource UIFontTabs}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Page.TabTitle}" FontSize="{DynamicResource UIFontTabs}" VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
                     <Button x:Name="PinTabButton" Style="{StaticResource TabPinButtonStyle}" Grid.Column="1" Content="&#xE718;" Click="PinTabClick" Width="20" Height="20" FontFamily="Segoe MDL2 Assets" FontSize="12" Padding="0" VerticalAlignment="Center" Focusable="False"

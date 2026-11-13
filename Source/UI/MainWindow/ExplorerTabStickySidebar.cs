@@ -198,7 +198,12 @@ public partial class ExplorerTab
     private void StickySidebarMouseWheel(object Sender, MouseWheelEventArgs E)
     {
         if (this.StickyAncestorScroll.ScrollableHeight > 0 && E.OriginalSource is DependencyObject Target
-            && this.StickyAncestorScroll.IsAncestorOf(Target)) return;
+            && this.StickyAncestorScroll.IsAncestorOf(Target))
+        {
+            if (!E.Handled && Keyboard.Modifiers == ModifierKeys.None
+                && CDir.Services.SmoothWheelScroll.Wheel(this.StickyAncestorScroll, E.Delta)) E.Handled = true;
+            return;
+        }
         this.FolderTreeMouseWheel(Sender, E);
     }
 }

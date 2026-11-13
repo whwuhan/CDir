@@ -5,6 +5,7 @@ using System.Windows.Input;
 using CDir.Controls;
 using CDir.Models;
 using CDir.Localization;
+using CDir.Services;
 
 namespace CDir.UI;
 
@@ -35,12 +36,28 @@ public partial class ExplorerTab
 
     private void MainPanelViewMouseLeave(object Sender, MouseEventArgs E) => this.FileViewWheelRemainder = 0;
 
+    private void CancelWheelScrolling()
+    {
+        SmoothWheelScroll.Cancel(FindVisualChild<ScrollViewer>(this.ActiveFileControl));
+        SmoothWheelScroll.Cancel(this.SidebarScroll);
+        SmoothWheelScroll.Cancel(this.StickyAncestorScroll);
+    }
+
     private void MainPanelViewMouseWheel(object Sender, MouseWheelEventArgs E)
     {
         if (E.Handled) return;
-        if (this.ReadFileViewWheelModifiers() != ModifierKeys.Control)
+        var Modifiers = this.ReadFileViewWheelModifiers();
+        if (Modifiers != ModifierKeys.Control)
         {
             this.FileViewWheelRemainder = 0;
+            if (Modifiers == ModifierKeys.None && E.Delta != 0
+                && (E.OriginalSource is not DependencyObject Origin || FindAncestor<TextBoxBase>(Origin) is null)
+                && FindVisualChild<ScrollViewer>(this.ActiveFileControl) is { } Viewer)
+            {
+                var Units = this.IsDetailsView ? this.FileGrid.RowHeight : 1;
+                if (SmoothWheelScroll.Wheel(Viewer, E.Delta, Units, Horizontal: !this.IsDetailsView && this.Settings.FileView == FileViewMode.List,
+                    LogicalRows: this.IsDetailsView && this.FileGrid.IsGrouping)) E.Handled = true;
+            }
             return;
         }
         if (this.Loading || this.OperationBusy || this.CurrentPath.Length == 0
@@ -113,6 +130,7 @@ public partial class ExplorerTab
     {
         var IconSize = SavedIconSize ?? this.HostWindow.FolderIconSizeFor(this.CurrentPath);
         if (this.Settings.FileView == Mode && this.AppliedFileView == Mode && this.Settings.FileViewIconSize == IconSize) return;
+        SmoothWheelScroll.Cancel(FindVisualChild<ScrollViewer>(this.ActiveFileControl));
         this.FileViewWheelRemainder = 0;
         this.CancelInlineRename();
         this.EndMarqueeSelection();
@@ -126,7 +144,8 @@ public partial class ExplorerTab
         var Mode = this.Settings.FileView;
         var IconSize = FileViewZoom.IsIconView(Mode) && this.Settings.FileViewIconSize is >= 16 and <= 256
             ? this.Settings.FileViewIconSize : FileViewZoom.DefaultSize(Mode);
-        void SetResource(string Key, object Value) { if (!Equals(this.Resources[Key], Value)) this.Resources[Key] = Value; }
+        // Keep zoom resource invalidation within the tile viewport.
+        void SetResource(string Key, object Value) { if (!Equals(this.FileTiles.Resources[Key], Value)) this.FileTiles.Resources[Key] = Value; }
         SetResource("FileViewNameHeight", this.FileGrid.FontSize * 2.8);
         SetResource("FileViewIconSize", (double)IconSize);
         SetResource("FileViewIconPixels", IconSize);
