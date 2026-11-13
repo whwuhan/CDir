@@ -464,6 +464,8 @@ public sealed class VersionSnapshot
         return Copy;
     }
     public string Root { get; }
+    private readonly string RootPrefix;
+    private string CoveragePrefix;
     public string Provider { get; }
     public IReadOnlyList<string> WatchDirectories { get; }
     public string? Error { get; private init; }
@@ -473,12 +475,19 @@ public sealed class VersionSnapshot
     {
         Path = System.IO.Path.GetFullPath(Path);
         return string.Equals(this.CoverageRoot, System.IO.Path.TrimEndingDirectorySeparator(Path), StringComparison.OrdinalIgnoreCase)
-            || Path.StartsWith(this.CoverageRoot.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+            || Path.StartsWith(this.CoveragePrefix, StringComparison.OrdinalIgnoreCase);
     }
-    internal VersionSnapshot WithCoverage(string Path) { this.CoverageRoot = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path)); return this; }
+    internal VersionSnapshot WithCoverage(string Path)
+    {
+        this.CoverageRoot = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path));
+        this.CoveragePrefix = this.CoverageRoot.TrimEnd('\\') + "\\";
+        return this;
+    }
     public VersionSnapshot(string Root, string Provider, IReadOnlyList<string> WatchDirectories)
     {
         this.Root = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Root));
+        this.RootPrefix = this.Root.TrimEnd('\\') + "\\";
+        this.CoveragePrefix = this.RootPrefix;
         this.CoverageRoot = this.Root;
         this.Provider = Provider;
         this.WatchDirectories = WatchDirectories.Select(Path => System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path)))
@@ -520,14 +529,26 @@ public sealed class VersionSnapshot
     public static VersionSnapshot Unavailable(string Root, string Provider, string Error) => new(Root, Provider, [Root]) { Error = Error };
     internal static VersionSnapshot Checking(string Root, string Provider) => new(Root, Provider, [Root]) { IsComplete = false };
     public bool Contains(string Path) => string.Equals(this.Root, System.IO.Path.TrimEndingDirectorySeparator(Path), StringComparison.OrdinalIgnoreCase)
-        || Path.StartsWith(this.Root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+        || Path.StartsWith(this.RootPrefix, StringComparison.OrdinalIgnoreCase);
 
     public VersionStatus GetStatus(string Path)
     {
+        Path = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(Path));
         if (!this.Contains(Path)) return VersionStatus.None;
-        var Relative = System.IO.Path.GetRelativePath(this.Root, Path).Replace('\\', '/');
-        if (Relative.Split('/').Any(Part => Part.Equals(".git", StringComparison.OrdinalIgnoreCase) || Part.Equals(".svn", StringComparison.OrdinalIgnoreCase))) return VersionStatus.None;
-        if (!this.Covers(Path)) return new(VersionState.Unknown, this.Provider);
+        // All paths are now canonical. Avoid a second full normalization and
+        // allocating a string array for every badge in large working copies.
+        var Relative = Path.Length == this.Root.Length ? "." : Path[this.RootPrefix.Length..].Replace('\\', '/');
+        var Remaining = Relative.AsSpan();
+        while (!Remaining.IsEmpty)
+        {
+            var Slash = Remaining.IndexOf('/');
+            var Part = Slash < 0 ? Remaining : Remaining[..Slash];
+            if (Part.Equals(".git", StringComparison.OrdinalIgnoreCase) || Part.Equals(".svn", StringComparison.OrdinalIgnoreCase)) return VersionStatus.None;
+            if (Slash < 0) break;
+            Remaining = Remaining[(Slash + 1)..];
+        }
+        if (!string.Equals(this.CoverageRoot, Path, StringComparison.OrdinalIgnoreCase)
+            && !Path.StartsWith(this.CoveragePrefix, StringComparison.OrdinalIgnoreCase)) return new(VersionState.Unknown, this.Provider);
         if (this.Error is not null) return new(VersionState.Unknown, this.Provider, Error: this.Error);
         if (this.States.TryGetValue(Relative, out var Status)) return Status;
         for (var Parent = Relative; Parent.Contains('/');)

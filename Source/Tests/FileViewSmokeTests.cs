@@ -23,6 +23,7 @@ public partial class ExplorerTab
         {
             if (!Condition) throw new InvalidOperationException("File view check failed: " + Name);
             Passed.Add(Name);
+            AppMain.RecordSmokeProgress("File view: " + Name);
         }
         var Root = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "File Views")).FullName;
         var Folder = Directory.CreateDirectory(Path.Combine(Root, "Folder")).FullName;
@@ -53,13 +54,15 @@ public partial class ExplorerTab
             Capture("FileViews-Menu");
             foreach (var Mode in Enum.GetValues<FileViewMode>())
             {
+                AppMain.RecordSmokeProgress("File view: switching to " + Mode);
                 Modes.Single(Item => Equals(Item.Tag, Mode)).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 await Settle();
                 Check(this.Settings.FileView == Mode && Modes.Count(Item => Item.IsChecked) == 1
                     && this.FileGrid.IsVisible == (Mode == FileViewMode.Details)
                     && this.FileTiles.IsVisible == (Mode != FileViewMode.Details)
-                    && this.SelectedEntries().Single().FullPath == Folder,
-                    Mode + " switches the main panel and preserves the selection with exactly one menu check");
+                    && this.SelectedEntries().Length == 1 && this.SelectedEntries()[0].FullPath == Folder,
+                    Mode + " switches the main panel and preserves the selection with exactly one menu check"
+                    + $" (selection={string.Join(',', this.SelectedEntries().Select(Entry => Entry.Name))})");
                 Check(this.CaptureWorkspaceTab().Settings.FileView == Mode && this.SaveSettings(SettingsFile)
                     && ReadSettings(SettingsFile).FileView == Mode, Mode + " survives settings and workspace snapshot capture");
                 if (Mode == FileViewMode.Details) continue;
@@ -76,7 +79,7 @@ public partial class ExplorerTab
                 Capture("FileView-" + Mode);
                 this.ClearFileSelection(); this.SelectPath(Folder);
                 var Container = (ListBoxItem)this.FileTiles.ItemContainerGenerator.ContainerFromItem(this.FileTiles.Items[0]);
-                Check(Container is not null && this.FileContextEntries(Container).Single().FullPath == Folder
+                Check(Container is not null && this.FileContextEntries(Container).Length == 1 && this.FileContextEntries(Container)[0].FullPath == Folder
                     && this.FileTransferTarget(Container, false)?.Path == Folder,
                     Mode + " routes item context menus and folder drops through the visible item");
                 this.BeginFileRename(Folder); await Settle();
@@ -104,7 +107,7 @@ public partial class ExplorerTab
                         && this.UpdateMarqueeSelection(new Point(Viewport.Bounds.Right - 2, Viewport.Bounds.Bottom - 2))
                         && this.SelectedEntries().Length > 1, Mode + " selects an item rectangle using its actual layout geometry");
                     this.EndMarqueeSelection(Cancel: true);
-                    Check(this.SelectedEntries().Single().FullPath == Folder, Mode + " restores the selection when marquee selection is cancelled");
+                    Check(this.SelectedEntries().Length == 1 && this.SelectedEntries()[0].FullPath == Folder, Mode + " restores the selection when marquee selection is cancelled");
                 }
             }
             this.ChangeFileView(FileViewMode.Details); await Settle();

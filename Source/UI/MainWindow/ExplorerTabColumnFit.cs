@@ -110,10 +110,12 @@ public partial class ExplorerTab
             Typeface, Size, Brushes.Black, Dpi).WidthIncludingTrailingWhitespace;
         // The header template reserves its arrow gutter even when it is unsorted.
         var Width = Measure(Convert.ToString(Column.Header, LanguageService.Culture) ?? "", (double)this.FindResource("UIFontHeaders")) + 39;
+        var Measured = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var Entry in this.FileGrid.Items.OfType<FileEntry>())
         {
             var Text = ColumnText(Entry, Column.SortMemberPath);
-            Width = Math.Max(Width, Measure(Text, this.FileGrid.FontSize) + (Column.SortMemberPath == nameof(FileEntry.Name) ? 43 : 21));
+            if (!Measured.TryGetValue(Text, out var TextWidth)) Measured[Text] = TextWidth = Measure(Text, this.FileGrid.FontSize);
+            Width = Math.Max(Width, TextWidth + (Column.SortMemberPath == nameof(FileEntry.Name) ? 43 : 21));
         }
         // Measure model values so virtualized, off-screen rows also participate.
         // A fitted short name must be able to shrink below the initial 230px minimum.

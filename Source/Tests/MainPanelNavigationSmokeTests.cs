@@ -13,6 +13,7 @@ public partial class ExplorerTab
     private async Task RunMainPanelNavigationSmokeChecksAsync(List<string> Passed)
     {
         await this.RunFileListScrollTailSmokeChecksAsync(Passed);
+        await this.RunSmoothScrollingSmokeChecksAsync(Passed);
         var Initial = this.CurrentPath;
         var Fixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "Main panel navigation " + Guid.NewGuid().ToString("N"))).FullName;
         var Child = Directory.CreateDirectory(Path.Combine(Fixture, "Child 中文")).FullName;
@@ -50,6 +51,14 @@ public partial class ExplorerTab
             await this.BackAsync();
             Check(SamePath(this.CurrentPath, Fixture) && this.Entries.Count == 1 && SamePath(this.Entries[0].FullPath, Child),
                 "Going back restores the flat parent-directory listing");
+            var Obsolete = this.NavigateAsync(Child, SyncNavigationTree: false);
+            var OldRead = this.NavigationReadCancellation?.Token;
+            var AlreadyCompleted = Obsolete.IsCompleted;
+            var Latest = this.NavigateAsync(Fixture, SyncNavigationTree: false);
+            var ObsoleteResult = await Obsolete;
+            Check((AlreadyCompleted || OldRead?.IsCancellationRequested == true && !ObsoleteResult) && await Latest
+                && SamePath(this.CurrentPath, Fixture) && !this.Loading,
+                "Rapid navigation cancels the superseded directory read and only presents the latest destination");
         }
         finally
         {

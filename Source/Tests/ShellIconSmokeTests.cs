@@ -150,6 +150,23 @@ public partial class ExplorerTab
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Check(CorrectAfterRebind && Probe.Source is null,
                 "recycled icon controls reject stale results and hide empty placeholder paths");
+            var Scale = VisualTreeHelper.GetDpi(Probe).DpiScaleX;
+            var Sizes = Enumerable.Range(33, 224).GroupBy(Size => ShellIcon.RasterSize(Math.Clamp((int)Math.Ceiling(Size * Scale), 8, 256)))
+                .First(Group => Group.Count() >= 6).Take(6).ToArray();
+            var Raster = ShellIcon.RasterSize(Math.Clamp((int)Math.Ceiling(Sizes[0] * Scale), 8, 256));
+            var ExpectedLarge = await ShellIconService.GetIconAsync(FolderPath, true, Raster);
+            Probe.IconSize = Sizes[0]; Probe.Path = FolderPath;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            await WaitForShellIconIdleAsync();
+            var NativeBeforeZoom = ShellIconService.GetDiagnostics().NativeRequestCount;
+            foreach (var Size in Sizes)
+            {
+                Probe.IconSize = Size;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            }
+            Check(ReferenceEquals(Probe.Source, ExpectedLarge) && ShellIconService.GetDiagnostics().NativeRequestCount == NativeBeforeZoom
+                && Raster >= Math.Min(256, (int)Math.Ceiling(Sizes[^1] * Scale)),
+                "Nearby zoom sizes reuse one sufficiently large cached bitmap without new native Shell reads");
         }
         catch (Exception Error)
         {

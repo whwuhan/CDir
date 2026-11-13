@@ -147,9 +147,21 @@ public partial class ExplorerTab
 
     private void RefreshFileRows(IReadOnlyList<FileEntry> Updated)
     {
-        this.CancelFolderSizes();
         if (this.Entries is not ObservableCollection<FileEntry> Items)
         { this.ShowEntries(Updated); return; }
+        var Today = DateTime.Today;
+        // The common watcher read has identical rows and metadata. Compare in
+        // place before allocating path maps, selection snapshots or a new array.
+        var Unchanged = Items.Count == Updated.Count;
+        for (var Index = 0; Unchanged && Index < Items.Count; Index++)
+        {
+            var Previous = Items[Index]; var Entry = Updated[Index];
+            Unchanged = SameFileRowIdentity(Previous, Entry) && Previous.Modified == Entry.Modified
+                && Previous.IsHidden == Entry.IsHidden && (Previous.IsDirectory || Previous.Size == Entry.Size)
+                && Previous.Use12HourClock == this.Settings.Use12HourClock
+                && (this.FileGroupProperty.Length == 0 || Previous.ViewGroup == this.GroupLabel(Previous, Today));
+        }
+        if (Unchanged) { this.ResumePendingFolderSizes(Items); return; }
         // Metadata commits can reorder a sorted/grouped view before collection
         // reconciliation. Capture the user's viewport before either can move it.
         var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
@@ -157,19 +169,23 @@ public partial class ExplorerTab
         var Horizontal = Viewer?.HorizontalOffset ?? 0;
         var Selected = this.SelectedEntries().Select(Entry => Entry.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var Existing = Items.ToDictionary(Entry => Entry.FullPath, StringComparer.OrdinalIgnoreCase);
+        var ChangedRows = 0;
         var Desired = Updated.Select(Entry =>
         {
             if (Existing.TryGetValue(Entry.FullPath, out var Previous))
             {
-                if (Previous.Name == Entry.Name && Previous.FullPath == Entry.FullPath && Previous.IsDirectory == Entry.IsDirectory
-                    && Previous.TypeKey == Entry.TypeKey && Previous.Extension == Entry.Extension
-                    && Previous.OriginalLocation == Entry.OriginalLocation && Previous.DateDeleted == Entry.DateDeleted)
+                if (SameFileRowIdentity(Previous, Entry))
                 {
                     // Commit only changes which affect the active ordering/group.
                     // Ordinary timestamp/size updates must not remove and reinsert
                     // rows, reset the view, or disturb virtualized icon containers.
                     bool Changed(string Property) => Property == nameof(FileEntry.Modified) && Previous.Modified != Entry.Modified
                         || Property == nameof(FileEntry.Size) && !Previous.IsDirectory && Previous.Size != Entry.Size;
+                    var MetadataChanged = Previous.Modified != Entry.Modified || Previous.IsHidden != Entry.IsHidden
+                        || !Previous.IsDirectory && Previous.Size != Entry.Size;
+                    if (!MetadataChanged && Previous.Use12HourClock == this.Settings.Use12HourClock
+                        && (this.FileGroupProperty.Length == 0 || Previous.ViewGroup == this.GroupLabel(Previous, Today))) return Previous;
+                    ChangedRows++;
                     var Reposition = Changed(this.SortProperty) || Changed(this.FileGroupProperty);
                     var List = Reposition ? this.View as System.Windows.Data.ListCollectionView : null;
                     List?.EditItem(Previous);
@@ -177,7 +193,7 @@ public partial class ExplorerTab
                     {
                         Previous.UpdateMetadata(Entry);
                         Previous.Use12HourClock = this.Settings.Use12HourClock;
-                        this.AssignFileGroup(Previous, DateTime.Today);
+                        this.AssignFileGroup(Previous, Today);
                     }
                     finally { List?.CommitEdit(); }
                     return Previous;
@@ -186,14 +202,25 @@ public partial class ExplorerTab
                 Entry.IsCut = Previous.IsCut;
             }
             Entry.Use12HourClock = this.Settings.Use12HourClock;
-            this.AssignFileGroup(Entry, DateTime.Today);
+            ChangedRows++;
+            this.AssignFileGroup(Entry, Today);
             return Entry;
         }).ToArray();
+        var SameRows = Items.Count == Desired.Length && Items.SequenceEqual(Desired);
+        if (SameRows && ChangedRows == 0)
+        {
+            // An explicit refresh can invalidate recursive totals even when the
+            // directory's immediate metadata is unchanged. Resume those totals
+            // without restarting a scan that is already running.
+            this.ResumePendingFolderSizes(Items);
+            return;
+        }
+        this.CancelFolderSizes();
         var WasApplying = this.ApplyingSearchSelection;
         this.ApplyingSearchSelection = true;
         try
         {
-            ReconcileItems(Items, Desired);
+            if (!SameRows) ReconcileItems(Items, Desired);
             foreach (var Entry in Desired.Where(Entry => Selected.Contains(Entry.FullPath)))
                 if (!this.FileGrid.SelectedItems.Contains(Entry)) this.FileGrid.SelectedItems.Add(Entry);
         }
@@ -208,6 +235,17 @@ public partial class ExplorerTab
         this.UpdateActions();
         this.UpdateCounts();
         this.QueueFolderSizes();
+    }
+
+    private static bool SameFileRowIdentity(FileEntry Previous, FileEntry Entry) =>
+        Previous.Name == Entry.Name && Previous.FullPath == Entry.FullPath && Previous.IsDirectory == Entry.IsDirectory
+        && Previous.TypeKey == Entry.TypeKey && Previous.Extension == Entry.Extension
+        && Previous.OriginalLocation == Entry.OriginalLocation && Previous.DateDeleted == Entry.DateDeleted;
+
+    private void ResumePendingFolderSizes(ObservableCollection<FileEntry> Items)
+    {
+        if (this.Settings.CalculateFolderSizes && this.FolderSizeCancellation is null
+            && Items.Any(Entry => Entry.IsDirectory && !Entry.FolderSizeComplete)) this.QueueFolderSizes();
     }
 
     private static void ReconcileItems<T>(ObservableCollection<T> Items, IReadOnlyList<T> Desired) where T : class

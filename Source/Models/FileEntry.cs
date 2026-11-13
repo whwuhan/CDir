@@ -66,7 +66,7 @@ public sealed class FileEntry : INotifyPropertyChanged
     }
     internal void ResetFolderSize()
     {
-        if (!this.IsDirectory) return;
+        if (!this.IsDirectory || this.CurrentSize is null && !this.FolderSizeComplete && !this.FolderSizePartial) return;
         this.CurrentSize = null;
         this.FolderSizeComplete = this.FolderSizePartial = false;
         PropertyChanged?.Invoke(this, new(nameof(Size)));
@@ -118,9 +118,41 @@ public sealed class FileEntry : INotifyPropertyChanged
             PropertyChanged?.Invoke(this, new(nameof(DisplayDateDeleted)));
         }
     }
-    public string DisplaySize => this.Size is { } ByteCount ? (this.FolderSizePartial ? "≥ " : "") + FormatSize(ByteCount) : "—";
-    public string DisplayModified => this.IsDrive ? "—" : this.Modified.ToString(
-        this.Use12HourClock ? "yyyy/MM/dd hh:mm:ss tt" : "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
+    private long CachedSizeValue;
+    private bool CachedSizePartial;
+    private CultureInfo? CachedSizeCulture;
+    private string? CachedSizeText;
+    private DateTime CachedModifiedValue;
+    private bool CachedModifiedClock;
+    private string? CachedModifiedText;
+    public string DisplaySize
+    {
+        get
+        {
+            if (this.Size is not { } ByteCount) return "—";
+            var Culture = LanguageService.Culture;
+            if (this.CachedSizeText is null || this.CachedSizeValue != ByteCount || this.CachedSizePartial != this.FolderSizePartial
+                || !ReferenceEquals(this.CachedSizeCulture, Culture))
+            {
+                this.CachedSizeText = (this.FolderSizePartial ? "≥ " : "") + FormatSize(ByteCount, Culture);
+                this.CachedSizeValue = ByteCount; this.CachedSizePartial = this.FolderSizePartial; this.CachedSizeCulture = Culture;
+            }
+            return this.CachedSizeText;
+        }
+    }
+    public string DisplayModified
+    {
+        get
+        {
+            if (this.IsDrive) return "—";
+            if (this.CachedModifiedText is null || this.CachedModifiedValue != this.Modified || this.CachedModifiedClock != this.Use12HourClock)
+            {
+                this.CachedModifiedText = this.Modified.ToString(this.Use12HourClock ? "yyyy/MM/dd hh:mm:ss tt" : "yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture);
+                this.CachedModifiedValue = this.Modified; this.CachedModifiedClock = this.Use12HourClock;
+            }
+            return this.CachedModifiedText;
+        }
+    }
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void RefreshLanguage()
@@ -132,14 +164,14 @@ public sealed class FileEntry : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new(nameof(DisplayDateDeleted)));
     }
 
-    private static string FormatSize(long Bytes)
+    private static readonly string[] SizeUnits = ["KB", "MB", "GB", "TB", "PB", "EB"];
+    private static string FormatSize(long Bytes, CultureInfo Culture)
     {
-        if (Bytes < 1024) return Bytes.ToString("N0", LanguageService.Culture) + " B";
-        string[] Units = ["KB", "MB", "GB", "TB", "PB", "EB"];
+        if (Bytes < 1024) return Bytes.ToString("N0", Culture) + " B";
         double Value = Bytes;
         var Unit = -1;
-        do { Value /= 1024; Unit++; } while (Value >= 1024 && Unit < Units.Length - 1);
-        return Value.ToString("0.#", LanguageService.Culture) + " " + Units[Unit];
+        do { Value /= 1024; Unit++; } while (Value >= 1024 && Unit < SizeUnits.Length - 1);
+        return Value.ToString("0.#", Culture) + " " + SizeUnits[Unit];
     }
 }
 

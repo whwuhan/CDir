@@ -45,6 +45,15 @@ public sealed class ShellIcon : Image
     private bool RefreshQueued;
     private IconIdentity? DisplayedIdentity;
     private sealed record IconIdentity(string? Path, bool IsDirectory, bool IsDrive, bool OpenFolder, bool Thumbnails);
+    private static readonly object BadgeSync = new();
+    private static readonly Dictionary<(VersionState State, bool Pending, double Size, double Dpi), DrawingGroup> BadgeDrawings = [];
+    private static readonly Typeface BadgeTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
+
+    internal static int RasterSize(int Pixels) => Pixels switch
+    {
+        <= 32 => Pixels, <= 48 => 48, <= 64 => 64,
+        <= 96 => 96, <= 128 => 128, <= 192 => 192, _ => 256
+    };
 
     public ShellIcon()
     {
@@ -74,6 +83,12 @@ public sealed class ShellIcon : Image
         if (Target is not ShellIcon { IsLoaded: true } Icon) return;
         // A folder timestamp (or a file in Details view) cannot change a thumbnail.
         if (E.Property == ThumbnailStampProperty && (!Icon.ShowThumbnails || Icon.IsDirectory || Icon.IconSize <= 16)) return;
+        if (E.Property == IconSizeProperty && E.OldValue is int OldSize && E.NewValue is int NewSize && OldSize > 32 && NewSize > 32)
+        {
+            var Scale = VisualTreeHelper.GetDpi(Icon).DpiScaleX;
+            if (RasterSize(Math.Clamp((int)Math.Ceiling(OldSize * Scale), 8, 256))
+                == RasterSize(Math.Clamp((int)Math.Ceiling(NewSize * Scale), 8, 256))) return;
+        }
         Icon.QueueRefresh();
         Icon.UpdateVersionTooltip();
     }
@@ -87,6 +102,34 @@ public sealed class ShellIcon : Image
         base.OnRender(Context);
         var State = this.VersionStatus.State;
         if (State == VersionState.None || ActualWidth < 8 || ActualHeight < 8) return;
+        var IconExtent = Math.Min(ActualWidth, ActualHeight);
+        var Size = Math.Min(IconExtent, Math.Max(10, IconExtent / 4));
+        var Key = (State, State == VersionState.Unknown && string.IsNullOrEmpty(this.VersionStatus.Error), Size, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        DrawingGroup Badge;
+        lock (BadgeSync)
+        {
+            if (!BadgeDrawings.TryGetValue(Key, out Badge!))
+            {
+                Badge = CreateBadge(State, Key.Item2, Size, Key.Item4);
+                if (BadgeDrawings.Count >= 512) BadgeDrawings.Clear();
+                BadgeDrawings[Key] = Badge;
+            }
+        }
+        Context.PushTransform(new TranslateTransform(ActualWidth - Size, ActualHeight - Size));
+        Context.DrawDrawing(Badge);
+        Context.Pop();
+    }
+
+    private static DrawingGroup CreateBadge(VersionState State, bool Pending, double Size, double Dpi)
+    {
+        var Drawing = new DrawingGroup();
+        using (var Context = Drawing.Open()) DrawBadge(Context, State, Pending, Size, Dpi);
+        Drawing.Freeze();
+        return Drawing;
+    }
+
+    private static void DrawBadge(DrawingContext Context, VersionState State, bool Pending, double Size, double Dpi)
+    {
         var (Glyph, Color) = State switch
         {
             VersionState.Clean => ("✓", "#25854B"),
@@ -101,11 +144,9 @@ public sealed class ShellIcon : Image
         };
         // Keep compact list/tree badges readable, and scale the whole vector
         // badge with the displayed icon or thumbnail in larger views.
-        var IconExtent = Math.Min(ActualWidth, ActualHeight);
-        var Size = Math.Min(IconExtent, Math.Max(10, IconExtent / 4));
-        var Center = new Point(ActualWidth - Size / 2, ActualHeight - Size / 2);
+        var Center = new Point(Size / 2, Size / 2);
         Context.DrawEllipse((Brush)new BrushConverter().ConvertFromString(Color)!, new Pen(Brushes.White, Size * 0.08), Center, Size / 2, Size / 2);
-        if (State == VersionState.Unknown && string.IsNullOrEmpty(this.VersionStatus.Error))
+        if (Pending)
         {
             // Draw the pending ellipsis as geometry so all three dots remain
             // legible in a 16px icon, independently of the installed font.
@@ -114,7 +155,7 @@ public sealed class ShellIcon : Image
             return;
         }
         var Text = new FormattedText(Glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal), Size * 0.8, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            BadgeTypeface, Size * 0.8, Brushes.White, Dpi);
         Context.DrawText(Text, new Point(Center.X - Text.Width / 2, Center.Y - Text.Height / 2 - Size * 0.02));
     }
 
@@ -164,7 +205,7 @@ public sealed class ShellIcon : Image
             return;
         }
         var Version = this.LoadVersion;
-        var PixelSize = Math.Clamp((int)Math.Ceiling(this.IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256);
+        var PixelSize = RasterSize(Math.Clamp((int)Math.Ceiling(this.IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256));
         var Fallback = this.IsDrive
             ? ShellIconService.GetDriveFallbackIcon(PixelSize)
             : ShellIconService.GetFallbackIcon(this.IsDirectory, PixelSize);

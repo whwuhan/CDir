@@ -151,6 +151,17 @@ public partial class ExplorerTab
                 && this.TabAlias.Length == 0,
                 "A tab alias changes only its label, accepts non-filename text and leaves other tabs and disk names intact");
             CheckHeaders("The tab header renders its alias while its tooltip retains the original folder path");
+            var LongAlias = string.Concat(Enumerable.Repeat("UE5.8 Engine And Project 自定义长标题 ", 16));
+            await RenameAlias(Second, LongAlias);
+            Shell.UpdateLayout();
+            var LongCaption = FindVisualChild<TextBlock>(HeaderButton(Second))!;
+            Check(LongCaption.Text == LongAlias.Trim() && LongCaption.TextTrimming == TextTrimming.None
+                && LongCaption.ActualWidth > Shell.TabScroll.ViewportWidth
+                && HeaderButton(Second).ActualWidth >= LongCaption.ActualWidth + 19
+                && Shell.TabScroll.ExtentWidth > Shell.TabScroll.ViewportWidth,
+                "A custom title wider than the window keeps its full text and scrolls horizontally without an ellipsis"
+                + $" (caption={LongCaption.ActualWidth}, button={HeaderButton(Second).ActualWidth}, viewport={Shell.TabScroll.ViewportWidth}, extent={Shell.TabScroll.ExtentWidth}, textLength={LongCaption.Text.Length}, expectedLength={LongAlias.Trim().Length}, trimming={LongCaption.TextTrimming})");
+            await RenameAlias(Second, "Work 工作 / Project");
             await RenameAlias(Second, "Cancelled", Confirm: false);
             Check(Second.TabTitle == "Work 工作 / Project", "Cancelling the alias dialog preserves the current alias");
             await Second.NavigateAsync(InitialPath);

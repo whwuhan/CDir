@@ -84,7 +84,8 @@ public partial class ExplorerTab
             Wheel(Page, 120, Target: Page.SearchBox); Wheel(Page, 120, Target: Page.FolderTree);
             Check(Page.Settings.FileView == FileViewMode.List,
                 "Wheel zoom is scoped to the main file pane, excluding search and the directory tree");
-            Check(!Wheel(Page, 120, ModifierKeys.None) && !Wheel(Page, 120, ModifierKeys.Control | ModifierKeys.Alt)
+            Wheel(Page, 120, ModifierKeys.None);
+            Check(!Wheel(Page, 120, ModifierKeys.Control | ModifierKeys.Alt)
                 && Page.Settings.FileView == FileViewMode.List, "Ordinary scrolling and other modifier combinations do not change the file view");
             Check(Wheel(Page, 60) && Page.Settings.FileView == FileViewMode.List
                 && Wheel(Page, 60) && Page.Settings.FileView == FileViewMode.SmallIcons,
@@ -103,7 +104,7 @@ public partial class ExplorerTab
                 "Zoom preserves file selection and existing detail-column widths");
             Page.ChangeFileView(FileViewMode.MediumIcons); Wheel(Page, 120); await Settle();
             var Pixels = Page.Settings.FileViewIconSize;
-            Check(Pixels == 53 && Page.Resources["FileViewIconPixels"] is int ActualPixels && ActualPixels == Pixels
+            Check(Pixels == 53 && Page.FileTiles.Resources["FileViewIconPixels"] is int ActualPixels && ActualPixels == Pixels
                 && FindVisualChild<FileTilePanel>(Page.FileTiles)!.CellWidth == Pixels + 48,
                 "Intermediate native icon sizes update both the thumbnail request and actual cell geometry");
             await Task.Delay(350); await Settle();
@@ -115,9 +116,10 @@ public partial class ExplorerTab
                 "The view dropdown reflects the layout reached by wheel zoom");
             Menu.IsOpen = false;
             Page.SearchBox.Text = "/file"; await Page.WaitForSearchSmokeAsync();
-            Wheel(Page, 120); var SearchSize = Page.Settings.FileViewIconSize;
-            Check(SearchSize > Pixels && Page.FileTiles.IsVisible && Page.Resources["FileViewIconPixels"] is int SearchPixels && SearchPixels == SearchSize,
-                "Search results use and update the same zoomed view as their current folder");
+            var SearchWheelHandled = Wheel(Page, 120); var SearchSize = Page.Settings.FileViewIconSize;
+            Check(SearchSize > Pixels && Page.FileTiles.IsVisible && Page.FileTiles.Resources["FileViewIconPixels"] is int SearchPixels && SearchPixels == SearchSize,
+                "Search results use and update the same zoomed view as their current folder"
+                + $" (handled={SearchWheelHandled}, before={Pixels}, after={SearchSize}, visible={Page.FileTiles.IsVisible}, mode={Page.Settings.FileView}, loading={Page.Loading}, busy={Page.OperationBusy})");
             Page.SearchBox.Clear(); await Page.WaitForSearchSmokeAsync();
             Check(Page.Settings.FileViewIconSize == SearchSize, "Leaving search preserves the folder's exact icon size");
             await Page.NavigateAsync(Other); Page.ChangeFileView(FileViewMode.Content);
@@ -165,12 +167,14 @@ public partial class ExplorerTab
                 NotifyCollectionChangedEventHandler Changed = (_, _) => Resets++;
                 Page.View!.CollectionChanged += Changed;
                 var Samples = new List<double>();
+                var DispatchSamples = new List<double>();
                 try
                 {
                     for (var Index = 0; Index < 24; Index++)
                     {
                         var Timer = Stopwatch.StartNew();
                         Wheel(Page, Index % 2 == 0 ? 120 : -120, Target: Container);
+                        DispatchSamples.Add(Timer.Elapsed.TotalMilliseconds);
                         await Settle();
                         Samples.Add(Timer.Elapsed.TotalMilliseconds);
                     }
@@ -187,6 +191,7 @@ public partial class ExplorerTab
                         $"10,000-file zoom (grouped={Grouped}) keeps the wheel anchor visible after resizing");
                     Timings.Add(new { grouped = Grouped, files = 10000, events = Samples.Count,
                         average_ms = Samples.Average(), maximum_ms = Samples.Max(), collection_changes = Resets,
+                        dispatch_average_ms = DispatchSamples.Average(), dispatch_maximum_ms = DispatchSamples.Max(), samples_ms = Samples,
                         realized_items = VisualTreeHelper.GetChildrenCount(Panel) });
                 }
                 finally { Page.View.CollectionChanged -= Changed; }

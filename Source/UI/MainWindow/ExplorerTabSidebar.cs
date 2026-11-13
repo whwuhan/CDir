@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using CDir.Localization;
 using CDir.Models;
+using CDir.Services;
 
 namespace CDir.UI;
 
@@ -41,12 +42,18 @@ public partial class ExplorerTab
 
     private void FolderTreeMouseWheel(object Sender, MouseWheelEventArgs E)
     {
+        if (Keyboard.Modifiers == ModifierKeys.None && SmoothWheelScroll.Wheel(this.SidebarScroll, E.Delta)) { E.Handled = true; return; }
         // The tree's horizontal ScrollViewer must not consume vertical wheel input.
         E.Handled = true;
         this.SidebarScroll.RaiseEvent(new MouseWheelEventArgs(E.MouseDevice, E.Timestamp, E.Delta)
         {
             RoutedEvent = Mouse.MouseWheelEvent
         });
+    }
+
+    private void SidebarPreviewMouseWheel(object Sender, MouseWheelEventArgs E)
+    {
+        if (!E.Handled && Keyboard.Modifiers == ModifierKeys.None && SmoothWheelScroll.Wheel(this.SidebarScroll, E.Delta)) E.Handled = true;
     }
 
     private bool CategoryLayoutUpdateQueued;

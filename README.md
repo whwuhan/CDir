@@ -10,7 +10,7 @@ Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語,
 
 Select files in the main panel and press Space to open them with their Windows default apps. If no app is associated, Windows shows its app picker. Customize, clear, or reset Open With Default App under Preferences > Keyboard Shortcuts. The built-in text editor has been removed. F5 keeps the selected sidebar tree when a folder and its parent are both bookmarked, and scrolls the exact selected folder header into view below pinned category and ancestor headers. Shortcut preferences remain grouped by function and searchable by action, key, or group.
 
-![CDir v3.1.13 interface preview](Docs/Images/CDirPreview.png)
+![CDir v3.3.17 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -268,7 +268,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 在主面板选中文件后按空格，使用 Windows 默认程序打开；没有关联程序时显示系统的打开方式选择器。可在“偏好设置 → 快捷键 → 使用默认程序打开”中自定义、清除或恢复快捷键。内置文本编辑器已移除。同一分类同时收藏父目录和子目录时，F5 保持之前点击的目录树，不再展开其他同路径入口，并滚动到具体选中节点，避免被固定的分类和祖先标题遮挡。快捷键页继续按功能分组，支持按动作、组合键或分组名称搜索。
 
-![CDir v3.1.13 界面预览](Docs/Images/CDirPreview.png)
+![CDir v3.3.17 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
