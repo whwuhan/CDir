@@ -1021,8 +1021,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.Settings.ShowSidebarDriveUsage, Value => this.ChangeSharedUI(() => this.ChangeShowSidebarDriveUsage(Value)),
             this.Settings.AutoFitColumnsOnNavigation, Value => this.AutoFitColumnsPreferenceUpdate = this.ChangeAutoFitColumnsOnNavigationAsync(Value),
             this.Settings.SeparatePinnedTabs, Value => this.ChangeSharedUI(() => this.ChangeSeparatePinnedTabs(Value)),
-            this.ReadStartOnLogin(), this.ChangeStartOnLogin,
-            this.ReadDefaultFileManager(), this.ChangeDefaultFileManager).ShowDialog();
+            this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 

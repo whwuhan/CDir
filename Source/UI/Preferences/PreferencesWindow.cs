@@ -25,7 +25,6 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal CheckBox AutoFitColumnsOnNavigationCheck { get; }
     internal CheckBox SeparatePinnedTabsCheck { get; }
     internal CheckBox StartOnLoginCheck { get; }
-    internal CheckBox DefaultFileManagerCheck { get; }
     internal ComboBox TimeFormatPicker { get; }
     internal Label TimeFormatLabel { get; }
     internal ListBox Categories { get; }
@@ -53,8 +52,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
         bool ShowSidebarDriveUsage, Action<bool> OnShowSidebarDriveUsageChanged,
         bool AutoFitColumnsOnNavigation, Action<bool> OnAutoFitColumnsOnNavigationChanged,
         bool SeparatePinnedTabs, Action<bool> OnSeparatePinnedTabsChanged,
-        bool StartOnLogin, Func<bool, bool> OnStartOnLoginChanged,
-        bool DefaultFileManager, Func<bool, bool> OnDefaultFileManagerChanged)
+        bool StartOnLogin, Func<bool, bool> OnStartOnLoginChanged)
     {
         var UpdatingPreferences = false;
         this.RestoreDefaultsButton = new Button
@@ -248,29 +246,6 @@ internal sealed partial class PreferencesWindow : DialogWindow
         Grid.SetRow(this.StartOnLoginCheck, 6);
         Grid.SetColumnSpan(this.StartOnLoginCheck, 2);
         Panel.Children.Add(this.StartOnLoginCheck);
-        Panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        this.DefaultFileManagerCheck = new CheckBox
-        {
-            Name = "DefaultFileManagerCheck", IsChecked = DefaultFileManager,
-            Margin = new Thickness(0, 16, 0, 0), VerticalContentAlignment = VerticalAlignment.Center
-        };
-        this.DefaultFileManagerCheck.SetResourceReference(ContentControl.ContentProperty, "TextDefaultFileManager");
-        this.DefaultFileManagerCheck.SetResourceReference(AutomationProperties.NameProperty, "TextDefaultFileManager");
-        this.DefaultFileManagerCheck.SetResourceReference(ToolTipProperty, "TextDefaultFileManagerTooltip");
-        void FileManagerChanged(object Sender, RoutedEventArgs E)
-        {
-            if (UpdatingPreferences) return;
-            var Enabled = this.DefaultFileManagerCheck.IsChecked == true;
-            if (OnDefaultFileManagerChanged(Enabled)) return;
-            UpdatingPreferences = true;
-            try { this.DefaultFileManagerCheck.IsChecked = !Enabled; }
-            finally { UpdatingPreferences = false; }
-        }
-        this.DefaultFileManagerCheck.Checked += FileManagerChanged;
-        this.DefaultFileManagerCheck.Unchecked += FileManagerChanged;
-        Grid.SetRow(this.DefaultFileManagerCheck, 7);
-        Grid.SetColumnSpan(this.DefaultFileManagerCheck, 2);
-        Panel.Children.Add(this.DefaultFileManagerCheck);
         Panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         this.ShowBookmarkPathsCheck = new CheckBox
         {
@@ -503,7 +478,6 @@ internal sealed partial class PreferencesWindow : DialogWindow
             try
             {
                 if ((Scope is PreferenceResetScope.All or PreferenceResetScope.General) && !OnStartOnLoginChanged(false)) return;
-                if ((Scope is PreferenceResetScope.All or PreferenceResetScope.General) && !OnDefaultFileManagerChanged(false)) return;
                 await OnRestoreDefaults(Scope);
                 var Defaults = DefaultSettings.Current;
                 if (Scope is PreferenceResetScope.All or PreferenceResetScope.General)
@@ -516,7 +490,6 @@ internal sealed partial class PreferencesWindow : DialogWindow
                     this.CopyOnDropCheck.IsChecked = Defaults.CopyOnDrop;
                     this.CalculateFolderSizesCheck.IsChecked = Defaults.CalculateFolderSizes;
                     this.StartOnLoginCheck.IsChecked = false;
-                    this.DefaultFileManagerCheck.IsChecked = false;
                 }
                 if (Scope is PreferenceResetScope.All or PreferenceResetScope.UI)
                 {

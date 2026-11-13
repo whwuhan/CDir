@@ -33,14 +33,12 @@ public partial class AppMain : Application
             TaskbarService.InitializeIdentity();
             base.OnStartup(E);
             var GroupSpecified = false;
-            var ShellOpen = false;
             int? CloneFrom = null;
             for (var I = 0; I < E.Args.Length; I++)
             {
                 if (E.Args[I] == "--screenshot" && I + 1 < E.Args.Length) ScreenshotPath = System.IO.Path.GetFullPath(E.Args[++I]);
                 else if (E.Args[I] == "--clone-from" && I + 1 < E.Args.Length) CloneFrom = int.Parse(E.Args[++I]);
                 else if (E.Args[I] == "--smoke-test") SmokeTest = true;
-                else if (E.Args[I] == "--shell-open") ShellOpen = true;
                 else if (E.Args[I] == "--smoke-group")
                 {
                     if (++I >= E.Args.Length) throw new ArgumentException("--smoke-group requires a group name");
@@ -48,18 +46,6 @@ public partial class AppMain : Application
                     GroupSpecified = true;
                 }
                 else if (!E.Args[I].StartsWith("--")) StartupPath = E.Args[I];
-            }
-            if (ShellOpen && !SmokeTest)
-            {
-                if (!ShellLaunchLocation.TryResolve(StartupPath, out var Location))
-                { ShellLaunchLocation.OpenInWindows(Location!); Shutdown(); return; }
-                var Instances = ShellLaunchClient.UserInstances(Environment.ProcessPath!);
-                if (Instances.Length > 0)
-                {
-                    ShellLaunchClient.ForwardAsync(Instances, Location).GetAwaiter().GetResult();
-                    Shutdown(); return;
-                }
-                StartupPath = Location ?? ShellLocations.Computer;
             }
             if (GroupSpecified && !SmokeTest) throw new ArgumentException("--smoke-group requires --smoke-test");
             if (SmokeGroup is not ("transfer" or "selection" or "lifecycle" or "tabs" or "panes" or "navigation" or "sidebar" or "address" or "operations" or "columns" or "view-zoom" or "grouping" or "fonts" or "search" or "language" or "shortcuts" or "shell-icons" or "version-control" or "terminal" or "all"))

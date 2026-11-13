@@ -42,7 +42,6 @@ public partial class ExplorerTab
         try
         {
             await this.RunStartupSmokeChecksAsync(Passed);
-            await this.RunDefaultFileManagerSmokeChecksAsync(Passed);
             var DefaultProperties = System.Text.Json.JsonSerializer.SerializeToElement(DefaultSettings.Current)
                 .EnumerateObject().ToDictionary(Property => Property.Name, Property => Property.Value.GetRawText());
             var FreshProperties = System.Text.Json.JsonSerializer.SerializeToElement(new AppSettings())

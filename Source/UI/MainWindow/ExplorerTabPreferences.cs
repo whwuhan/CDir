@@ -180,26 +180,6 @@ public partial class ExplorerTab
         }
     }
 
-    private bool ReadDefaultFileManager()
-    {
-        try { return DefaultFileManagerBridge.IsEnabled(); }
-        catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
-        {
-            this.ShowNotice(LanguageService.Text("DefaultFileManagerError", FriendlyError(Error)), true);
-            return false;
-        }
-    }
-
-    private bool ChangeDefaultFileManager(bool Enabled)
-    {
-        try { DefaultFileManagerBridge.SetEnabled(Enabled); return true; }
-        catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
-        {
-            this.ShowNotice(LanguageService.Text("DefaultFileManagerError", FriendlyError(Error)), true);
-            return false;
-        }
-    }
-
     private bool ChangeStartOnLogin(bool Enabled)
     {
         try { StartupService.SetEnabled(Enabled); return true; }

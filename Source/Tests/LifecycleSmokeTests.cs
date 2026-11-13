@@ -20,7 +20,6 @@ public partial class ExplorerTab
         await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
         await this.RunWorkspaceStartupSmokeChecksAsync(Passed);
         await this.RunInstanceWorkspaceSmokeChecksAsync(Passed);
-        await this.RunShellLaunchSmokeChecksAsync(Passed);
         await this.RunExitConflictSmokeChecksAsync(Passed);
         await this.RunSessionEndingSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)

@@ -82,7 +82,6 @@ public partial class ExplorerTab
                 Dialog.ExitOnCloseCheck.IsChecked = true;
                 Dialog.CopyOnDropCheck.IsChecked = false;
                 Dialog.StartOnLoginCheck.IsChecked = true;
-                Dialog.DefaultFileManagerCheck.IsChecked = true;
                 Dialog.GridLinesCheck.IsChecked = true;
                 Dialog.ShowBookmarkPathsCheck.IsChecked = true;
                 Dialog.ShowSidebarDriveUsageCheck.IsChecked = true;
@@ -104,17 +103,17 @@ public partial class ExplorerTab
                 var SelectedCategory = Dialog.Categories.SelectedItem;
                 var Before = JsonSerializer.Serialize(this.CaptureSaveSettings());
                 await this.RestorePreferencesSmokeAsync(Dialog, null, Passed: Passed);
-                Check(Before == JsonSerializer.Serialize(this.CaptureSaveSettings()) && this.ReadStartOnLogin() && this.ReadDefaultFileManager(),
+                Check(Before == JsonSerializer.Serialize(this.CaptureSaveSettings()) && this.ReadStartOnLogin(),
                     "Cancel leaves all preferences and startup registration unchanged: " + Scope);
                 await this.RestorePreferencesSmokeAsync(Dialog, null, Escape: true, Passed: Passed);
-                Check(Before == JsonSerializer.Serialize(this.CaptureSaveSettings()) && this.ReadStartOnLogin() && this.ReadDefaultFileManager(),
+                Check(Before == JsonSerializer.Serialize(this.CaptureSaveSettings()) && this.ReadStartOnLogin(),
                     "Escape leaves all preferences unchanged: " + Scope);
                 await this.RestorePreferencesSmokeAsync(Dialog, Scope, Passed: Passed);
                 Check(ReferenceEquals(SelectedCategory, Dialog.Categories.SelectedItem), "Scoped reset keeps the selected category: " + Scope);
                 var GeneralReset = Scope == PreferenceResetScope.General;
                 Check(LanguageService.CurrentLanguage == (GeneralReset ? "en-US" : "zh-CN")
                     && this.Settings.Use12HourClock == !GeneralReset && this.Settings.ExitOnClose == !GeneralReset
-                    && this.Settings.CopyOnDrop == GeneralReset && this.ReadStartOnLogin() == !GeneralReset && this.ReadDefaultFileManager() == !GeneralReset,
+                    && this.Settings.CopyOnDrop == GeneralReset && this.ReadStartOnLogin() == !GeneralReset,
                     "Only General reset changes language, clock, close behavior, copy-on-drop and startup: " + Scope);
                 var UIReset = Scope == PreferenceResetScope.UI;
                 Check(this.Settings.ShowGridLines == !UIReset && this.Settings.ShowBookmarkPaths == !UIReset

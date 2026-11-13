@@ -51,6 +51,20 @@ if ($Publish -or $Package) {
         'publish', $ProjectFile, '-c', $Configuration, '--no-build', '-r', 'win-x64', '--self-contained', 'true',
         '-p:PublishSingleFile=false', '-p:PublishTrimmed=false', '-p:DebugType=None', '-p:DebugSymbols=false', '-o', $PublishDirectory
     ) -AdditionalArguments ($BuildArguments + $VersionArguments)
+    # Remove retired integration binaries left behind by publishing over an older release.
+    $RemovedIntegrationFiles = @('CDirShellLauncher.exe', 'CDirShellLauncher.dll', 'CDirShellLauncher.deps.json', 'CDirShellLauncher.runtimeconfig.json')
+    $RemovedIntegrationArchive = Join-Path $ProjectRoot ('Trash/RetiredIntegration-' + [Guid]::NewGuid().ToString('N') + '/Publish/CDirWinX64')
+    foreach ($Name in $RemovedIntegrationFiles) {
+        $Obsolete = [IO.Path]::GetFullPath((Join-Path $PublishDirectory $Name))
+        if (-not $Obsolete.StartsWith([IO.Path]::GetFullPath($PublishDirectory).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'The retired integration path is outside the published directory.' }
+        if (Test-Path -LiteralPath $Obsolete) {
+            if ((Get-Item -LiteralPath $Obsolete).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing to archive a retired integration reparse point.' }
+            New-Item -ItemType Directory -Path $RemovedIntegrationArchive -Force | Out-Null
+            $Archived = Join-Path $RemovedIntegrationArchive $Name
+            Move-Item -LiteralPath $Obsolete -Destination $Archived
+            if ((Test-Path -LiteralPath $Obsolete) -or -not (Test-Path -LiteralPath $Archived)) { throw 'The retired integration archive move did not complete.' }
+        }
+    }
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'Docs\使用说明.txt') -Destination (Join-Path $PublishDirectory '使用说明.txt') -Force
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'Docs\UserGuide.txt') -Destination (Join-Path $PublishDirectory 'UserGuide.txt') -Force
     [ordered]@{ Version = $ReleasePlan.Version; SourceHash = $ReleasePlan.SourceHash } |
