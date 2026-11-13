@@ -7,4 +7,7 @@
     <BaseOutputPath>$(MSBuildThisFileDirectory)..\Build\Bin\CDirTests\</BaseOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\Build\Obj\CDirTests\</BaseIntermediateOutputPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'CDirShellLauncher'">
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\Build\Obj\CDirShellLauncher\</BaseIntermediateOutputPath>
+  </PropertyGroup>
 </Project>

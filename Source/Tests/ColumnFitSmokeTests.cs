@@ -225,6 +225,7 @@ public partial class ExplorerTab
             await A.RunPreferencesSmokeChecksAsync(Passed, RestoreDefaults: true);
             Check(!A.Settings.AutoFitColumnsOnNavigation && Probe.Tabs.All(Page => !Page.Settings.AutoFitColumnsOnNavigation),
                 "Restoring default preferences switches automatic fitting off in every tab");
+            await A.RunManualRefreshSmokeChecksAsync(Passed);
             await A.NavigateAsync(Folder, RecordHistory: false); A.AutoFitColumns(); await Settle();
             Capture("ColumnFitReleasePreview", Probe, Probe.ActualWidth, Probe.ActualHeight);
         }

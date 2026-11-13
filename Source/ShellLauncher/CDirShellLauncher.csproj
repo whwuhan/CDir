@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Version.props" />
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CDirShellLauncher</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Services/ShellLaunchClient.cs" Link="ShellLaunchClient.cs" />
+    <Compile Include="../Services/DefaultFileManagerService.cs" Link="DefaultFileManagerService.cs" />
+    <Compile Include="../Services/StartupService.cs" Link="StartupService.cs" />
+  </ItemGroup>
+</Project>

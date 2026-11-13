@@ -20,6 +20,7 @@ public partial class ExplorerTab
         await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
         await this.RunWorkspaceStartupSmokeChecksAsync(Passed);
         await this.RunInstanceWorkspaceSmokeChecksAsync(Passed);
+        await this.RunShellLaunchSmokeChecksAsync(Passed);
         await this.RunExitConflictSmokeChecksAsync(Passed);
         await this.RunSessionEndingSmokeChecksAsync(Passed);
         void Check(bool Condition, string Name)
@@ -68,6 +69,7 @@ public partial class ExplorerTab
             Probe.WindowState = WindowState.Normal;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             CheckResizeBorders(Probe, Passed);
+            CheckVisibleWindowFrame(Probe, Passed);
             await CheckCaptionButtons("Initial display");
             Check(!Page.Settings.ExitOnClose && !new AppSettings().ExitOnClose, "Fresh and legacy settings default to hiding on close");
             var Tray = Probe.TrayIcon!;
@@ -138,7 +140,7 @@ public partial class ExplorerTab
                 $"Repeated tray cycles reuse one icon and preserve maximized state (visible={Probe.IsVisible}, state={Probe.WindowState}, icon={Tray.IsVisible})");
             Probe.WindowState = WindowState.Normal;
             Check(Probe.BorderThickness == new Thickness(0) && Probe.WindowFrame.BorderThickness == new Thickness(1),
-                "Restoring the window reinstates only its thin application border");
+                "Restoring the window reinstates its neutral thin application border");
             Probe.WindowState = WindowState.Minimized;
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             TrayMessage(Tray, 0x203);

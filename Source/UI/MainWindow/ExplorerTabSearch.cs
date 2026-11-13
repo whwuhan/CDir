@@ -97,12 +97,16 @@ public partial class ExplorerTab
         this.PendingSearchSelection.Clear();
     }
 
-    private void ShowEntries(IReadOnlyList<FileEntry> Entries, IEnumerable<string>? Selection = null)
+    private void ShowEntries(IReadOnlyList<FileEntry> Entries, IEnumerable<string>? Selection = null, bool RevealSelection = true)
     {
         this.EndMarqueeSelection();
         this.Entries = Entries as ObservableCollection<FileEntry> ?? new ObservableCollection<FileEntry>(Entries);
         this.RefreshCutFeedback();
         foreach (var Entry in Entries) Entry.Use12HourClock = this.Settings.Use12HourClock;
+        // A passive refresh can replace FolderEntries while retaining visible rows.
+        // Filtering later binds those fresh objects; restore their cached badges
+        // before exposing the view, without issuing another repository query.
+        if (!this.IsVirtualLocation) this.ApplyVersionSnapshots();
         this.View = CollectionViewSource.GetDefaultView(this.Entries);
         this.View.Filter = this.MatchesFilter;
         this.SyncingFileViews = true;
@@ -114,7 +118,7 @@ public partial class ExplorerTab
         this.ApplySort();
         this.UpdateComputerSorting();
         if (Selection is not null)
-            foreach (var Path in Selection) this.SelectPath(Path, Append: true);
+            foreach (var Path in Selection) this.SelectPath(Path, Append: true, Reveal: RevealSelection);
         this.UpdateCounts();
         this.QueueFolderSizes();
     }
@@ -141,7 +145,7 @@ public partial class ExplorerTab
 
     private bool MatchesFilter(object Entry) => Entry is FileEntry File && this.CurrentSearch.Matches(File);
 
-    private void QueueSearch(bool Debounce = true, IEnumerable<string>? Selection = null)
+    private void QueueSearch(bool Debounce = true, IEnumerable<string>? Selection = null, bool RevealSelection = true)
     {
         if (this.IsVirtualLocation)
         {
@@ -165,18 +169,18 @@ public partial class ExplorerTab
         }
         if (!this.CurrentSearch.IsActive || this.CurrentSearch.ErrorKey is not null)
         {
-            this.ShowEntries(this.CurrentSearch.ErrorKey is null ? this.FolderEntries : [], Selected);
+            this.ShowEntries(this.CurrentSearch.ErrorKey is null ? this.FolderEntries : [], Selected, RevealSelection);
             this.SearchTask = Task.CompletedTask;
         }
         else
         {
             this.Searching = true;
             var Items = new ObservableCollection<FileEntry>(this.FolderEntries);
-            this.ShowEntries(Items, Selected);
+            this.ShowEntries(Items, Selected, RevealSelection);
             var Cancellation = new CancellationTokenSource();
             this.SearchCancellation = Cancellation;
             this.SearchTask = this.RunSearchAsync(this.CurrentPath, this.CurrentSearch, this.SearchVersion,
-                this.Settings.ShowHidden, Items, Cancellation, Debounce);
+                this.Settings.ShowHidden, Items, Cancellation, Debounce, RevealSelection);
         }
         if (!this.CurrentSearch.IsActive && this.FolderRefreshPending)
         {
@@ -188,7 +192,7 @@ public partial class ExplorerTab
     }
 
     private async Task RunSearchAsync(string Root, SearchQuery Query, long Version, bool ShowHidden,
-        ObservableCollection<FileEntry> Items, CancellationTokenSource Cancellation, bool Debounce)
+        ObservableCollection<FileEntry> Items, CancellationTokenSource Cancellation, bool Debounce, bool RevealSelection)
     {
         var Token = Cancellation.Token;
         var Known = this.FolderEntries.Select(Entry => Entry.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -210,7 +214,7 @@ public partial class ExplorerTab
                     this.AssignFileGroup(Entry, Today);
                     Items.Add(Entry);
                 }
-                foreach (var Path in this.PendingSearchSelection.ToArray()) this.SelectPath(Path, Append: true);
+                foreach (var Path in this.PendingSearchSelection.ToArray()) this.SelectPath(Path, Append: true, Reveal: RevealSelection);
                 this.UpdateCounts();
             }, DispatcherPriority.Background, Token);
         }

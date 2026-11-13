@@ -366,7 +366,7 @@
       <StackPanel Margin="6,6,6,2"><controls:ShellIcon Path="{Binding FullPath}" VersionStatus="{Binding VersionStatus}" IsDirectory="{Binding IsDirectory}" ShowThumbnails="True" ThumbnailStamp="{Binding Modified.Ticks}" IconSize="{DynamicResource FileViewIconPixels}" Width="{DynamicResource FileViewIconSize}" Height="{DynamicResource FileViewIconSize}" VerticalAlignment="Center" />
         <Grid Margin="0,6,0,0">
           <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" MaxHeight="{DynamicResource FileViewNameHeight}" TextTrimming="CharacterEllipsis" Style="{StaticResource RenameLabel}" ToolTip="{Binding FullPath}" />
-          <TextBox Style="{StaticResource RenameEditor}" FontSize="{DynamicResource UIFontFileList}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" />
+          <TextBox Style="{StaticResource RenameEditor}" TextAlignment="Center" FontSize="{DynamicResource UIFontFileList}" IsVisibleChanged="InlineRenameVisibleChanged" LostKeyboardFocus="InlineRenameLostFocus" />
         </Grid>
       </StackPanel>
     </DataTemplate>

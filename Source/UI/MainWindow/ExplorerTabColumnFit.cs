@@ -42,7 +42,10 @@ public partial class ExplorerTab
 
     private async Task RefreshAndFitColumnsAsync()
     {
-        await this.RefreshAsync(true);
+        this.InvalidateVersionStatuses();
+        CDir.Services.ShellIconService.InvalidateCache();
+        if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync();
+        await this.RefreshAsync(true, RebuildRows: true);
         if (!this.Settings.AutoFitColumnsOnNavigation || this.WindowClosed) return;
         var Version = this.NavigationVersion;
         var Search = this.SearchVersion;

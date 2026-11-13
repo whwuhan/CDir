@@ -6,6 +6,7 @@ internal sealed partial class RegressionRunner
     // These resources are prose or status fragments; all other English resources are functional captions.
     private static readonly HashSet<string> SentenceCaseKeys =
     [
+        "DefaultFileManagerTooltip", "DefaultFileManagerError",
         "FolderViewApplied", "FolderViewsReset",
         "ResetScopeQuestion", "RestoringFiles", "RestoreComplete", "DeletingFiles", "DeleteComplete", "HistoryStorageProtected", "HistoryHint", "HistoryEmpty", "HistoryChanged", "NothingToUndo", "NothingToRedo", "Undoing", "Redoing", "UndoComplete", "RedoComplete",
         "DriveUsageFormat", "DriveUsageTooltip", "DriveUsageUnavailable", "DriveUsageUnavailableTooltip",
@@ -56,7 +57,7 @@ internal sealed partial class RegressionRunner
                 Check(English.ContainsKey(Key), "Missing sentence-case resource: " + Key);
                 var Text = English[Key];
                 if (Key == "HelpBody") Text = Regex.Replace(Text, @"(?m)^(?:Ctrl|Alt|F\d)[^:\r\n]*:\s*", "");
-                Text = Regex.Replace(Text, @"File Explorer|Recycle Bin|Windows Shell|%[A-Z_]+%|\{\d+(?:[^}]*)\}|\b(?:Windows|Ctrl|Shift|Alt|Enter|Esc|Tab|Delete|UNC|CDir|Git|SVN|HEAD|AM|PM)\b",
+                Text = Regex.Replace(Text, @"File Explorer|Recycle Bin|Windows Shell|%[A-Z_]+%|\{\d+(?:[^}]*)\}|\b(?:Windows|Win|Ctrl|Shift|Alt|Enter|Esc|Tab|Delete|UNC|CDir|Git|SVN|HEAD|AM|PM)\b",
                     Match => new string(' ', Match.Length));
                 foreach (Match Word in Regex.Matches(Text, @"\b[A-Z][a-z]+\b"))
                 {

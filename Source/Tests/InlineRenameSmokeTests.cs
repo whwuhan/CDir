@@ -36,6 +36,8 @@ public partial class ExplorerTab
     private async Task RunInlineRenameSmokeChecksAsync(List<string> Passed)
     {
         var Initial = this.CurrentPath;
+        var InitialView = this.Settings.FileView;
+        var InitialIconSize = this.Settings.FileViewIconSize;
         var Fixture = Directory.CreateDirectory(Path.Combine(AppMain.SmokeRoot!, "Rename-" + Guid.NewGuid().ToString("N")[..8])).FullName;
         void Check(bool Condition, string Name)
         {
@@ -86,10 +88,28 @@ public partial class ExplorerTab
             var DefaultPath = RenamePath(this.InlineRenameTarget!);
             await this.AcceptSmokeInlineRenameAsync(() => Task.CompletedTask, "Cancelled Folder", Confirm: false);
             Check(Directory.Exists(DefaultPath), "Escape after folder creation keeps the newly created default folder");
+            foreach (var Mode in Enum.GetValues<FileViewMode>())
+            {
+                this.ChangeFileView(Mode);
+                var ExpectedAlignment = Mode is FileViewMode.ExtraLargeIcons or FileViewMode.LargeIcons or FileViewMode.MediumIcons
+                    ? TextAlignment.Center : TextAlignment.Left;
+                foreach (var TargetPath in new[] { Renamed, DefaultPath })
+                {
+                    this.BeginFileRename(TargetPath);
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                    this.UpdateLayout();
+                    Check(this.InlineRenameBox is { IsVisible: true } Editor && Editor.TextAlignment == ExpectedAlignment
+                        && Editor.SelectedText == (File.Exists(TargetPath) ? "Renamed 中文" : Path.GetFileName(TargetPath)),
+                        $"{Mode} {(File.Exists(TargetPath) ? "file" : "folder")} renaming uses {ExpectedAlignment} alignment and preserves name selection");
+                    if (File.Exists(TargetPath)) this.CaptureAddressBreadcrumbPreview($"InlineRename-{Mode}.png");
+                    this.CancelInlineRename();
+                }
+            }
         }
         finally
         {
             this.CancelInlineRename();
+            this.ChangeFileView(InitialView, InitialIconSize);
             await this.NavigateAsync(Initial, RecordHistory: false);
             if (!AppMain.IsInsideSmokeScope(Fixture) || (File.GetAttributes(Fixture) & FileAttributes.ReparsePoint) != 0)
                 throw new InvalidOperationException("Unowned inline rename fixture.");

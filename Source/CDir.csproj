@@ -24,10 +24,24 @@
     <EmbeddedResource Include="Localization/*.json" />
     <EmbeddedResource Include="Config/DefaultSettings.json" LogicalName="CDir.Config.DefaultSettings.json" />
     <Compile Remove="Tests/**/*.cs" />
+    <Compile Remove="ShellLauncher/**/*.cs" />
+    <ProjectReference Include="ShellLauncher/CDirShellLauncher.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="Tests/*SmokeTests.cs" />
     <None Remove="Tests/**" />
     <None Update="ThirdParty/VirtualTerminal.LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="Config/TerminalStartup.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="../LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="IncludeShellLauncherInPublish" BeforeTargets="_HandleFileConflictsForPublish">
+    <ItemGroup>
+      <!-- The SDK can supply the apphost from obj and the assembly from bin.
+           Deduplicate by the destination, then publish the exact tested files. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.RelativePath)' == 'CDirShellLauncher.exe' Or '%(ResolvedFileToPublish.RelativePath)' == 'CDirShellLauncher.dll' Or '%(ResolvedFileToPublish.RelativePath)' == 'CDirShellLauncher.deps.json' Or '%(ResolvedFileToPublish.RelativePath)' == 'CDirShellLauncher.runtimeconfig.json'" />
+      <ResolvedFileToPublish Include="$(TargetDir)CDirShellLauncher.exe" RelativePath="CDirShellLauncher.exe" CopyToPublishDirectory="PreserveNewest" />
+      <ResolvedFileToPublish Include="$(TargetDir)CDirShellLauncher.dll" RelativePath="CDirShellLauncher.dll" CopyToPublishDirectory="PreserveNewest" />
+      <ResolvedFileToPublish Include="$(TargetDir)CDirShellLauncher.deps.json" RelativePath="CDirShellLauncher.deps.json" CopyToPublishDirectory="PreserveNewest" />
+      <ResolvedFileToPublish Include="$(TargetDir)CDirShellLauncher.runtimeconfig.json" RelativePath="CDirShellLauncher.runtimeconfig.json" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

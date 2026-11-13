@@ -32,6 +32,23 @@ internal static class WindowAppearance
 
     internal static void UseSquareCorners(Window Window) => UseSquareCorners(new WindowInteropHelper(Window).Handle);
 
+    internal static int UseNeutralShadowFrame(Window Window)
+    {
+        var Handle = new WindowInteropHelper(Window).Handle;
+        if (Handle == IntPtr.Zero) return -1;
+        // A nonzero WindowChrome glass frame preserves the compositor's native
+        // shadow. Keep native edge coloring neutral in both activation states.
+        var Rendering = 2; // DWMNCRP_ENABLED
+        var Result = DwmSetWindowAttribute(Handle, 2, ref Rendering, sizeof(int));
+        if (Result != 0) return Result;
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+        {
+            var Border = 0x00C2C2C2;
+            return DwmSetWindowAttribute(Handle, 34, ref Border, sizeof(int));
+        }
+        return Result;
+    }
+
     private static void UseSquareCorners(IntPtr Window)
     {
         if (Window == IntPtr.Zero || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;

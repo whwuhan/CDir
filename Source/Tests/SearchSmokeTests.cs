@@ -254,8 +254,13 @@ public partial class ExplorerTab
             Check(Results().Length == 6 && Results().Count(Entry => Entry.IsDirectory) == 2
                 && Results().Count(Entry => Entry.Name == "needle-leaf.txt") == 2,
                 "Plain search includes deep files folders Unicode and duplicate basenames");
+            // Natural-name sorting uses CustomSort, which clears SortDescriptions.
+            // Verify the displayed folder-first name order rather than WPF's sort storage.
             Check(Results().TakeWhile(Entry => Entry.IsDirectory).Count() == 2
-                && this.View!.SortDescriptions.Count >= 2,
+                && Results().Select(Entry => Entry.Name).SequenceEqual(new[]
+                {
+                    "needle-dir", "needle-folder", "needle-leaf.txt", "needle-leaf.txt", "needle-root.txt", "资料 needle 文件.txt"
+                }),
                 "Incoming recursive matches retain folder-first column sorting");
             Check(SamePath(this.CurrentPath, Fixture) && this.History.SequenceEqual(History)
                 && Results().All(Entry => Entry.FullPath.StartsWith(Fixture + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))

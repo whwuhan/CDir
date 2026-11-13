@@ -273,7 +273,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
                 }
                 var Path = Normalized;
                 if (System.IO.File.Exists(Path)) { SelectPath = Path; Path = System.IO.Path.GetDirectoryName(Path)!; }
-                return (Path: Path, Entries: this.Files.GetEntries(Path, ShowHidden));
+                return (Path: Path, Entries: this.Files.GetEntries(Path, ShowHidden, SortByName: false));
             });
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
             this.CurrentPath = Result.Path;
@@ -550,17 +550,17 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private Task ForwardAsync() => this.NavigateBrowseHistoryAsync(true);
     private async void UpClick(object Sender, RoutedEventArgs E) => await this.UpAsync();
     private async Task UpAsync() { if (!this.IsVirtualLocation && !string.IsNullOrEmpty(this.CurrentPath) && this.Files.GetParent(this.CurrentPath) is { } Parent) await this.NavigateAsync(Parent, TreeKey: this.NavigationTreeKey); }
-    private async void RefreshClick(object Sender, RoutedEventArgs E) { this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAndFitColumnsAsync(); }
-    private async Task RefreshAsync(bool RefreshTree = false)
+    private async void RefreshClick(object Sender, RoutedEventArgs E) => await this.RefreshAndFitColumnsAsync();
+    private async Task RefreshAsync(bool RefreshTree = false, bool RebuildRows = false)
     {
         if (string.IsNullOrEmpty(this.CurrentPath) || this.WindowClosed) return;
         if (this.IsComputer) { await this.NavigateAsync(this.CurrentPath, RecordHistory: false, PreserveFilter: true, TreeKey: this.NavigationTreeKey); return; }
-        if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(); return; }
+        if (this.IsRecycleBin) { await this.RefreshRecycleBinAsync(RebuildRows); return; }
         var Version = this.NavigationVersion;
         var Key = this.NavigationTreeKey;
         // Keep the selected node's identity: overlapping bookmark roots can expose
         // the same path in several independent trees. Rebuilding loses its origin.
-        await this.RefreshCurrentFolderAsync(RefreshTree, NavigationTreeOnly: true);
+        await this.RefreshCurrentFolderAsync(RefreshTree, NavigationTreeOnly: true, RebuildRows: RebuildRows);
         if (RefreshTree && Version == this.NavigationVersion && Key == this.NavigationTreeKey
             && !this.Loading && !this.OperationBusy && this.InlineRenameTarget is null)
             await this.SyncNavigationTreeAsync(Key, this.CurrentPath, Version, Reveal: true, ScrollToSelection: true);
@@ -600,15 +600,41 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         E.Column.SortDirection = this.SortDirection;
         this.ApplySort();
     }
+    private System.ComponentModel.ICollectionView? CountedView;
+    private bool FileCountsDirty = true;
+    private int VisibleFileCount;
+    private int VisibleDirectoryCount;
+
+    private void FileCountsChanged(object? Sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs E)
+        => this.FileCountsDirty = true;
+
     private void UpdateCounts()
     {
         if (this.StatusText is null || this.View is null) return;
-        var VisibleEntries = this.View.Cast<FileEntry>().ToArray();
-        var Visible = VisibleEntries.Length;
+        if (!ReferenceEquals(this.CountedView, this.View))
+        {
+            if (this.CountedView is not null) this.CountedView.CollectionChanged -= this.FileCountsChanged;
+            this.CountedView = this.View;
+            this.CountedView.CollectionChanged += this.FileCountsChanged;
+            this.FileCountsDirty = true;
+        }
+        // Selection and status updates are frequent. Recount only after the
+        // visible collection changes, without allocating a full row snapshot.
+        if (this.FileCountsDirty)
+        {
+            this.VisibleFileCount = this.VisibleDirectoryCount = 0;
+            foreach (FileEntry Entry in this.View)
+            {
+                this.VisibleFileCount++;
+                if (Entry.IsDirectory) this.VisibleDirectoryCount++;
+            }
+            this.FileCountsDirty = false;
+        }
+        var Visible = this.VisibleFileCount;
         var Filtered = this.CurrentSearch.IsActive;
         var CountText = Filtered ? LanguageService.Text(this.Searching ? "SearchProgressCount" : "SearchResultsCount", Visible) : LanguageService.Text("ItemsCount", Visible);
         var Selected = this.FileGrid.SelectedItems.Count;
-        this.StatusText.Text = CountText + " = " + LanguageService.Text("FolderFileCount", VisibleEntries.Count(X => X.IsDirectory), VisibleEntries.Count(X => !X.IsDirectory));
+        this.StatusText.Text = CountText + " = " + LanguageService.Text("FolderFileCount", this.VisibleDirectoryCount, Visible - this.VisibleDirectoryCount);
         this.SelectionStatusText.Text = Selected > 0 ? LanguageService.Text("SelectedCount", Selected) : "";
         this.SelectionStatusText.Visibility = Selected > 0 ? Visibility.Visible : Visibility.Collapsed;
         this.StatusText.Foreground = (Brush)FindResource("Muted");
@@ -662,7 +688,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (ReferenceEquals(this.HostWindow.ActiveTab, this) && this.HostWindow.PreferencesMenuItem is not null)
             this.HostWindow.PreferencesMenuItem.IsEnabled = !this.Loading && !this.OperationBusy;
     }
-    private void SelectPath(string Path, bool Append = false)
+    private void SelectPath(string Path, bool Append = false, bool Reveal = true)
     {
         var Entry = this.Entries.FirstOrDefault(X => SamePath(X.FullPath, Path));
         if (!Append) this.PendingSearchSelection.Clear();
@@ -677,7 +703,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         {
             if (!Append) { this.FileGrid.SelectedItems.Clear(); this.FileGrid.CurrentItem = Entry; }
             if (!this.FileGrid.SelectedItems.Contains(Entry)) this.FileGrid.SelectedItems.Add(Entry);
-            this.RevealFile(Entry);
+            if (Reveal) this.RevealFile(Entry);
         }
         finally { this.ApplyingSearchSelection = false; }
     }
@@ -995,7 +1021,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             this.Settings.ShowSidebarDriveUsage, Value => this.ChangeSharedUI(() => this.ChangeShowSidebarDriveUsage(Value)),
             this.Settings.AutoFitColumnsOnNavigation, Value => this.AutoFitColumnsPreferenceUpdate = this.ChangeAutoFitColumnsOnNavigationAsync(Value),
             this.Settings.SeparatePinnedTabs, Value => this.ChangeSharedUI(() => this.ChangeSeparatePinnedTabs(Value)),
-            this.ReadStartOnLogin(), this.ChangeStartOnLogin).ShowDialog();
+            this.ReadStartOnLogin(), this.ChangeStartOnLogin,
+            this.ReadDefaultFileManager(), this.ChangeDefaultFileManager).ShowDialog();
         await this.HostWindow.SynchronizePreferencesAsync(this);
     }
 

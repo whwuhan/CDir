@@ -2,11 +2,40 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
+using System.IO;
+using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace CDir.UI;
 
 public partial class ExplorerTab
 {
+    private static void CheckVisibleWindowFrame(MainWindow Window, List<string> Passed)
+    {
+        Window.UpdateLayout();
+        var Frame = Window.WindowFrame;
+        var Chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(Window);
+        var Brush = (SolidColorBrush)Frame.BorderBrush;
+        if (Frame.BorderThickness != new Thickness(1) || Brush.Color.R != Brush.Color.G || Brush.Color.G != Brush.Color.B
+            || Chrome.GlassFrameThickness != new Thickness(1) || Chrome.UseAeroCaptionButtons
+            || Window.AllowsTransparency || Frame.Effect is not null)
+            throw new InvalidOperationException("The main window must use a native shadow and a neutral thin edge without a blue frame or software blur.");
+        Passed.Add("The main window enables native compositor shadows with a neutral thin edge and no blue active border or software blur");
+        var Handle = new WindowInteropHelper(Window).Handle;
+        var Result = GetSmokeWindowCornerPreference(Handle, 1, out var Rendering, sizeof(int));
+        if (Result != 0 || Rendering != 1) throw new InvalidOperationException("Native non-client rendering must be enabled for the window shadow.");
+        // BORDER_COLOR is a DwmSetWindowAttribute option, not a readable DWM
+        // attribute. Verify the real API accepts it and query rendering separately.
+        var ColorResult = WindowAppearance.UseNeutralShadowFrame(Window);
+        if (ColorResult != 0) throw new InvalidOperationException($"The native neutral border color could not be applied ({ColorResult:X8}).");
+        Passed.Add("DWM reports enabled native frame rendering and accepts neutral border coloring without activating the owned test window");
+        if (AppMain.ScreenshotPath is { } Output)
+            File.WriteAllText(Path.Combine(Path.GetDirectoryName(Output)!, "WindowShadow.json"), System.Text.Json.JsonSerializer.Serialize(new
+            {
+                rendering_enabled = Rendering == 1, native_border_color = "#C2C2C2", border_set_hresult = ColorResult, glass_frame_thickness = 1,
+                software_blur = false, allows_transparency = false, capture_note = "Client RenderTargetBitmap previews do not capture the compositor shadow outside the HWND."
+            }));
+    }
     private static void CheckSquareWindowCorners(Window Window) => CheckSquareWindowCorners(new WindowInteropHelper(Window).Handle);
 
     private static void CheckSquareWindowCorners(IntPtr Window)

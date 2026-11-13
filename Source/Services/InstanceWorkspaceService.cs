@@ -12,7 +12,7 @@ internal sealed class InstanceWorkspaceService(Func<Task<WorkspaceState?>> Captu
     private readonly CancellationTokenSource Stop = new();
     private Mutex? UserRegistration;
     private static string PipeName(int Id) => "CDir.Workspace." + Id;
-    private static string RegistrationName(int Id) => @"Local\CDir.UserWorkspace." + Id;
+    private static string RegistrationName(int Id) => ShellLaunchClient.UserRegistrationName(Id);
 
     internal void Start(bool RegisterUserInstance = false)
     {

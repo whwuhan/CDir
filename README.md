@@ -10,7 +10,7 @@ Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語,
 
 Select files in the main panel and press Space to open them with their Windows default apps. If no app is associated, Windows shows its app picker. Customize, clear, or reset Open With Default App under Preferences > Keyboard Shortcuts. The built-in text editor has been removed. F5 keeps the selected sidebar tree when a folder and its parent are both bookmarked, and scrolls the exact selected folder header into view below pinned category and ancestor headers. Shortcut preferences remain grouped by function and searchable by action, key, or group.
 
-![CDir v3.0.6 interface preview](Docs/Images/CDirPreview.png)
+![CDir v3.0.12 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -50,7 +50,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - A detailed file list supports column sorting, multiple selection, and recursive name search through the current directory and subdirectories. Use `/file` for files only or `/dir` for folders only, for example `report /file` or `/dir work`. Hidden items are controlled in Preferences. Counts and operation messages appear in the status bar; the selected-item count is separate from total, folder, and file counts.
 - Search supports regular expressions (`/regex` or `/r`, for example `/r ^report.*\.txt$ /f`) and `*` / `?` wildcard patterns such as `report*.txt` or `*report*`. `/wildcard` or `/w` explicitly enables wildcard mode. Matching ignores case by default. Input hints complete mode commands, and invalid or timed-out expressions produce a message.
 - Drag any visible header horizontally to reorder columns. File > Preferences > UI controls visibility of Name, Date Modified, Type, Size, and Absolute Path. Order and visibility are saved. Absolute Path appears only in search results, and at least one normal browsing column must remain visible.
-- Click a header to toggle ascending or descending sorting. The active header shows a bold arrow: ↑ for ascending and ↓ for descending. Other columns show no arrow.
+- Click a header to toggle ascending or descending sorting. Date Modified sorts files and folders together by timestamp, including seconds; within each group it uses the same date order. The active header shows a bold arrow: ↑ for ascending and ↓ for descending. Other columns show no arrow.
 - The list, tree, Quick Access, and address bar display Windows Shell icons, including associated applications, programs, shortcuts, and custom folder icons.
 - Git/SVN badges in the list, tree, and address bar come from actual workspace queries and distinguish unchanged, modified, added, deleted, renamed, conflicted, untracked, and ignored items. Commits and reverts trigger refresh.
 - Context menus and shortcuts support new folders, rename, copy, cut, paste, and recycling, with Windows file-clipboard interoperability.
@@ -76,6 +76,9 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - Maximization respects the current monitor's work area so the bottom status bar remains visible. Configured shortcuts, including the terminal toggle, are forwarded by the main window.
 - A Windows notification-area icon remains visible until CDir exits. By default, closing the window or its last tab (including Ctrl+W) hides it; double-click the icon to restore the same window and tabs. Right-click it to open or exit. Enable Exit CDir On Close in Preferences > General to make Close exit instead; the choice saves immediately.
 - Windows sign-in startup is off by default. Enable Start CDir When I Sign In To Windows in Preferences > General to register the current executable for your Windows user; unchecking or restoring defaults removes this copy’s entry. Cut (Ctrl+X) and terminal wheel zoom (Ctrl+wheel) are fixed and omitted from shortcut customization.
+- Preferences > General > Use CDir As The Default File Manager is unchecked by default. Enable it to open folders, drives and Win+E with this copy of CDir for your Windows user. Uncheck it, or reset General, to restore the previous registrations. Keep CDir at the same location while enabled. This changes folder opening and leaves the Windows desktop and file picker dialogs in place.
+- When CDir is already running, Win+E restores its most recently active window and keeps the active folder. The lightweight shell launcher forwards the request to that process; it starts CDir only when no matching user instance exists. Opening a folder reuses an existing tab for that folder or opens a tab in the existing window.
+- Normal windows use the native Windows compositor shadow with neutral thin edges. Maximizing keeps the workspace flush with the monitor work area; no blue activation border or software blur is applied to the main content.
 - With a single instance, the current workspace is saved automatically about once per second. Multiple instances keep changes private. On exit, confirmation is needed only if another instance saved a different layout or configuration; otherwise the current state is saved automatically. Ctrl+N clones the current window’s full workspace and tree expansion; launching another instance from its icon clones the most recently active window. Preferences and workspace snapshots use flushed atomic writes with a previous-version backup. Startup restores tabs, active folder, tab names, navigation history, search, sorting, selection, column widths, sidebar layout, window bounds, and terminal panel state. After a crash or sudden power loss, recovery uses the latest completed save; terminal panels open fresh PowerShell sessions.
 - Horizontal and vertical scrollbars are 12 DIP. Sidebar tree scrollbars appear during scrolling, hover or dragging, then hide about one second after scrolling stops outside their area. Fixed `Shift+Wheel` horizontally scrolls the area beneath the pointer and is not customizable; the ordinary wheel scrolls vertically.
 - Quick Access, My Computer, and each custom category support independent horizontal scrolling. Use Shift+Wheel, a horizontal wheel, or the horizontal scrollbar to view full names, paths, and drive capacity. Bookmark roots and expanded descendants move together while category titles stay fixed; the ordinary wheel continues to scroll vertically.
@@ -267,7 +270,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 在主面板选中文件后按空格，使用 Windows 默认程序打开；没有关联程序时显示系统的打开方式选择器。可在“偏好设置 → 快捷键 → 使用默认程序打开”中自定义、清除或恢复快捷键。内置文本编辑器已移除。同一分类同时收藏父目录和子目录时，F5 保持之前点击的目录树，不再展开其他同路径入口，并滚动到具体选中节点，避免被固定的分类和祖先标题遮挡。快捷键页继续按功能分组，支持按动作、组合键或分组名称搜索。
 
-![CDir v3.0.6 界面预览](Docs/Images/CDirPreview.png)
+![CDir v3.0.12 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -315,7 +318,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 文件详细列表、列排序、多选、按名称递归搜索当前目录及子目录；使用 `/file` 仅显示文件、`/dir` 仅显示文件夹，例如 `report /file`、`/dir work`。隐藏项目在偏好设置中控制，项目数量和操作提示显示在底部状态栏；已选择数量独立显示，保留总数、文件夹数和文件数。
 - 搜索支持正则匹配（`/regex` 或 `/r`，例如 `/r ^report.*\.txt$ /f`）和 `*`、`?` 通配符模糊匹配（例如 `report*.txt`、`*report*`）；也可用 `/wildcard` 或 `/w` 显式启用。匹配默认不区分大小写，输入提示可补全模式命令，表达式错误或耗时过长会显示提示。
 - 左右拖动任意可见表头可调整列的显示顺序；“文件 → 偏好设置 → UI”提供名称、修改日期、类型、大小、绝对路径的显示开关，列顺序和显示选择自动保存。绝对路径仍只在搜索结果中显示，普通浏览至少保留一列。
-- 点击表头可切换该列的升序、降序；当前排序列表头右侧显示加粗箭头，↑ 表示升序、↓ 表示降序，其他列不显示箭头。
+- 点击表头可切换该列的升序、降序；修改日期按完整时间（含秒）混排文件和文件夹，分组内也按相同时间规则排列。当前排序列表头右侧显示加粗箭头，↑ 表示升序、↓ 表示降序，其他列不显示箭头。
 - 文件列表、目录树、常用位置和地址栏显示 Windows Shell 系统图标，包含默认关联程序、应用程序、快捷方式及自定义文件夹图标。
 - 文件列表、目录树和地址栏显示由 Git/SVN 实际工作区查询生成的状态徽标，区分未修改、修改、新增、删除、重命名、冲突、未跟踪与忽略；提交和还原后自动刷新。
 - 通过右键菜单或快捷键新建文件夹、重命名、复制、剪切、粘贴、移到回收站；与 Windows 文件剪贴板互通。
@@ -343,6 +346,9 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 横向和纵向滚动条统一为 12 DIP。目录树滚动时显示滚动条，持续滚动、悬停或拖动时保持显示，停止约一秒后在未悬停时隐藏。固定的 Shift + 滚轮用于鼠标所在区域的横向滚动，不支持自定义；普通滚轮保持纵向滚动。
 - 快捷访问、我的电脑和每个自定义类别均支持独立横向滚动。通过 Shift + 滚轮、横向滚轮或拖动横向滚动条可查看完整名称、路径和容量信息；每个类别的根文件夹与展开后代一起移动，类别标题保持固定，普通滚轮继续纵向滚动。
 - “偏好设置 → General → 开机自动启动 CDir”默认关闭，仅为当前 Windows 用户注册此位置的程序；取消勾选或恢复默认设置会移除此副本的启动项。剪切 Ctrl+X 与终端 Ctrl+滚轮均为固定快捷键，不列入自定义列表。
+- “偏好设置 → General → 使用 CDir 作为默认文件管理器”默认不勾选。勾选后，为当前 Windows 用户使用此位置的 CDir 打开文件夹、磁盘和 Win+E；取消勾选或重置 General 会恢复之前的注册设置。启用期间请保持程序路径不变。该选项改变文件夹打开入口，Windows 桌面和系统文件选择对话框继续保留。
+- CDir 已运行时，Win+E 唤回最近活动的窗口并保留当前文件夹，由轻量 Shell 启动入口向已有进程转发请求；没有此位置的用户实例时才启动 CDir。打开文件夹时复用已有同路径标签页，或在现有窗口中新建标签页。
+- 普通窗口使用 Windows 合成器的原生阴影和中性细边线，最大化时工作区仍贴合显示器可用范围；不添加蓝色激活边框，也不对主界面使用软件模糊。
 - 单实例时工作区约每秒自动保存；多实例运行时各自保留更改；退出时仅当其他进程已保存不同的布局或配置才询问是否覆盖，否则自动保存退出。Ctrl+N 复制当前窗口的完整工作区和目录树展开状态，图标新开进程时复制最近活动窗口；配置和工作区使用刷盘后的原子写入，并保留上一版本备份。启动时恢复标签、活动目录、标签名称、前后导航历史、搜索、排序、选择、列宽、侧栏布局、窗口位置与终端面板状态。崩溃或突然断电后恢复最近一次完整保存的状态；终端面板会启动新的 PowerShell 会话。
 - “文件 → 偏好设置”左侧按 General（常规）、UI、Terminal Theme（终端主题）和 Keyboard Shortcuts（快捷键）分类。常规分类包含语言、12/24 小时制、隐藏项目、关闭窗口时退出、拖放时复制、后台计算文件夹大小和开机自动启动选项（默认关闭）；UI 分类包含面板字体大小、网格线、文件夹路径、磁盘用量和列显示开关；终端主题包含终端字号、背景色和预览。语言支持简体中文、日本語、한국어和 English，即时切换并记住选择；当前路径、筛选、排序和选中项目保持不变。
 - 浅色界面使用三层灰白底色：外层 `#F3F3F3`、中层 `#FBFBFB`、内层 `#FFFFFF`；聚焦提示统一为 `#F3F3F3`。主窗口、菜单、弹窗和偏好设置统一配色，终端保持独立主题。

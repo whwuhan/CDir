@@ -25,6 +25,8 @@ public sealed class FileEntry : INotifyPropertyChanged
         set { if (this.CurrentVersionStatus == value) return; this.CurrentVersionStatus = value; PropertyChanged?.Invoke(this, new(nameof(VersionStatus))); }
     }
     private string OriginalTypeName = string.Empty;
+    private string? CachedTypeLanguage;
+    private string? CachedTypeName;
     public string ViewGroup { get; set; } = "";
     internal long ViewGroupOrder { get; set; }
     public string Name { get; init; } = string.Empty;
@@ -36,7 +38,17 @@ public sealed class FileEntry : INotifyPropertyChanged
     public object?[] TypeArguments { get; init; } = [];
     public string TypeName
     {
-        get => this.TypeKey is { } Key ? LanguageService.Text(Key, this.TypeArguments) : this.OriginalTypeName;
+        get
+        {
+            if (this.TypeKey is not { } Key) return this.OriginalTypeName;
+            var Language = LanguageService.CurrentLanguage;
+            if (this.CachedTypeLanguage != Language)
+            {
+                this.CachedTypeName = LanguageService.Text(Key, this.TypeArguments);
+                this.CachedTypeLanguage = Language;
+            }
+            return this.CachedTypeName!;
+        }
         init => this.OriginalTypeName = value;
     }
     private long? CurrentSize;
@@ -113,6 +125,7 @@ public sealed class FileEntry : INotifyPropertyChanged
 
     public void RefreshLanguage()
     {
+        this.CachedTypeLanguage = null;
         PropertyChanged?.Invoke(this, new(nameof(TypeName)));
         PropertyChanged?.Invoke(this, new(nameof(DisplaySize)));
         PropertyChanged?.Invoke(this, new(nameof(DisplayModified)));

@@ -163,6 +163,11 @@ internal sealed partial class RegressionRunner
             Check(this.Service.GetDirectories(Directory, false).Select(Item => Item.Name).SequenceEqual(Names), "Tree folders must use numeric name order.");
             var Expected = Names.Concat(Names.Select(Name => Name + ".txt"));
             Check(this.Service.GetEntries(Directory, false).Select(Item => Item.Name).SequenceEqual(Expected), "Entries must keep folders first and naturally sort both kinds.");
+            var Unsorted = this.Service.GetEntries(Directory, false, SortByName: false);
+            Check(Unsorted.Select(Item => Item.Name).ToHashSet(StringComparer.Ordinal).SetEquals(Expected),
+                "UI enumeration must return the same entries without paying for a redundant natural sort.");
+            Check(Unsorted.All(Item => Item.FullPath.Length > 0 && Item.Modified > DateTime.MinValue && Item.IsDirectory == !Item.Name.EndsWith(".txt", StringComparison.Ordinal)),
+                "Unsorted enumeration must preserve all filesystem metadata.");
             Check(FileNameComparer.Instance.Compare("Item2", "item10") < 0, "Name order must ignore case.");
             Check(FileNameComparer.Instance.Compare("item", "item extra") < 0, "A shared prefix must precede its longer name.");
             Check(FileNameComparer.Instance.Compare("part2-item9", "part2-item10") < 0, "Every embedded numeric run must compare numerically.");
@@ -519,6 +524,14 @@ internal sealed partial class RegressionRunner
                     Labels.Add(Entry.TypeName);
                 }
                 Check(Labels.Count > 1, "Metadata should visibly change between languages.");
+                var Formatted = new FileEntry { TypeKey = "TypeExtensionFile", TypeArguments = ["CUSTOM"] };
+                foreach (var Language in LanguageService.SupportedLanguages.Reverse())
+                {
+                    LanguageService.SetLanguage(Language.Code);
+                    var Label = Formatted.TypeName;
+                    Check(Label == LanguageService.Text("TypeExtensionFile", "CUSTOM") && ReferenceEquals(Label, Formatted.TypeName),
+                        "Formatted type labels must cache per language and follow language changes even before binding notifications.");
+                }
             });
             this.Test("Modified dates preserve seconds and distinguish midnight noon and afternoon in both clock formats", () =>
             {

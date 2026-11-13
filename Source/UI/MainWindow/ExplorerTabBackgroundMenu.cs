@@ -83,7 +83,8 @@ public partial class ExplorerTab
                 if (Group == 0) Group = this.Comparison.Compare(A.ViewGroup, B.ViewGroup, System.Globalization.CompareOptions.StringSort);
                 if (Group != 0) return Tab.FileGroupDescending ? -Group : Group;
             }
-            if (A.IsDirectory != B.IsDirectory) return A.IsDirectory ? -1 : 1;
+            // Date sorting must compare folders and files on the same timeline.
+            if (Tab.SortProperty != nameof(FileEntry.Modified) && A.IsDirectory != B.IsDirectory) return A.IsDirectory ? -1 : 1;
             var Order = Tab.SortProperty switch
             {
                 nameof(FileEntry.Modified) => A.Modified.CompareTo(B.Modified), nameof(FileEntry.Size) => Nullable.Compare(A.Size, B.Size),

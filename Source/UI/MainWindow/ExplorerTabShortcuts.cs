@@ -89,7 +89,7 @@ public partial class ExplorerTab
             case "Back": await this.BackAsync(); break;
             case "Forward": await this.ForwardAsync(); break;
             case "Up": await this.UpAsync(); break;
-            case "Refresh": this.InvalidateVersionStatuses(); ShellIconService.InvalidateCache(); if (this.NavigationTreeKey == "folder-tree") await this.RefreshRootsAsync(); await this.RefreshAndFitColumnsAsync(); break;
+            case "Refresh": await this.RefreshAndFitColumnsAsync(); break;
             case "NewFolder": await this.NewFolderAsync(); break;
             case "Copy": this.CopySelection(false); break;
             case "Cut": this.CopySelection(true); break;

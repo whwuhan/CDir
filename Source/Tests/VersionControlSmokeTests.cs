@@ -69,6 +69,52 @@ public partial class ExplorerTab
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             }
         }
+        async Task CheckBadgesAfterFiltering(string Provider, string FileName)
+        {
+            var PreviousMode = this.Settings.FileView;
+            var PreviousSize = this.Settings.FileViewIconSize;
+            async Task Settle()
+            {
+                this.UpdateLayout();
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+                this.UpdateLayout();
+            }
+            try
+            {
+                foreach (var Mode in new[] { FileViewMode.Details, FileViewMode.LargeIcons, FileViewMode.List, FileViewMode.Tiles })
+                {
+                    this.ApplyRememberedFolderView(Mode, 48);
+                    await this.RefreshCurrentFolderAsync(false);
+                    await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled && !this.VersionRefreshPending);
+                    var Expected = this.Entries.ToDictionary(Item => Item.FullPath, Item => Item.VersionStatus, StringComparer.OrdinalIgnoreCase);
+                    Check(Expected.Values.All(Status => Status.Provider == Provider && Status.State != VersionState.None),
+                        $"{Provider} {Mode} starts with verified file and folder badges after a passive refresh");
+                    var Commands = this.VersionControl.NativeCommandCount;
+                    // A cancelled search replaces the visible rows with FolderEntries,
+                    // which were freshly read by the preceding filesystem refresh.
+                    this.SearchBox.Text = "__owned_no_matching_badge_fixture__";
+                    this.SearchBox.Clear();
+                    Check(this.Entries.All(Item => Expected[Item.FullPath] == Item.VersionStatus),
+                        $"{Provider} {Mode} preserves every verified badge immediately when a filter is cleared");
+                    await Settle();
+                    foreach (var Name in new[] { FileName, "Child" })
+                    {
+                        var Item = Entry(Name);
+                        this.RevealFile(Item);
+                        await Settle();
+                        var Container = this.ActiveFileItems.ItemContainerGenerator.ContainerFromItem(Item);
+                        var Badge = Container is null ? null : FindVisualChild<ShellIcon>(Container);
+                        Check(Badge?.VersionStatus == Expected[Item.FullPath]
+                            && Badge.ToolTip?.ToString()?.Contains(Item.VersionStatus.Description, StringComparison.Ordinal) == true,
+                            $"{Provider} {Mode} binds the restored status and tooltip to the realized main-panel icon: {Name}");
+                    }
+                    Check(this.VersionControl.NativeCommandCount == Commands,
+                        $"{Provider} {Mode} restores cached badges without additional native status commands");
+                    this.CaptureVersionControlPreview($"VersionControlFilter-{Provider}-{Mode}.png");
+                }
+            }
+            finally { this.ApplyRememberedFolderView(PreviousMode, PreviousSize); }
+        }
         try
         {
             var GitPath = Directory.CreateDirectory(System.IO.Path.Combine(Fixture, "GitWorkingCopy")).FullName;
@@ -86,6 +132,7 @@ public partial class ExplorerTab
             Check(TreeNode(GitPath).VersionStatus is { State: VersionState.Modified, ContainsChanges: true }
                 && Entry("Child").VersionStatus.State == VersionState.Clean,
                 "Git list and directory tree distinguish changed files clean siblings and aggregate directory changes");
+            await CheckBadgesAfterFiltering("Git", "Modified.txt");
 
             // Start measuring once pending fixture-creation refreshes have completed.
             await WaitUntil(() => this.VersionCancellation is null && !this.VersionDebounce.IsEnabled && !this.VersionRefreshPending
@@ -187,6 +234,7 @@ public partial class ExplorerTab
             await WaitUntil(() => Entry("Property.txt").VersionStatus.State == VersionState.Modified && Entry("Clean.txt").VersionStatus.State == VersionState.Clean
                 && TreeNode(SvnPath).VersionStatus.State == VersionState.Modified);
             Check(TreeNode(SvnPath).VersionStatus.State == VersionState.Modified, "SVN property-only changes get verified badges while unchanged files remain clean");
+            await CheckBadgesAfterFiltering("SVN", "Property.txt");
             File.AppendAllText(SvnDeepFile, "deep recursive change\n");
             await WaitUntil(() => Entry("Child").VersionStatus is { State: VersionState.Modified, ContainsChanges: true });
             Check(Entry("Clean.txt").VersionStatus.State == VersionState.Clean,

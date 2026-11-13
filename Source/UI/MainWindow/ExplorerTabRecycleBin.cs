@@ -146,7 +146,7 @@ public partial class ExplorerTab
         }
     }
 
-    private async Task RefreshRecycleBinAsync()
+    private async Task RefreshRecycleBinAsync(bool RebuildRows = false)
     {
         if (!this.IsRecycleBin || this.WindowClosed) return;
         if (this.Loading) { this.FolderRefreshPending = true; this.ScheduleRefresh(); return; }
@@ -159,7 +159,9 @@ public partial class ExplorerTab
             if (this.WindowClosed || !this.IsRecycleBin || Navigation != this.NavigationVersion || Request != this.RecycleReadVersion) return;
             this.FolderEntries = Entries;
             this.FolderRefreshPending = false;
-            this.RefreshFileRows(Entries);
+            if (RebuildRows) await this.RebuildFileViewAsync(() => !this.WindowClosed && this.IsRecycleBin
+                && Navigation == this.NavigationVersion && Request == this.RecycleReadVersion);
+            else this.RefreshFileRows(Entries);
         }
         catch (OperationCanceledException) { }
         catch (Exception Error) when (Error is COMException or IOException or UnauthorizedAccessException)

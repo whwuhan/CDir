@@ -73,7 +73,7 @@ public sealed class FileSystemService
         return Result.OrderBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
     }
 
-    public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden)
+    public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden, bool SortByName = true)
     {
         var Result = new List<FileEntry>();
         foreach (var Info in new DirectoryInfo(Path).EnumerateFileSystemInfos("*", Enumeration))
@@ -87,6 +87,9 @@ public sealed class FileSystemService
             }
             catch (System.Exception Ex) when (IsFileSystemError(Ex)) { /* Keep other readable entries visible. */ }
         }
+        // The UI applies its chosen comparator once; other callers retain the
+        // public folders-first natural order by default.
+        if (!SortByName) return Result;
         return Result.OrderByDescending(Item => Item.IsDirectory)
             .ThenBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
     }

@@ -100,8 +100,9 @@ public partial class MainWindow : Window
             if (this.WindowState != WindowState.Minimized) this.LastWorkspaceMaximized = this.WindowState == WindowState.Maximized;
             this.UpdateCaption();
         };
-        Activated += (_, _) => this.LastActivatedUtc = DateTimeOffset.UtcNow;
-        Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); };
+        Activated += (_, _) => { this.LastActivatedUtc = DateTimeOffset.UtcNow; WindowAppearance.UseNeutralShadowFrame(this); };
+        Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); WindowAppearance.UseNeutralShadowFrame(this); };
+        Loaded += (_, _) => WindowAppearance.UseNeutralShadowFrame(this);
         this.SeparatePinnedTabs = Settings.SeparatePinnedTabs;
         this.AttachTab(Initial);
         Initial.RefreshShellResources();
@@ -127,7 +128,17 @@ public partial class MainWindow : Window
             if (System.Windows.PresentationSource.FromVisual(this) is System.Windows.Interop.HwndSource Source)
                 Source.AddHook(this.BrowserAppCommand);
             this.WorkAreaBounds = new WindowWorkArea(this);
+            WindowAppearance.UseNeutralShadowFrame(this);
             this.EnsureTrayIcon();
+            if (this.TrackInstances)
+            {
+                this.ShellLaunch = new ShellLaunchServer(ShellLaunchClient.PipeName(Environment.ProcessId), async Request =>
+                    await (await this.Dispatcher.InvokeAsync(() => this.HandleShellLaunchAsync(Request))));
+                this.ShellLaunch.Start();
+                try { DefaultFileManagerBridge.RefreshOwnedRegistration(); }
+                catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
+                { this.ActiveTab?.ShowRecoveryError(); }
+            }
         };
         Closed += (_, _) =>
         {
@@ -137,6 +148,7 @@ public partial class MainWindow : Window
             this.WorkspaceTimer?.Stop();
             if (!this.SessionIsEnding) this.SessionStore?.Discard();
             this.InstanceService?.Dispose();
+            this.ShellLaunch?.Dispose();
             this.TrayIcon?.Dispose();
             this.WorkAreaBounds?.Dispose();
             foreach (var Page in this.Tabs) Page.DisposePage();

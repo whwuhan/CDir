@@ -202,6 +202,10 @@ public partial class ExplorerTab
                     && Dialog.StartOnLoginCheck.Content?.ToString() == LanguageService.Text("StartOnLogin")
                     && Dialog.StartOnLoginCheck.ToolTip?.ToString() == LanguageService.Text("StartOnLoginTooltip"),
                     "General shows the saved Windows startup choice with localized text");
+                Check(Dialog.DefaultFileManagerCheck.IsChecked == this.ReadDefaultFileManager()
+                    && Dialog.DefaultFileManagerCheck.Content?.ToString() == LanguageService.Text("DefaultFileManager")
+                    && Dialog.DefaultFileManagerCheck.ToolTip?.ToString() == LanguageService.Text("DefaultFileManagerTooltip"),
+                    "General shows the actual default file manager choice with localized text");
                 Dialog.UpdateLayout();
                 Check(Dialog.TerminalThemePanel.IsVisible && !Dialog.GeneralPanel.IsVisible && !Dialog.UIPanel.IsVisible
                     && Equals(Dialog.TerminalFontSizePicker.SelectedItem, this.GetTerminalFontSize())
@@ -305,6 +309,8 @@ public partial class ExplorerTab
                     && Dialog.ShowBookmarkPathsCheck.Content?.ToString() == LanguageService.Text("ShowBookmarkPaths")
                     && Dialog.ShowBookmarkPathsCheck.ToolTip?.ToString() == LanguageService.Text("ShowBookmarkPathsTooltip")
                     && Dialog.StartOnLoginCheck.Content?.ToString() == LanguageService.Text("StartOnLogin")
+                    && Dialog.DefaultFileManagerCheck.Content?.ToString() == LanguageService.Text("DefaultFileManager")
+                    && Dialog.DefaultFileManagerCheck.ToolTip?.ToString() == LanguageService.Text("DefaultFileManagerTooltip")
                     && Dialog.StartOnLoginCheck.ToolTip?.ToString() == LanguageService.Text("StartOnLoginTooltip")
                     && Dialog.TimeFormatLabel.Content?.ToString() == LanguageService.Text("TimeFormat")
                     && Dialog.TimeFormatPicker.Items.Cast<ComboBoxItem>().Select(Item => Item.Content?.ToString())
