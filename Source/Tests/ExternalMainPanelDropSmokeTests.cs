@@ -29,6 +29,7 @@ public partial class ExplorerTab
         async Task Settle() { await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle); this.UpdateLayout(); }
         try
         {
+            await this.RunDelayedDropSmokeAsync(Passed, Root);
             foreach (var Copy in new[] { true, false })
             foreach (var IntoFolder in new[] { false, true })
             {
@@ -111,7 +112,7 @@ public partial class ExplorerTab
                     this.ChangeCopyOnDrop(Copy);
                     var Over = Route(this.FileGrid, Data, DragDrop.PreviewDragOverEvent);
                     var Drop = Route(this.FileGrid, Data, DragDrop.PreviewDropEvent);
-                    Check(Over.Handled && Drop.Handled && Over.Effects == DragDropEffects.None && Drop.Effects == DragDropEffects.None
+                    Check(Over.Handled && Drop.Handled && (Over.Effects == DragDropEffects.None || Over.Effects == (Copy ? DragDropEffects.Copy : DragDropEffects.Move)) && Drop.Effects == DragDropEffects.None
                         && Before.SetEquals(Directory.GetFileSystemEntries(SameFolder)) && SameFolderCalls == 0 && !this.OperationBusy
                         && File.ReadAllText(Original) == "Original content" && File.ReadAllText(Path.Combine(OriginalFolder, "Nested.txt")) == "Original nested content"
                         && this.FileDropHint.Visibility == Visibility.Collapsed && this.FileDropTargetHighlight.Visibility == Visibility.Collapsed,

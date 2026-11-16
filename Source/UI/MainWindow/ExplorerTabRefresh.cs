@@ -64,6 +64,7 @@ public partial class ExplorerTab
             }
             else if (this.CurrentSearch.IsActive) { this.QueueSearch(Debounce: false); Search = this.SearchVersion; }
             else this.RefreshFileRows(Updated);
+            this.QueueShellColumnValues();
             this.QueueDriveUsageRefresh(Path);
             var Trees = await Task.Run(() =>
             {

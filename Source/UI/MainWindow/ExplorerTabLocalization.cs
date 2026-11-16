@@ -81,21 +81,15 @@ public partial class ExplorerTab
         UpdateMenuHeaders(this.TerminalSurface?.ContextMenu);
         if (this.FileGrid is not null)
         {
+            this.UpdateColumnHints();
             foreach (var Column in this.FileGrid.Columns)
             {
-                var Key = Column.SortMemberPath switch
-                {
-                    nameof(FileEntry.Name) => "NameColumn",
-                    nameof(FileEntry.Modified) => "ModifiedColumn",
-                    nameof(FileEntry.TypeName) => "TypeColumn",
-                    nameof(FileEntry.Size) => "SizeColumn",
-                    nameof(FileEntry.FullPath) => "AbsolutePathColumn",
-                    nameof(FileEntry.OriginalLocation) => "OriginalLocationColumn",
-                    nameof(FileEntry.DateDeleted) => "DateDeletedColumn",
-                    _ => null
-                };
-                if (Key is not null) Column.Header = LanguageService.Text(Key);
+                var Key = ColumnResourceKey(Column.SortMemberPath);
+                if (LanguageService.GetTexts().ContainsKey(Key)) Column.Header = LanguageService.Text(Key);
             }
+            if (this.ColumnMenuButton.ContextMenu is { } ColumnsMenu)
+                foreach (var Item in ColumnsMenu.Items.OfType<System.Windows.Controls.MenuItem>())
+                    if (Item.Tag is string ColumnKey && ColumnKeys.Contains(ColumnKey)) Item.Header = LanguageService.Text(ColumnResourceKey(ColumnKey));
             UpdateMenuHeaders(this.FileGrid.ContextMenu);
             this.ApplyShortcutHints();
         }
@@ -228,6 +222,7 @@ public partial class ExplorerTab
             AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
             ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
             HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
+            EnabledColumns = this.Settings.EnabledColumns?.ToList(),
             BoldAllFonts = this.Settings.BoldAllFonts,
             FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
             TitleBarFontRevision = this.Settings.TitleBarFontRevision,

@@ -122,6 +122,7 @@ public partial class ExplorerTab
             foreach (var Path in Selection) this.SelectPath(Path, Append: true, Reveal: RevealSelection);
         this.UpdateCounts();
         this.QueueFolderSizes();
+        this.QueueShellColumnValues();
     }
 
     private void SearchBoxTextChanged(object Sender, TextChangedEventArgs E)
@@ -238,6 +239,7 @@ public partial class ExplorerTab
                 this.Searching = false;
                 this.PendingSearchSelection.Clear();
                 if (Query.ErrorKey is not null) this.ShowEntries([]);
+                this.QueueShellColumnValues();
                 this.UpdateActions();
                 this.UpdateCounts();
                 if (Failure is not null) this.ShowNotice(Failure, true);

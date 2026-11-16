@@ -95,6 +95,46 @@ public partial class ExplorerTab
                 && SegmentButton(ParentPath).Tag is string Target && SamePath(Target, ParentPath),
                 "address display renders clickable complete ancestors for Unicode folders and spaces");
 
+            var Sibling = Directory.CreateDirectory(Path.Combine(ParentPath, "Sibling folder")).FullName;
+            for (var Index = 0; Index < 35; Index++) Directory.CreateDirectory(Path.Combine(ParentPath, "Folder " + Index));
+            await Settle();
+            var ParentButton = SegmentButton(ParentPath);
+            var Arrow = ((StackPanel)ParentButton.Parent).Children.OfType<Button>().Last();
+            Arrow.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntil(() => this.AddressChildrenMenu?.IsOpen == true);
+            var ChildMenu = this.AddressChildrenMenu!;
+            Check(ChildMenu.Items.OfType<MenuItem>().Any(Item => Equals(Item.Tag, ChildPath) && Item.IsChecked)
+                && ChildMenu.Items.OfType<MenuItem>().Any(Item => Equals(Item.Tag, Sibling))
+                && ChildMenu.FontSize == (double)this.FindResource("UIFontMenus"),
+                "Each breadcrumb arrow lists its direct subfolders and marks the current path with readable menu fonts");
+            ChildMenu.UpdateLayout();
+            Check(FindVisualChild<ScrollViewer>(ChildMenu) is { ScrollableHeight: > 0 }
+                && ChildMenu.ActualHeight <= 420 && Arrow.Content?.ToString() == "⌄"
+                && ChildMenu.Items.OfType<MenuItem>().All(Item => Item.Header is StackPanel Label && Label.Children[0] is CDir.Controls.ShellIcon),
+                "Long breadcrumb dropdowns scroll within a compact height and show folder icons");
+            if (AppMain.ScreenshotPath is { } CapturePath)
+            {
+                var Bitmap = new RenderTargetBitmap((int)Math.Ceiling(ChildMenu.ActualWidth), (int)Math.Ceiling(ChildMenu.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                Bitmap.Render(ChildMenu);
+                var Encoder = new PngBitmapEncoder(); Encoder.Frames.Add(BitmapFrame.Create(Bitmap));
+                using var Stream = File.Create(Path.Combine(Path.GetDirectoryName(CapturePath)!, "AddressChildrenMenu.png"));
+                Encoder.Save(Stream);
+            }
+            Arrow.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntil(() => !ChildMenu.IsOpen && Arrow.Content?.ToString() == "›");
+            Check(!ChildMenu.IsOpen && Arrow.Content?.ToString() == "›", "Clicking the open breadcrumb arrow toggles its menu closed");
+            Arrow.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntil(() => this.AddressChildrenMenu?.IsOpen == true);
+            ChildMenu = this.AddressChildrenMenu!;
+            ChildMenu.Items.OfType<MenuItem>().Single(Item => Equals(Item.Tag, Sibling)).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await WaitUntil(() => !this.Loading && SamePath(this.CurrentPath, Sibling));
+            Check(!ChildMenu.IsOpen, "Choosing a breadcrumb child navigates directly and closes its menu");
+            await this.BackAsync();
+            Check(SamePath(this.CurrentPath, ChildPath), "Breadcrumb dropdown navigation participates in Back history");
+
+            Check(SegmentButton(ParentPath).Padding.Left <= 1 && SegmentButton(ParentPath).MinWidth == 0
+                && SegmentButton(ParentPath).FontSize == (double)this.FindResource("UIFontNavigation"),
+                "Breadcrumb segments use compact spacing without shrinking the configured navigation font");
             var OriginalHistory = this.History.ToArray();
             var AncestorButton = SegmentButton(ParentPath);
             Press(AncestorButton, 1);

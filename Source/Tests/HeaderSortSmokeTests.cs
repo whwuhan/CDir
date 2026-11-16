@@ -77,7 +77,7 @@ public partial class ExplorerTab
             Check(await this.NavigateAsync(Fixture), "Sort arrows test opens an owned file fixture");
             this.SearchBox.Text = "/file /dir";
             await this.WaitForSearchSmokeAsync();
-            foreach (var Column in this.FileGrid.Columns)
+            foreach (var Column in this.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible))
             {
                 this.FileGrid.ScrollIntoView(this.FileGrid.Items[0], Column);
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);

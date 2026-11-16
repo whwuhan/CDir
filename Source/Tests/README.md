@@ -1,5 +1,9 @@
 # 文件系统、语言与版本控制回归测试
 
+启动与恢复响应性使用 lifecycle 组：暂停后台字体测量，检查首个页面在目录读取前可命中、内容提交后 Open 与 Preferences 可用、等待期间真实打开其他目录，以及迟到的列宽/工作区恢复不覆盖新目录、搜索和手动列宽；本地触发激活/停用事件验证不重复同步设置 DWM 边框，不锁定或切换用户桌面。navigation、columns、tabs、panes 检查导航与列宽、多标签和分栏兼容。
+
+偏好设置的 Columns 使用自适应多列布局，保留顺序、勾选语义与字号，长名称换行。columns 组检查宽/窄窗口及 24 号字号的真实布局，生成 PreferencesColumnsWide/Narrow/LargeFont/Special 和 PreferencesColumnTooltip 截图；language 后台组及 columns、language 界面组覆盖四语适用范围提示，区分回收站专用属性、普通创建时间和音视频/图像等元数据，并检查列菜单、表头及禁用选项的提示。
+
 默认程序打开使用 `Source/Scripts/Test.ps1 -UIGroup shortcuts,operations,lifecycle -Group language -PublishConfiguration` 验证。shortcuts 在自有目录检查空格/F9 的四种视图路由、多选、搜索结果、文本输入隔离、旧快捷键迁移、无关联时调用 Windows openas、取消及失败处理；替换启动边界，不打开用户文件或改写默认程序关联。偏好设置仅保留五个快捷键分组，内置编辑器与其专用设置已移除。lifecycle 检查旧工作区兼容与实例/测试隔离。目录树 F5 的父子重复入口回归位于 sidebar 组，另以 navigation、columns 检查导航、筛选、选择和列宽。
 
 测试代码统一放在 `Source/Tests`：`Program.cs`、各后台测试文件由独立的 `CDirTests.csproj` 编译；各 `*SmokeTests.cs` 是 `CDir.UI.ExplorerTab` 的部分类，由主项目编译，通过 `--smoke-test` 入口运行。构建、测试和打包脚本统一位于 `Source/Scripts`。
@@ -104,3 +108,8 @@ Windows 自带回收站回归必须通过其 IShellFolder.GetUIObjectOf 获取�
 Git/SVN 状态徽标缩放使用 view-zoom 界面组验证全部状态的 16/48/96/192/256 像素渲染、连续放大缩小、缩略图宽高比、150% 渲染和等待/错误区分，输出 VersionBadgeScaling.png。状态绑定和仓库刷新仍由 version-control 界面组覆盖。
 
 分组网格线包含在 grouping 界面组中：验证四种分组字段下实际行/列边界的物理像素、标题留白、开关与选择保持、纵横滚动、列重排/隐藏、24 号字体与 150% 渲染、取消分组、切换视图、短列表末尾留白及空搜索。输出 GroupedGridLines.png；同组的 10,000 项虚拟化检查启用网格线后运行。
+
+Windows 详细信息列、地址栏子目录菜单和导航返回位置使用 `Source/Scripts/Test.ps1 -Group address,language -UIGroup navigation,address,columns -PublishConfiguration` 合并验证。navigation 检查详细信息、大图标、列表、平铺的选择与双向滚动恢复，以及筛选历史和新分支；address 检查路径段的直接子目录、当前分支标记、文件夹图标、长菜单滚动与再次点击关闭，输出 `AddressChildrenMenu.png`。columns 将系统 `IShellFolder2` 的列目录与表格和 Preferences/UI 一一比对，通过独立 Shell 自动化接口核对创建日期，检查真实属性值排序、递归搜索属性加载，以及所有普通列和回收站列的零最小宽度。未开启的扩展列不读取文件属性。
+
+列菜单的两层设置与完整列名翻译使用 columns、language 界面组及 language 后台组验证：Preferences/UI/Columns 管理菜单成员，右上角菜单独立管理可见状态；包含旧设置迁移、保存回读、跨标签同步和四语列名，英文界面不混入系统中文标签。地址栏紧凑间距由 address 组验证，保留配置字号。
+压缩软件延迟提供 HDROP 的响应性包含在 transfer 组：用原生 COM 封送的延迟数据源模拟 7-Zip 解压，检查悬停零数据读取、STA 后台读取、等待期间的地址编辑和目录导航、重复放下拦截、原目标目录保持、取消清理；全程使用自有文件和 WPF 路由，不移动桌面指针，不操作用户压缩包。该检查验证延迟 OLE 协议，不声称自动操控过真实 7-Zip 窗口。

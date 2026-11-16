@@ -14,6 +14,8 @@ public partial class ExplorerTab
 {
     private async Task RunColumnsSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunWindowsColumnsSmokeAsync(Passed);
+        await this.RunColumnOptionsLayoutSmokeAsync(Passed);
         await this.RunGridLinesSmokeChecksAsync(Passed);
         await this.RunFolderSizeSmokeChecksAsync(Passed);
         await this.RunHeaderSortSmokeChecksAsync(Passed);
@@ -66,6 +68,9 @@ public partial class ExplorerTab
                 && this.ColumnMenuButton.TranslatePoint(new Point(), this).X >= this.SearchContainer.TranslatePoint(new Point(this.SearchContainer.ActualWidth, 0), this).X
                 && Menu.Items.OfType<MenuItem>().Where(Item => Item.Tag is string Key && ColumnKeys.Contains(Key)).All(Item => Item.IsChecked == (Column((string)Item.Tag).Visibility == Visibility.Visible)),
                 "The dropdown sits to the right of search and marks currently displayed column headers");
+            Check(Menu.Items.OfType<MenuItem>().Where(Item => Item.Tag is string Key && ColumnKeys.Contains(Key)).All(Item => this.IsColumnEnabled((string)Item.Tag))
+                && Menu.Items.OfType<MenuItem>().Count(Item => Item.Tag is string Key && ColumnKeys.Contains(Key)) == 4,
+                "The default column menu contains only four enabled browsing columns");
             Check(Menu.Items[^2] is Separator && Menu.Items[^1] is MenuItem { Tag: "ShowHidden" },
                 "A separator and hidden-files toggle finish the column dropdown");
             var HiddenItem = (MenuItem)Menu.Items[^1];
@@ -95,7 +100,7 @@ public partial class ExplorerTab
             Check(this.FileGrid.CanUserReorderColumns && this.FileGrid.Columns.All(Column => Column.CanUserReorder),
                 "Native header dragging is enabled for every file-list column");
             Reorder(Column(nameof(FileEntry.Name)), 3);
-            Check(Column(nameof(FileEntry.Name)).DisplayIndex == 3 && Order().Distinct().Count() == 5
+            Check(Column(nameof(FileEntry.Name)).DisplayIndex == 3 && Order().Distinct().Count() == ColumnKeys.Length
                 && this.Settings.ColumnOrder!.SequenceEqual(Order()), "Dragging a column updates its display order and saved layout");
             Check(this.SaveSettings(SettingsFile) && ReadSettings(SettingsFile).ColumnOrder!.SequenceEqual(Order()),
                 "Column display order survives settings serialization");
@@ -124,7 +129,7 @@ public partial class ExplorerTab
             this.RestoreColumnLayout(null, null);
             this.RestoreColumnLayout(Saved.ColumnOrder, Saved.HiddenColumns);
             Check(Order().SequenceEqual(Saved.ColumnOrder!)
-                && this.FileGrid.Columns.Where(Column => Column.SortMemberPath != nameof(FileEntry.FullPath))
+                && this.FileGrid.Columns.Where(Column => Column.SortMemberPath != nameof(FileEntry.FullPath) && this.ColumnAvailable(Column.SortMemberPath))
                     .All(Column => (Column.Visibility == Visibility.Collapsed) == Saved.HiddenColumns!.Contains(Column.SortMemberPath)),
                 "Startup restoration rebuilds saved order and visibility using stable column keys");
             var Legacy = JsonSerializer.Deserialize<AppSettings>("{}")!;
@@ -132,10 +137,10 @@ public partial class ExplorerTab
             Check(Order().SequenceEqual(ColumnKeys) && this.FileGrid.Columns.Count(Column => Column.Visibility == Visibility.Visible) == 4,
                 "Older settings retain the default four browsing columns and default order");
             this.RestoreColumnLayout(["unknown", nameof(FileEntry.Size), nameof(FileEntry.Size)], ColumnKeys);
-            Check(Order()[0] == nameof(FileEntry.Size) && Order().Distinct().Count() == 5
+            Check(Order()[0] == nameof(FileEntry.Size) && Order().Distinct().Count() == ColumnKeys.Length
                 && Column(nameof(FileEntry.Name)).Visibility == Visibility.Visible,
                 "Unknown duplicate incomplete or all-hidden settings cannot lose columns or leave an unusable list");
-            this.RestoreColumnLayout(InitialOrder, []);
+            this.RestoreColumnLayout(null, null);
             this.SearchBox.Text = "/file";
             await this.WaitForSearchSmokeAsync();
             var SearchVersion = this.SearchVersion;

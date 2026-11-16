@@ -10,7 +10,7 @@ Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語,
 
 Select files in the main panel and press Space to open them with their Windows default apps. If no app is associated, Windows shows its app picker. Customize, clear, or reset Open With Default App under Preferences > Keyboard Shortcuts. The built-in text editor has been removed. F5 keeps the selected sidebar tree when a folder and its parent are both bookmarked, and scrolls the exact selected folder header into view below pinned category and ancestor headers. Shortcut preferences remain grouped by function and searchable by action, key, or group.
 
-![CDir v3.3.17 interface preview](Docs/Images/CDirPreview.png)
+![CDir v3.4.20 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -49,7 +49,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - New folders and F2/single-item Rename use an inline filename editor. Enter confirms, Esc cancels naming, and files initially select their stem without the extension. Copy/move actions show native Windows progress and same-name replacement prompts with cancellation and refresh the destination before reporting completion.
 - A detailed file list supports column sorting, multiple selection, and recursive name search through the current directory and subdirectories. Use `/file` for files only or `/dir` for folders only, for example `report /file` or `/dir work`. Hidden items are controlled in Preferences. Counts and operation messages appear in the status bar; the selected-item count is separate from total, folder, and file counts.
 - Search supports regular expressions (`/regex` or `/r`, for example `/r ^report.*\.txt$ /f`) and `*` / `?` wildcard patterns such as `report*.txt` or `*report*`. `/wildcard` or `/w` explicitly enables wildcard mode. Matching ignores case by default. Input hints complete mode commands, and invalid or timed-out expressions produce a message.
-- Drag any visible header horizontally to reorder columns. File > Preferences > UI controls visibility of Name, Date Modified, Type, Size, and Absolute Path. Order and visibility are saved. Absolute Path appears only in search results, and at least one normal browsing column must remain visible.
+- Drag any visible header horizontally to reorder columns. File > Preferences > UI > Columns lists all available Windows detail columns in the selected app language. Select which columns belong in the top-right menu, then use that menu to show or hide them. Menu membership and visibility are saved independently. Absolute Path appears only in search results, and at least one normal browsing column must remain visible.
 - Click a header to toggle ascending or descending sorting. Date Modified sorts files and folders together by timestamp, including seconds; within each group it uses the same date order. The active header shows a bold arrow: ↑ for ascending and ↓ for descending. Other columns show no arrow.
 - The list, tree, Quick Access, and address bar display Windows Shell icons, including associated applications, programs, shortcuts, and custom folder icons.
 - Git/SVN badges in the list, tree, and address bar come from actual workspace queries and distinguish unchanged, modified, added, deleted, renamed, conflicted, untracked, and ignored items. Commits and reverts trigger refresh.
@@ -268,7 +268,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 在主面板选中文件后按空格，使用 Windows 默认程序打开；没有关联程序时显示系统的打开方式选择器。可在“偏好设置 → 快捷键 → 使用默认程序打开”中自定义、清除或恢复快捷键。内置文本编辑器已移除。同一分类同时收藏父目录和子目录时，F5 保持之前点击的目录树，不再展开其他同路径入口，并滚动到具体选中节点，避免被固定的分类和祖先标题遮挡。快捷键页继续按功能分组，支持按动作、组合键或分组名称搜索。
 
-![CDir v3.3.17 界面预览](Docs/Images/CDirPreview.png)
+![CDir v3.4.20 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -315,7 +315,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 一键复制当前路径、复制选中项目路径，支持后退、前进、上一级与刷新。
 - 文件详细列表、列排序、多选、按名称递归搜索当前目录及子目录；使用 `/file` 仅显示文件、`/dir` 仅显示文件夹，例如 `report /file`、`/dir work`。隐藏项目在偏好设置中控制，项目数量和操作提示显示在底部状态栏；已选择数量独立显示，保留总数、文件夹数和文件数。
 - 搜索支持正则匹配（`/regex` 或 `/r`，例如 `/r ^report.*\.txt$ /f`）和 `*`、`?` 通配符模糊匹配（例如 `report*.txt`、`*report*`）；也可用 `/wildcard` 或 `/w` 显式启用。匹配默认不区分大小写，输入提示可补全模式命令，表达式错误或耗时过长会显示提示。
-- 左右拖动任意可见表头可调整列的显示顺序；“文件 → 偏好设置 → UI”提供名称、修改日期、类型、大小、绝对路径的显示开关，列顺序和显示选择自动保存。绝对路径仍只在搜索结果中显示，普通浏览至少保留一列。
+- 左右拖动任意可见表头可调整列的显示顺序；“文件 → 偏好设置 → UI → 列（Columns）”按当前应用语言列出全部 Windows 详细信息列。勾选要加入右上角菜单的列，再通过该菜单控制显示或隐藏；菜单成员与可见状态分别保存。绝对路径只在搜索结果中显示，普通浏览至少保留一列。
 - 点击表头可切换该列的升序、降序；修改日期按完整时间（含秒）混排文件和文件夹，分组内也按相同时间规则排列。当前排序列表头右侧显示加粗箭头，↑ 表示升序、↓ 表示降序，其他列不显示箭头。
 - 文件列表、目录树、常用位置和地址栏显示 Windows Shell 系统图标，包含默认关联程序、应用程序、快捷方式及自定义文件夹图标。
 - 文件列表、目录树和地址栏显示由 Git/SVN 实际工作区查询生成的状态徽标，区分未修改、修改、新增、删除、重命名、冲突、未跟踪与忽略；提交和还原后自动刷新。

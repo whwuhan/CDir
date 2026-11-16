@@ -149,21 +149,29 @@ public partial class ExplorerTab
                 && this.FileGrid.Columns.Count(Column => Column.Visibility == Visibility.Visible) == 6
                 && this.FileGrid.RowHeight == (double)this.FindResource("UIFileRowHeight"),
                 "Recycle Bin shares ordinary row layout and adds only Original Location and Date Deleted");
-            Check(!this.ChangeColumnVisibility(nameof(FileEntry.OriginalLocation), false)
-                && !this.ChangeColumnVisibility(nameof(FileEntry.DateDeleted), false)
-                && this.GetColumnPreferences().All(Item => !IsRecycleColumn(Item.Key)),
-                "The two required Recycle Bin columns cannot be toggled and are absent from editable preferences");
-            this.Settings.HiddenColumns = [nameof(FileEntry.OriginalLocation), nameof(FileEntry.DateDeleted)];
-            this.ApplyColumnVisibility();
-            Check(Original.Visibility == Visibility.Visible && Deleted.Visibility == Visibility.Visible,
-                "Even manually edited hidden-column settings cannot hide the two required columns");
+            Check(this.ChangeColumnVisibility(nameof(FileEntry.OriginalLocation), false)
+                && this.ChangeColumnVisibility(nameof(FileEntry.DateDeleted), false)
+                && this.GetColumnPreferences().Any(Item => Item.Key == nameof(FileEntry.OriginalLocation))
+                && Original.Visibility == Visibility.Collapsed && Deleted.Visibility == Visibility.Collapsed,
+                "Recycle Bin detail columns use the same visibility preferences as Windows detail columns");
+            this.ChangeColumnVisibility(nameof(FileEntry.OriginalLocation), true);
+            this.ChangeColumnVisibility(nameof(FileEntry.DateDeleted), true);
+            foreach (var Column in new[] { Original, Deleted })
+            {
+                var Width = Column.Width;
+                Column.Width = new DataGridLength(1);
+                this.UpdateLayout();
+                Check(Column.MinWidth == 0 && Column.ActualWidth <= 1.1,
+                    "Recycle Bin column can shrink to one pixel: " + Column.SortMemberPath);
+                Column.Width = Width;
+            }
             this.Settings.HiddenColumns = InitialHidden?.ToList();
             this.ApplyColumnVisibility();
             this.ColumnMenuClick(this.ColumnMenuButton, new RoutedEventArgs(Button.ClickEvent));
             await Settle();
             var Menu = this.ColumnMenuButton.ContextMenu!;
-            Check(Menu.Items.OfType<MenuItem>().Count(Item => Item.IsChecked && !Item.IsEnabled) == 2,
-                "The column dropdown lists both required columns as checked fixed items");
+            Check(Menu.Items.OfType<MenuItem>().Count(Item => Item.Tag is string Key && IsRecycleColumn(Key) && Item.IsChecked && Item.IsEnabled) == 2,
+                "The column dropdown lists both Recycle Bin properties as editable checked items");
             Menu.IsOpen = false;
             Check(Press(this.FileGrid, Key.F, ModifierKeys.Control).Handled
                 && (this.SearchBox.IsFocused || ReferenceEquals(FocusManager.GetFocusedElement(this), this.SearchBox)),

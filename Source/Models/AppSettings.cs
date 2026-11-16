@@ -44,6 +44,7 @@ internal sealed class AppSettings
     public bool SeparatePinnedTabs { get; set; } = DefaultSettings.Current.SeparatePinnedTabs;
     public bool ShowBookmarkPaths { get; set; } = DefaultSettings.Current.ShowBookmarkPaths;
     public List<string>? ColumnOrder { get; set; } = DefaultSettings.Current.ColumnOrder.ToList();
+    public List<string>? EnabledColumns { get; set; }
     public List<string>? HiddenColumns { get; set; } = DefaultSettings.Current.HiddenColumns.ToList();
     public bool BoldAllFonts { get; set; } = DefaultSettings.Current.BoldAllFonts;
     public Dictionary<string, double>? FontSizes { get; set; } = new(DefaultSettings.Current.FontSizes, StringComparer.Ordinal);

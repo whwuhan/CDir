@@ -10,6 +10,7 @@ internal static class WindowAppearance
     private const int DoNotRound = 1;
     private static IntPtr DialogHook;
     private static HookProc? DialogHookCallback;
+    internal static int ShadowFrameApplicationCount { get; private set; }
 
     internal static void Initialize()
     {
@@ -36,6 +37,7 @@ internal static class WindowAppearance
     {
         var Handle = new WindowInteropHelper(Window).Handle;
         if (Handle == IntPtr.Zero) return -1;
+        ShadowFrameApplicationCount++;
         // A nonzero WindowChrome glass frame preserves the compositor's native
         // shadow. Keep native edge coloring neutral in both activation states.
         var Rendering = 2; // DWMNCRP_ENABLED

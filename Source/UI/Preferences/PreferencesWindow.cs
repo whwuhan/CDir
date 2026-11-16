@@ -34,13 +34,14 @@ internal sealed partial class PreferencesWindow : DialogWindow
     internal FrameworkElement UIPanel { get; }
     internal TextBlock DirectoryTreeAndTabBarHeading { get; }
     internal IReadOnlyDictionary<string, CheckBox> ColumnChecks { get; }
+    internal ColumnOptionsPanel ColumnChoices { get; }
     internal IReadOnlyDictionary<string, ComboBox> FontSizePickers { get; }
     internal IReadOnlyDictionary<string, TextBlock> FontSizeLabels { get; }
     internal Button RestoreDefaultsButton { get; }
 
     public PreferencesWindow(Window Owner, Action<string> OnLanguageChanged, bool ShowGridLines, Action<bool> OnGridLinesChanged,
         bool ShowHidden, Func<bool, Task> OnShowHiddenChanged, bool Use12HourClock, Action<bool> OnTimeFormatChanged,
-        IReadOnlyList<ColumnPreference> Columns, Func<string, bool, bool> OnColumnVisibilityChanged,
+        IReadOnlyList<ColumnPreference> Columns, Func<string, bool, bool> OnColumnEnabledChanged,
         bool BoldAllFonts, Action<bool> OnBoldAllFontsChanged,
         IReadOnlyList<UIFontOption> Fonts, Func<string, double, bool> OnFontSizeChanged, Func<PreferenceResetScope, Task> OnRestoreDefaults,
         IReadOnlyDictionary<string, string> Shortcuts, Func<string, string, bool> OnShortcutChanged,
@@ -364,9 +365,16 @@ internal sealed partial class PreferencesWindow : DialogWindow
         ColumnsHeading.SetResourceReference(TextBlock.FontWeightProperty, "UIHeadingFontWeight");
         ColumnsHeading.SetResourceReference(TextBlock.TextProperty, "TextVisibleColumns");
         UI.Children.Add(ColumnsHeading);
+        bool BasicDefaultColumn(string Key) => Key is "Name" or "Modified" or "TypeName" or "Size" or "FullPath" or "OriginalLocation" or "DateDeleted";
         var Checks = new Dictionary<string, CheckBox>(StringComparer.Ordinal);
         this.ColumnChecks = Checks;
         var UpdatingChecks = false;
+        this.ColumnChoices = new ColumnOptionsPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+        UI.Children.Add(this.ColumnChoices);
+        var ColumnLabel = new FrameworkElementFactory(typeof(TextBlock));
+        ColumnLabel.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
+        ColumnLabel.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        var ColumnLabelTemplate = new DataTemplate { VisualTree = ColumnLabel };
         void UpdateColumnChecks()
         {
             var BrowsingCount = Columns.Count(Option => !Option.SearchOnly && Checks[Option.Key].IsChecked == true);
@@ -377,21 +385,32 @@ internal sealed partial class PreferencesWindow : DialogWindow
         {
             var Check = new CheckBox
             {
-                IsChecked = Option.Visible,
-                Margin = new Thickness(0, 0, 0, 12),
+                IsChecked = Option.Enabled,
+                Margin = new Thickness(0, 0, 16, 8),
                 VerticalContentAlignment = VerticalAlignment.Center,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                ContentTemplate = ColumnLabelTemplate,
                 Tag = Option.Key
             };
-            Check.SetResourceReference(ContentControl.ContentProperty, "Text" + Option.ResourceKey);
-            Check.SetResourceReference(AutomationProperties.NameProperty, "Text" + Option.ResourceKey);
-            if (Option.SearchOnly) Check.SetResourceReference(ToolTipProperty, "TextSearchColumnHint");
+            if (Option.DisplayName is { } DisplayName)
+            {
+                Check.Content = DisplayName;
+                AutomationProperties.SetName(Check, DisplayName);
+            }
+            else
+            {
+                Check.SetResourceReference(ContentControl.ContentProperty, "Text" + Option.ResourceKey);
+                Check.SetResourceReference(AutomationProperties.NameProperty, "Text" + Option.ResourceKey);
+            }
+            if (Option.HintResourceKey is { } Hint) Check.SetResourceReference(ToolTipProperty, "Text" + Hint);
+            ToolTipService.SetShowOnDisabled(Check, true);
             Checks.Add(Option.Key, Check);
-            UI.Children.Add(Check);
+            this.ColumnChoices.Children.Add(Check);
             void ColumnChanged(object Sender, RoutedEventArgs E)
             {
                 if (UpdatingChecks || UpdatingPreferences) return;
                 var Visible = Check.IsChecked == true;
-                if (!OnColumnVisibilityChanged(Option.Key, Visible))
+                if (!OnColumnEnabledChanged(Option.Key, Visible))
                 {
                     UpdatingChecks = true;
                     Check.IsChecked = !Visible;
@@ -500,7 +519,7 @@ internal sealed partial class PreferencesWindow : DialogWindow
                     this.BoldAllFontsCheck.IsChecked = Defaults.BoldAllFonts;
                     this.GridLinesCheck.IsChecked = Defaults.ShowGridLines;
                     foreach (var Option in Fonts) Pickers[Option.Key].SelectedItem = Option.DefaultSize;
-                    foreach (var Check in Checks) Check.Value.IsChecked = !Defaults.HiddenColumns.Contains(Check.Key);
+                    foreach (var Check in Checks) Check.Value.IsChecked = !Defaults.HiddenColumns.Contains(Check.Key) && (BasicDefaultColumn(Check.Key));
                     UpdateColumnChecks();
                 }
                 if (Scope is PreferenceResetScope.All or PreferenceResetScope.TerminalTheme)
