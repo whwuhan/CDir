@@ -73,6 +73,13 @@ public partial class ExplorerTab
     private sealed class FileViewComparer(ExplorerTab Tab) : IComparer
     {
         private readonly System.Globalization.CompareInfo Comparison = LanguageService.Culture.CompareInfo;
+        private static int CompareShellValues(object? A, object? B, string TextA, string TextB)
+        {
+            if (A is null) return B is null ? 0 : -1;
+            if (B is null) return 1;
+            if (A.GetType() == B.GetType() && A is IComparable Comparable) return Comparable.CompareTo(B);
+            return System.Globalization.CultureInfo.CurrentCulture.CompareInfo.Compare(TextA, TextB);
+        }
         public int Compare(object? Left, object? Right)
         {
             if (Left is not FileEntry A || Right is not FileEntry B) return 0;
@@ -92,6 +99,7 @@ public partial class ExplorerTab
                 nameof(FileEntry.FullPath) => this.Comparison.Compare(A.FullPath, B.FullPath),
                 nameof(FileEntry.OriginalLocation) => this.Comparison.Compare(A.OriginalLocation, B.OriginalLocation),
                 nameof(FileEntry.DateDeleted) => Nullable.Compare(A.DateDeleted, B.DateDeleted),
+                _ when !BasicColumnKeys.Contains(Tab.SortProperty) => CompareShellValues(A.ShellSortValue(Tab.SortProperty), B.ShellSortValue(Tab.SortProperty), A[Tab.SortProperty], B[Tab.SortProperty]),
                 _ => FileNameComparer.Instance.Compare(A.Name, B.Name)
             };
             // Keep the existing ascending name tie-break for ordinary column

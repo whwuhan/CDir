@@ -183,7 +183,7 @@ public partial class ExplorerTab
         foreach (var Item in Menu.Items.OfType<MenuItem>())
         {
             if (Item.Tag is FileViewMode Mode) Item.IsChecked = Mode == this.Settings.FileView;
-            else if (Item.Tag is string Key && ColumnKeys.Contains(Key)) Item.IsEnabled = this.IsDetailsView && !IsRecycleColumn(Key);
+            else if (Item.Tag is string Key && ColumnKeys.Contains(Key)) Item.IsEnabled = this.IsDetailsView;
         }
     }
     private void SyncTileSelection()

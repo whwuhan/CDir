@@ -57,33 +57,58 @@ public partial class ExplorerTab
         this.HostWindow.PersistWorkspaceNow();
     }
 
+    private int ColumnFitVersion;
+    private Func<Task>? BeforeColumnMeasurementForTests;
+
     private async Task FitVisibleColumnsAsync(int Version)
     {
         if (!this.IsDetailsView) return;
+        var Fit = ++this.ColumnFitVersion;
+        var Search = this.SearchVersion;
+        bool Current() => Version == this.NavigationVersion && Search == this.SearchVersion
+            && Fit == this.ColumnFitVersion && !this.WindowClosed && this.IsDetailsView;
+        // Input and the first frame take precedence over optional text sizing.
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        if (!Current()) return;
         var Entries = this.FileGrid.Items.OfType<FileEntry>().ToArray();
         var Typeface = new Typeface(this.FileGrid.FontFamily, this.FileGrid.FontStyle, this.FileGrid.FontWeight, this.FileGrid.FontStretch);
         var Dpi = VisualTreeHelper.GetDpi(this.FileGrid).PixelsPerDip;
         var Culture = LanguageService.Culture;
         var Direction = this.FileGrid.FlowDirection;
         var FontSize = this.FileGrid.FontSize;
-        double Measure(string Text, double Size) => new FormattedText(Text, Culture, Direction,
-            Typeface, Size, Brushes.Black, Dpi).WidthIncludingTrailingWhitespace;
+        var HeaderSize = (double)this.FindResource("UIFontHeaders");
         var Slice = Stopwatch.StartNew();
         foreach (var Column in this.FileGrid.Columns.Where(Item => Item.Visibility == Visibility.Visible).ToArray())
         {
-            var Width = Measure(Convert.ToString(Column.Header, Culture) ?? "", (double)this.FindResource("UIFontHeaders")) + 39;
-            var Measured = new Dictionary<string, double>(StringComparer.Ordinal);
+            var Header = Convert.ToString(Column.Header, Culture) ?? "";
+            var Padding = Column.SortMemberPath == nameof(FileEntry.Name) ? 43 : 21;
+            var Texts = new HashSet<string>(StringComparer.Ordinal);
             foreach (var Entry in Entries)
             {
-                if (Version != this.NavigationVersion || this.WindowClosed || !this.IsDetailsView) return;
-                var Text = ColumnText(Entry, Column.SortMemberPath);
-                if (!Measured.TryGetValue(Text, out var TextWidth)) Measured[Text] = TextWidth = Measure(Text, FontSize);
-                Width = Math.Max(Width, TextWidth + (Column.SortMemberPath == nameof(FileEntry.Name) ? 43 : 21));
+                if (!Current()) return;
+                Texts.Add(ColumnText(Entry, Column.SortMemberPath));
                 if (Slice.ElapsedMilliseconds < 8) continue;
                 await Dispatcher.Yield(DispatcherPriority.Background);
                 Slice.Restart();
             }
-            if (Version != this.NavigationVersion || this.WindowClosed || !this.IsDetailsView) return;
+            // Snapshot model strings on their dispatcher; font shaping can then
+            // run without occupying it during cold font-cache/device recovery.
+            var Probe = AppMain.SmokeTest ? this.BeforeColumnMeasurementForTests : null;
+            var Width = await Task.Run(async () =>
+            {
+                if (Probe is not null) await Probe();
+                double Measure(string Text, double Size) => new FormattedText(Text, Culture, Direction,
+                    Typeface, Size, Brushes.Black, Dpi).WidthIncludingTrailingWhitespace;
+                var Maximum = Measure(Header, HeaderSize) + 39;
+                foreach (var Text in Texts)
+                {
+                    if (Volatile.Read(ref this.ColumnFitVersion) != Fit || Volatile.Read(ref this.NavigationVersion) != Version
+                        || Volatile.Read(ref this.SearchVersion) != Search || Volatile.Read(ref this.WindowClosed)) return Maximum;
+                    Maximum = Math.Max(Maximum, Measure(Text, FontSize) + Padding);
+                }
+                return Maximum;
+            });
+            if (!Current()) return;
             Column.MinWidth = 0;
             Column.Width = new DataGridLength(Math.Min(Column.MaxWidth, Math.Ceiling(Width)));
         }
@@ -98,7 +123,7 @@ public partial class ExplorerTab
         nameof(FileEntry.FullPath) => Entry.FullPath,
         nameof(FileEntry.OriginalLocation) => Entry.OriginalLocation ?? "",
         nameof(FileEntry.DateDeleted) => Entry.DisplayDateDeleted,
-        _ => ""
+        _ => Entry[Key]
     };
 
     private void AutoFitColumn(DataGridColumn Column)

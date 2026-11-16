@@ -113,6 +113,7 @@ public partial class ExplorerTab
         SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
         BoldAllFonts = this.Settings.BoldAllFonts,
         FontSizes = this.Settings.FontSizes is null ? null : new(this.Settings.FontSizes, StringComparer.Ordinal),
+        EnabledColumns = this.Settings.EnabledColumns?.ToList(),
         ColumnOrder = this.Settings.ColumnOrder?.ToList(), HiddenColumns = this.Settings.HiddenColumns?.ToList()
     };
 
@@ -130,7 +131,7 @@ public partial class ExplorerTab
         this.Settings.FontSizes = Source.FontSizes is null ? null : new(Source.FontSizes, StringComparer.Ordinal);
         this.ApplyUIFonts();
         this.ApplyGridLines();
-        this.RestoreColumnLayout(Source.ColumnOrder?.ToArray(), Source.HiddenColumns?.ToArray());
+        this.RestoreColumnLayout(Source.ColumnOrder?.ToArray(), Source.HiddenColumns?.ToArray(), Source.EnabledColumns?.ToArray());
         if (Source.ShowSidebarDriveUsage) this.QueueSidebarDriveUsageRefresh();
     }
 

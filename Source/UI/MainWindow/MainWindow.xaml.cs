@@ -100,9 +100,10 @@ public partial class MainWindow : Window
             if (this.WindowState != WindowState.Minimized) this.LastWorkspaceMaximized = this.WindowState == WindowState.Maximized;
             this.UpdateCaption();
         };
-        Activated += (_, _) => { this.LastActivatedUtc = DateTimeOffset.UtcNow; WindowAppearance.UseNeutralShadowFrame(this); };
-        Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); WindowAppearance.UseNeutralShadowFrame(this); };
-        Loaded += (_, _) => WindowAppearance.UseNeutralShadowFrame(this);
+        // DWM attributes belong to the HWND, not its activation state. Reapplying
+        // them synchronously on unlock waits for the recovering compositor.
+        Activated += (_, _) => this.LastActivatedUtc = DateTimeOffset.UtcNow;
+        Deactivated += (_, _) => { this.ActiveTab?.DismissSearchTips(); this.ActiveTab?.DismissFileDragFeedback(); };
         this.SeparatePinnedTabs = Settings.SeparatePinnedTabs;
         this.AttachTab(Initial);
         Initial.RefreshShellResources();
@@ -185,7 +186,9 @@ public partial class MainWindow : Window
         this.PreferencesMenuItem.InputGestureText = Page.PreferencesGesture;
         this.ActivePane.Selected = Page;
         foreach (var Tab in this.PaneTabs(this.ActivePane)) Tab.SetTabSelected(ReferenceEquals(Tab, Page));
-        if (Page.IsInitialContentReady) this.PresentTab(Page);
+        // A new window/pane has no previous content to retain. Its address bar,
+        // menus and navigation must accept input while the first read is pending.
+        if (Page.IsInitialContentReady || this.PresentedTab is null) this.PresentTab(Page);
         else
         {
             Page.Visibility = Visibility.Visible;

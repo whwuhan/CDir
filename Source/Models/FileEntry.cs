@@ -6,6 +6,14 @@ namespace CDir.Models;
 
 public sealed class FileEntry : INotifyPropertyChanged
 {
+    private readonly Dictionary<string, (string Text, object? Value)> ShellDetails = [];
+    public string this[string Key] => this.ShellDetails.TryGetValue(Key, out var Detail) ? Detail.Text : "";
+    internal object? ShellSortValue(string Key) => this.ShellDetails.TryGetValue(Key, out var Detail) ? Detail.Value : null;
+    internal void SetShellDetails(IReadOnlyDictionary<string, (string Text, object? Value)> Values)
+    {
+        foreach (var Pair in Values) this.ShellDetails[Pair.Key] = Pair.Value;
+        PropertyChanged?.Invoke(this, new("Item[]"));
+    }
     private bool CurrentIsRenaming;
     public bool IsRenaming
     {

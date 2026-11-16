@@ -220,11 +220,21 @@ public partial class ExplorerTab
                     && Dialog.DirectoryTreeAndTabBarHeading.TranslatePoint(new Point(0, Dialog.DirectoryTreeAndTabBarHeading.ActualHeight), Dialog.UIPanel).Y
                         <= Dialog.GridLinesCheck.TranslatePoint(new Point(), Dialog.UIPanel).Y,
                     "The localized directory tree and tab bar heading separates font sizes from UI options");
+                Check(((StackPanel)Dialog.UIPanel).Children.OfType<TextBlock>().Any(Label => Label.Text == LanguageService.Text("VisibleColumns")),
+                    "The UI column section uses the localized Columns heading");
                 Check(Dialog.ColumnChecks.Count == this.FileGrid.Columns.Count
                     && this.GetColumnPreferences().All(Option => Dialog.ColumnChecks[Option.Key].IsVisible
-                        && Dialog.ColumnChecks[Option.Key].IsChecked == Option.Visible
-                        && Dialog.ColumnChecks[Option.Key].Content?.ToString() == LanguageService.Text(Option.ResourceKey)),
+                        && Dialog.ColumnChecks[Option.Key].IsChecked == Option.Enabled
+                        && Dialog.ColumnChecks[Option.Key].Content?.ToString() == (Option.DisplayName ?? LanguageService.Text(Option.ResourceKey))),
                     "UI page exposes localized checkboxes for every column and reflects the saved visibility");
+                Check(this.GetColumnPreferences().Where(Option => Option.HintResourceKey is not null)
+                    .All(Option => Dialog.ColumnChecks[Option.Key].ToolTip?.ToString() == LanguageService.Text(Option.HintResourceKey!)
+                        && ToolTipService.GetShowOnDisabled(Dialog.ColumnChecks[Option.Key])),
+                    "Special column choices expose localized applicability hints even when disabled");
+                Check(Dialog.ColumnChoices.Children.Count == Dialog.ColumnChecks.Count
+                    && Dialog.ColumnChecks.Values.All(Choice => ReferenceEquals(Choice.Parent, Dialog.ColumnChoices))
+                    && Dialog.ColumnChoices.ItemWidth > 0 && Dialog.ColumnChoices.ItemWidth <= Dialog.ColumnChoices.ActualWidth,
+                    "All column choices participate in the responsive layout without changing their order or controls");
                 Check(Dialog.FontSizePickers.Count == 9 && this.GetFontOptions().All(Option =>
                     Dialog.FontSizePickers[Option.Key].SelectedItem is double Size && Size == Option.Size
                     && Dialog.FontSizeLabels[Option.Key].Text == LanguageService.Text(Option.ResourceKey)),
@@ -247,8 +257,10 @@ public partial class ExplorerTab
                                 .GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle);
                             ColumnToggle.Toggle();
                         }
+                        if (Choice.Value) this.ChangeColumnVisibility(Choice.Key, true);
+                        this.HostWindow.SynchronizeUIPreferences(this);
                         Check(ColumnCheck.IsChecked == Choice.Value
-                            && (this.Settings.HiddenColumns?.Contains(Choice.Key) != true) == Choice.Value,
+                            && this.IsColumnEnabled(Choice.Key) == Choice.Value,
                             "Column checkbox immediately updates and saves its selected visibility: " + Choice.Key);
                     }
                 Check(Dialog.FontSize == this.Settings.FontSizes!["Preferences"],
@@ -316,7 +328,7 @@ public partial class ExplorerTab
                 Check(Dialog.GeneralCategory.Content?.ToString() == LanguageService.Text("GeneralCategory")
                     && Dialog.TerminalThemeCategory.Content?.ToString() == LanguageService.Text("TerminalTheme")
                     && Dialog.UICategory.Content?.ToString() == LanguageService.Text("UICategory")
-                    && this.GetColumnPreferences().All(Option => Dialog.ColumnChecks[Option.Key].Content?.ToString() == LanguageService.Text(Option.ResourceKey))
+                    && this.GetColumnPreferences().All(Option => Dialog.ColumnChecks[Option.Key].Content?.ToString() == (Option.DisplayName ?? LanguageService.Text(Option.ResourceKey)))
                     && this.GetFontOptions().All(Option => Dialog.FontSizeLabels[Option.Key].Text == LanguageService.Text(Option.ResourceKey)),
                     "Preferences categories and column choices update when the interface language changes");
                 Check(Dialog.RestoreDefaultsButton.IsVisible && Dialog.RestoreDefaultsButton.IsEnabled
@@ -373,8 +385,8 @@ public partial class ExplorerTab
                             && this.HostWindow.PreferencesMenuItem.FontSize == 13 && this.HostWindow.FileMenu.FontSize == 13
                             && this.GetFontOptions().All(Option => Option.Size == Option.DefaultSize
                                 && Dialog.FontSizePickers[Option.Key].SelectedItem is double Size && Size == Option.DefaultSize)
-                            && Dialog.ColumnChecks.Values.All(Check => Check.IsChecked == true && Check.IsEnabled)
-                            && this.Settings.HiddenColumns!.Count == 0
+                            && this.GetColumnPreferences().All(Option => Dialog.ColumnChecks[Option.Key].IsChecked == Option.Enabled)
+                            && this.Settings.HiddenColumns!.All(Key => !BasicColumnKeys.Contains(Key))
                             && this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).SequenceEqual(ColumnKeys)
                             && this.Entries.All(Entry => !Entry.Use12HourClock),
                             "Restore Defaults immediately resets all Preferences and remains safe to repeat: " + Attempt);

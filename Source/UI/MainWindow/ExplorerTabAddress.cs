@@ -15,6 +15,7 @@ public partial class ExplorerTab
     private bool AddressLayoutQueued;
     private IReadOnlyList<AddressSegment> AddressSegments = [];
     private CancellationTokenSource? AddressNavigationDelay;
+    private ContextMenu? AddressChildrenMenu;
 
     internal IntPtr AddressWindowMouseMessage(IntPtr Window, int Message, IntPtr WParam, IntPtr LParam, ref bool Handled)
     {
@@ -38,6 +39,7 @@ public partial class ExplorerTab
 
     private void UpdateAddressPath(bool PreserveEditing = false)
     {
+        if (this.AddressChildrenMenu is { } Children) Children.IsOpen = false;
         if (this.AddressOverflowButton.ContextMenu is { } Menu) Menu.IsOpen = false;
         this.AddressSegments = this.IsVirtualLocation ? [new AddressSegment(CDir.Localization.LanguageService.Text(this.IsComputer ? "DirectoryTree" : "RecycleBin"), this.CurrentPath, "")]
             : AddressSegment.Create(this.CurrentPath);
@@ -53,6 +55,7 @@ public partial class ExplorerTab
 
     private void BeginAddressEdit()
     {
+        if (this.AddressChildrenMenu is { } Children) Children.IsOpen = false;
         this.CancelSidebarFolderClick();
         this.CancelAddressNavigation();
         if (!this.AddressEditing) this.AddressBox.Text = this.CurrentPath;
@@ -158,6 +161,51 @@ public partial class ExplorerTab
         }
         this.AddressOverflowButton.ContextMenu = Menu;
         Menu.IsOpen = true;
+    }
+
+    private async void AddressChildrenClick(object Sender, RoutedEventArgs E)
+    {
+        E.Handled = true;
+        this.CancelAddressNavigation();
+        if (Sender is not Button { Tag: AddressSegment Segment } Button || this.AddressFolderDragActive) return;
+        if (AppMain.SmokeTest && !this.IsVirtualLocation && !AppMain.IsInsideSmokeScope(Segment.FullPath)) return;
+        if (this.AddressChildrenMenu is { } Previous)
+        {
+            var ToggleClosed = Previous.IsOpen && ReferenceEquals(Previous.PlacementTarget, Button);
+            Previous.IsOpen = false;
+            if (ToggleClosed) { this.AddressChildrenMenu = null; return; }
+        }
+        var Version = this.NavigationVersion;
+        var Menu = new ContextMenu { PlacementTarget = Button, Placement = PlacementMode.Bottom,
+            Style = (Style)this.FindResource("ScrollableColumnContextMenu"), MaxHeight = Math.Min(420, SystemParameters.WorkArea.Height * .8) };
+        Menu.SetResourceReference(Control.FontFamilyProperty, "InterfaceFont");
+        Menu.Opened += (_, _) => Button.Content = "⌄";
+        Menu.Closed += (_, _) => Button.Content = "›";
+        this.AddressChildrenMenu = Menu;
+        try
+        {
+            var Children = this.IsComputer ? this.Roots.Select(Node => new DirectoryEntry(Node.Name, Node.FullPath)).ToArray()
+                : this.IsRecycleBin ? []
+                : await Task.Run(() => this.Files.GetDirectories(Segment.FullPath, this.Settings.ShowHidden).ToArray());
+            if (this.WindowClosed || Version != this.NavigationVersion || !ReferenceEquals(this.AddressChildrenMenu, Menu)) return;
+            foreach (var Child in Children.OrderBy(Child => Child.Name, CDir.Services.FileNameComparer.Instance))
+            {
+                var Label = new StackPanel { Orientation = Orientation.Horizontal };
+                Label.Children.Add(new CDir.Controls.ShellIcon { Path = Child.FullPath, IsDirectory = true, Width = 16, Height = 16, Margin = new Thickness(0, 0, 6, 0) });
+                Label.Children.Add(new TextBlock { Text = Child.Name, VerticalAlignment = VerticalAlignment.Center });
+                var Item = new MenuItem { Header = Label, Tag = Child.FullPath,
+                    ToolTip = Child.FullPath, IsCheckable = true,
+                    IsChecked = this.AddressSegments.Any(Part => SamePath(Part.FullPath, Child.FullPath)),
+                    Style = (Style)this.FindResource("ColumnToggleMenuItem") };
+                Item.Click += this.AddressSegmentClick;
+                Menu.Items.Add(Item);
+            }
+            if (Menu.Items.Count == 0) return;
+            Button.ContextMenu = Menu;
+            Menu.IsOpen = true;
+        }
+        catch (Exception Error) when (Error is System.IO.IOException or UnauthorizedAccessException)
+        { this.ShowNotice(CDir.Localization.LanguageService.Text("OpenLocationError", FriendlyError(Error)), true); }
     }
 
     private void AddressBreadcrumbScrollChanged(object Sender, ScrollChangedEventArgs E)

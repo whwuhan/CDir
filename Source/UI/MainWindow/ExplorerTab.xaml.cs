@@ -74,9 +74,9 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.ApplyUIFonts();
         AppMain.RecordSmokeProgress("Loading window XAML");
         InitializeComponent();
-        this.PreviewMouseDown += (_, _) => { this.StartupInteraction |= this.IsInitialContentReady; this.CancelWheelScrolling(); };
-        this.PreviewMouseWheel += (_, _) => this.StartupInteraction |= this.IsInitialContentReady;
-        this.PreviewKeyDown += (_, _) => { this.StartupInteraction |= this.IsInitialContentReady; this.CancelWheelScrolling(); };
+        this.PreviewMouseDown += (_, _) => { this.StartupInteraction |= this.PageLoaded; this.CancelWheelScrolling(); };
+        this.PreviewMouseWheel += (_, _) => this.StartupInteraction |= this.PageLoaded;
+        this.PreviewKeyDown += (_, _) => { this.StartupInteraction |= this.PageLoaded; this.CancelWheelScrolling(); };
         this.ShowBookmarkPaths = this.Settings.ShowBookmarkPaths;
         this.ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage;
         CutClipboardChanged += this.RefreshCutFeedback;
@@ -85,7 +85,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         this.RestoreSidebarWidth(this.Settings.SidebarWidth);
         this.ApplyShortcutHints();
         this.ApplyUIFonts();
-        this.RestoreColumnLayout(this.Settings.ColumnOrder, this.Settings.HiddenColumns);
+        this.RestoreColumnLayout(this.Settings.ColumnOrder, this.Settings.HiddenColumns, this.Settings.EnabledColumns);
         this.ApplyFileView();
         AppMain.RecordSmokeProgress("Initializing window state");
         this.InitializeVersionControl();
@@ -127,13 +127,17 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (TreeKey is null || !this.SidebarSections.Any(Section => this.SidebarSectionKey(Section) == TreeKey)) TreeKey = "folder-tree";
         var TreeLayouts = this.Settings.SidebarTreeLayouts;
         var SidebarOffset = this.Settings.SidebarScrollOffset;
+        this.InitialNavigationVersion = this.NavigationVersion + 1;
         if (!await this.NavigateAsync(Initial, RevealTree: false, SyncNavigationTree: false, TreeKey: TreeKey)
+            && this.NavigationVersion == this.InitialNavigationVersion
             && !AppMain.SmokeTest && !string.Equals(Initial, Home, StringComparison.OrdinalIgnoreCase))
+        {
+            this.InitialNavigationVersion = this.NavigationVersion + 1;
             await this.NavigateAsync(Home, RevealTree: false, SyncNavigationTree: false, TreeKey: TreeKey);
-        this.InitialNavigationVersion = this.NavigationVersion;
+        }
         this.IsInitialContentReady = true;
         this.HostWindow.TabReady(this);
-        if (this.IsTabSelected) this.RestoreTabFocus();
+        if (this.IsTabSelected && !this.StartupInteraction) this.RestoreTabFocus();
         // Paint and service input before optional device and sidebar restoration.
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
         var LoadedFavorites = await Favorites;
@@ -235,6 +239,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
     private async Task<bool> NavigateAsync(string Raw, int? HistoryIndex = null, bool RecordHistory = true, bool PreserveFilter = false, bool RevealTree = true, bool SyncNavigationTree = true, string TreeKey = "folder-tree")
     {
         if (RecordHistory && !HistoryIndex.HasValue) ++this.BrowseHistoryEpoch;
+        this.RememberBrowseState();
         this.CancelInlineRename();
         this.DismissFileDragFeedback();
         SmoothWheelScroll.Cancel(FindVisualChild<ScrollViewer>(this.ActiveFileControl));
@@ -300,27 +305,38 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             {
                 this.History.RemoveRange(this.HistoryIndex + 1, this.History.Count - this.HistoryIndex - 1);
                 this.HistoryTreeKeys.RemoveRange(this.HistoryIndex + 1, this.HistoryTreeKeys.Count - this.HistoryIndex - 1);
+                foreach (var Key in this.BrowseStates.Keys.Where(Key => Key > this.HistoryIndex).ToArray()) this.BrowseStates.Remove(Key);
                 this.History.Add(this.CurrentPath);
                 this.HistoryTreeKeys.Add(TreeKey);
                 this.HistoryIndex = this.History.Count - 1;
             }
             this.UseNavigationTree(TreeKey);
-            this.UpdateAddressPath(PreserveEditing: this.AddressEditing && !RecordHistory && PreserveFilter && SamePath(OldPath, this.CurrentPath));
+            this.UpdateAddressPath(PreserveEditing: this.AddressEditing && (!this.IsInitialContentReady
+                || !RecordHistory && PreserveFilter && SamePath(OldPath, this.CurrentPath)));
             if (!PreserveFilter) this.SearchBox.Text = "";
             this.ShowEntries(this.FolderEntries, SearchSelection);
+            // The directory is committed. Optional sizing/tree recovery must not
+            // keep Open, navigation and Preferences disabled behind a drawn frame.
+            this.Loading = false;
+            this.UpdateActions();
+            if (!this.IsInitialContentReady)
+            {
+                this.IsInitialContentReady = true;
+                this.HostWindow.TabReady(this);
+            }
+            if (SelectPath is not null) this.SelectPath(SelectPath);
+            this.ConfigureWatcher();
+            this.ScheduleVersionRefresh();
+            this.QueueSearch(Debounce: false, Selection: SelectPath is null ? SearchSelection : [SelectPath]);
             // Fit newly opened folders; explicit refresh commands refit after the filtered list is ready.
             if (!Computer && !PreserveFilter && this.Settings.AutoFitColumnsOnNavigation)
                 await this.FitVisibleColumnsAsync(Version);
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
-            if (SelectPath is not null) this.SelectPath(SelectPath);
-            this.ConfigureWatcher();
             if (Computer) this.SelectSidebarNode(null);
             else if (SyncNavigationTree)
                 await this.SyncNavigationTreeAsync(TreeKey, this.CurrentPath, Version,
                     Reveal: RevealTree && (RecordHistory || HistoryIndex.HasValue || this.ActiveFileControl.IsKeyboardFocusWithin));
             if (Version != this.NavigationVersion || this.WindowClosed) return false;
-            this.ScheduleVersionRefresh();
-            this.QueueSearch(Debounce: false, Selection: SelectPath is null ? SearchSelection : [SelectPath]);
             return true;
         }
         catch (OperationCanceledException) when (ReadToken.IsCancellationRequested) { return false; }
@@ -555,7 +571,10 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
             if (this.WindowClosed || Epoch != this.BrowseHistoryEpoch) return;
             var Index = this.HistoryIndex + (Forward ? 1 : -1);
             if (Index >= 0 && Index < this.History.Count)
-                await this.NavigateAsync(this.History[Index], Index, TreeKey: this.HistoryTreeKeys[Index]);
+            {
+                if (await this.NavigateAsync(this.History[Index], Index, TreeKey: this.HistoryTreeKeys[Index]))
+                    await this.RestoreBrowseStateAsync(Index, this.NavigationVersion);
+            }
         }
         finally { this.BrowseHistoryGate.Release(); }
     }
@@ -1028,7 +1047,7 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         new PreferencesWindow(this.HostWindow, Code => this.ChangeLanguage(Code), this.Settings.ShowGridLines,
             Value => this.ChangeSharedUI(() => this.ChangeGridLines(Value)),
             this.Settings.ShowHidden, this.ChangeShowHiddenAsync, this.Settings.Use12HourClock, this.ChangeTimeFormat,
-            this.GetColumnPreferences(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeColumnVisibility(Key, Value)),
+            this.GetColumnPreferences(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeColumnEnabled(Key, Value)),
             this.Settings.BoldAllFonts, Value => this.ChangeSharedUI(() => this.ChangeBoldAllFonts(Value)),
             this.GetFontOptions(), (Key, Value) => this.TryChangeSharedUI(() => this.ChangeUIFontSize(Key, Value)),
             this.RestoreDefaultPreferencesAsync, this.ShortcutBindings, this.ChangeShortcut,
@@ -1049,6 +1068,8 @@ public partial class ExplorerTab : UserControl, INotifyPropertyChanged
         if (this.WindowClosed) return;
         this.EndMarqueeSelection();
         this.WindowClosed = true;
+        this.ShellColumnsCancellation?.Cancel();
+        if (this.AddressChildrenMenu is { } Children) Children.IsOpen = false;
         this.CloseRecycleBinView();
         CutClipboardChanged -= this.RefreshCutFeedback;
         this.ClearFileTransferFeedback();

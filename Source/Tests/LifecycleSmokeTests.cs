@@ -16,6 +16,7 @@ public partial class ExplorerTab
 {
     private async Task RunLifecycleSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunStartupResponsivenessSmokeAsync(Passed);
         await this.RunExitGeometrySmokeChecksAsync(Passed);
         await this.RunWorkspaceRecoverySmokeChecksAsync(Passed);
         await this.RunWorkspaceStartupSmokeChecksAsync(Passed);

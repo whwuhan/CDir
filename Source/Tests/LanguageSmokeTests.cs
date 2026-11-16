@@ -78,7 +78,7 @@ public partial class ExplorerTab
             IndependentSettings.ColumnOrder!.Reverse();
             var FreshSettings = new AppSettings();
             Check(FreshSettings.FontSizes!["Menus"] == 13 && FreshSettings.HiddenColumns!.Count == 0
-                && FreshSettings.ColumnOrder!.SequenceEqual(ColumnKeys),
+                && FreshSettings.ColumnOrder!.SequenceEqual(BasicColumnKeys),
                 "Changing user settings cannot mutate the shared JSON default configuration");
             Check(InitialLanguage == "en-US" && this.Settings.Language == "en-US"
                 && this.HostWindow.Title == LanguageService.Text("WindowTitle") && this.HostWindow.FileMenuButton.Content?.ToString() == "File",
@@ -172,7 +172,7 @@ public partial class ExplorerTab
                 Check(this.HostWindow.Title == LanguageService.Text("WindowTitle")
                     && Application.Current.Resources["TextWindowTitle"]?.ToString() == LanguageService.Text("WindowTitle")
                     && this.FileGrid.Columns.Select(Column => Column.Header?.ToString()).SequenceEqual(
-                        new[] { "NameColumn", "ModifiedColumn", "TypeColumn", "SizeColumn", "AbsolutePathColumn" }.Select(Key => LanguageService.Text(Key)))
+                        this.FileGrid.Columns.Select(Column => LanguageService.Text(ColumnResourceKey(Column.SortMemberPath))))
                     && this.StatusText.Text.StartsWith(LanguageService.Text("SearchResultsCount", 2), StringComparison.Ordinal)
                     && this.SelectionStatusText.IsVisible && this.SelectionStatusText.Text == LanguageService.Text("SelectedCount", 1),
                     Code + " window and column resources update",
@@ -184,7 +184,7 @@ public partial class ExplorerTab
                         ["Header"] = this.FileGrid.Columns[0].Header?.ToString(),
                         ["ExpectedHeader"] = LanguageService.Text("NameColumn"),
                         ["AllHeaders"] = this.FileGrid.Columns.Select(Column => Column.Header?.ToString()).ToArray(),
-                        ["AllExpectedHeaders"] = new[] { "NameColumn", "ModifiedColumn", "TypeColumn", "SizeColumn", "AbsolutePathColumn" }.Select(Key => LanguageService.Text(Key)).ToArray(),
+                        ["AllExpectedHeaders"] = this.FileGrid.Columns.Select(Column => LanguageService.Text(ColumnResourceKey(Column.SortMemberPath))).ToArray(),
                         ["ExpectedStatusStartsWith"] = LanguageService.Text("SearchResultsCount", 2),
                         ["Status"] = this.StatusText.Text,
                         ["SelectionStatus"] = this.SelectionStatusText.Text,
@@ -301,7 +301,7 @@ public partial class ExplorerTab
             Check(this.SaveSettings(DefaultsFile), "Restored defaults save to an owned settings file");
             var Defaults = ReadSettings(DefaultsFile);
             Check(Defaults.Language == "en-US" && !Defaults.ShowGridLines && !Defaults.ShowHidden && !Defaults.Use12HourClock
-                && Defaults.HiddenColumns is { Count: 0 } && Defaults.ColumnOrder!.SequenceEqual(ColumnKeys)
+                && Defaults.HiddenColumns!.All(Key => !BasicColumnKeys.Contains(Key)) && Defaults.ColumnOrder!.SequenceEqual(ColumnKeys)
                 && FontPanels.All(Panel => Defaults.FontSizes![Panel.Key] == Panel.DefaultSize)
                 && Defaults.FontSizes!["Headers"] == 13 && Defaults.FontSizes["StatusBar"] == 13
                 && Defaults.FontSizes["Sidebar"] == 13 && Defaults.FontSizes["Menus"] == 13,

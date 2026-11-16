@@ -84,6 +84,7 @@ public partial class ExplorerTab
         Check(this.CurrentPath.Length > 0 && this.View is not null, "initial folder loaded");
         Check(SamePath(this.AddressBox.Text, this.CurrentPath), "address reflects current folder");
         Check(this.FolderTree.SelectedItem is FolderNode SelectedNode && SamePath(SelectedNode.FullPath, this.CurrentPath), "directory tree follows navigation");
+        await this.RunBrowsePositionSmokeAsync(Passed);
         var Initial = this.CurrentPath;
         var Child = this.Entries.FirstOrDefault(X => X.IsDirectory);
         if (Child is not null)

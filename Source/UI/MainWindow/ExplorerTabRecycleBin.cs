@@ -78,6 +78,7 @@ public partial class ExplorerTab
             {
                 this.History.RemoveRange(this.HistoryIndex + 1, this.History.Count - this.HistoryIndex - 1);
                 this.HistoryTreeKeys.RemoveRange(this.HistoryIndex + 1, this.HistoryTreeKeys.Count - this.HistoryIndex - 1);
+                foreach (var Key in this.BrowseStates.Keys.Where(Key => Key > this.HistoryIndex).ToArray()) this.BrowseStates.Remove(Key);
                 this.History.Add(this.CurrentPath);
                 this.HistoryTreeKeys.Add("quick-access");
                 this.HistoryIndex = this.History.Count - 1;
@@ -182,23 +183,8 @@ public partial class ExplorerTab
 
     private void ApplyRecycleBinColumns()
     {
-        foreach (var Column in this.FileGrid.Columns.Where(Column => IsRecycleColumn(Column.SortMemberPath)).ToArray())
-            this.FileGrid.Columns.Remove(Column);
-        if (this.IsRecycleBin)
-        {
-            var PathStyle = new Style(typeof(TextBlock), (Style)this.FindResource("FileMetadataText"));
-            PathStyle.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
-            PathStyle.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(nameof(FileEntry.OriginalLocation))));
-            var Original = new DataGridTextColumn { Header = LanguageService.Text("OriginalLocationColumn"), SortMemberPath = nameof(FileEntry.OriginalLocation),
-                Binding = new Binding(nameof(FileEntry.OriginalLocation)), Width = 300, MinWidth = 160,
-                ElementStyle = PathStyle };
-            var Deleted = new DataGridTextColumn { Header = LanguageService.Text("DateDeletedColumn"), SortMemberPath = nameof(FileEntry.DateDeleted),
-                Binding = new Binding(nameof(FileEntry.DisplayDateDeleted)), Width = 200,
-                ElementStyle = (Style)this.FindResource("FileMetadataText") };
-            this.FileGrid.Columns.Add(Original);
-            this.FileGrid.Columns.Add(Deleted);
-        }
-        else if (IsRecycleColumn(this.SortProperty))
+        this.InitializeShellColumns();
+        if (!this.IsRecycleBin && IsRecycleColumn(this.SortProperty))
         {
             this.SortProperty = nameof(FileEntry.Name);
             this.SortDirection = System.ComponentModel.ListSortDirection.Ascending;

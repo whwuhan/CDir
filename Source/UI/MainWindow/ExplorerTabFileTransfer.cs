@@ -19,6 +19,8 @@ public partial class ExplorerTab
     }
     private bool SidebarFileTransferFeedback;
     private bool ReplaceTransferConflictsInSmoke;
+    private bool ReceivingFileDrop;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IDataObject, object> MaterializedFileDrags = new();
 
     private static bool HasFileDrop(IDataObject Data)
     {
@@ -34,6 +36,7 @@ public partial class ExplorerTab
         if (Selection.Length > 0 && Selection.All(Entry => Entry.ShellId is not null))
             Data.SetData(ShellDropData.Format, new MemoryStream(ShellDropData.Create(Selection.Select(Entry => Entry.ShellId!).ToArray())));
         else Data.SetData(DataFormats.FileDrop, Selection.Select(Entry => Entry.FullPath).ToArray());
+        MaterializedFileDrags.Add(Data, new object());
         return Data;
     }
 
@@ -150,7 +153,19 @@ public partial class ExplorerTab
     private DragDropEffects ShowFileTransferFeedback(IDataObject Data, DependencyObject? Source, bool Sidebar, DragDropEffects Allowed)
     {
         this.ClearFileTransferFeedback();
-        if (this.FileTransferTarget(Source, Sidebar) is not { } Target || this.PlanFileTransfer(Data, Target.Path, Allowed) is not { } Plan) return DragDropEffects.None;
+        if (this.ReceivingFileDrop || this.WindowClosed || this.OperationBusy || this.Loading
+            || this.FileTransferTarget(Source, Sidebar) is not { } Target || ShellLocations.IsVirtual(Target.Path)
+            || (!HasFileDrop(Data) && !ShellDropData.IsPresent(Data))) return DragDropEffects.None;
+        // Hovering must only query advertised formats, never request delayed contents.
+        var Copy = this.Settings.CopyOnDrop;
+        if ((Allowed & (Copy ? DragDropEffects.Copy : DragDropEffects.Move)) == 0)
+        {
+            if (!Copy || (Allowed & DragDropEffects.Move) == 0 || !ShellDropData.IsPresent(Data)) return DragDropEffects.None;
+            Copy = false; // Provisional; the resolved drop validates Recycle Bin identity.
+        }
+        var Plan = MaterializedFileDrags.TryGetValue(Data, out _)
+            ? this.PlanFileTransfer(Data, Target.Path, Allowed) : new FileTransferPlan([], Target.Path, Copy);
+        if (Plan is null) return DragDropEffects.None;
         if (Target.Element is Button AddressButton && this.AddressBreadcrumbs.IsAncestorOf(AddressButton))
         {
             this.CancelAddressNavigation();
@@ -209,11 +224,19 @@ public partial class ExplorerTab
         E.Handled = true;
         E.Effects = DragDropEffects.None;
         this.ClearFileTransferFeedback();
-        if (this.FileTransferTarget(E.OriginalSource as DependencyObject, ReferenceEquals(Sender, this.SidebarPanel)) is not { } Target
-            || this.PlanFileTransfer(E.Data, Target.Path, E.AllowedEffects) is not { } Plan) return;
+        if (this.ReceivingFileDrop || this.OperationBusy || this.Loading || this.WindowClosed
+            || this.FileTransferTarget(E.OriginalSource as DependencyObject, ReferenceEquals(Sender, this.SidebarPanel)) is not { } Target
+            || ShellLocations.IsVirtual(Target.Path) || (!HasFileDrop(E.Data) && !ShellDropData.IsPresent(E.Data))) return;
+        this.ReceivingFileDrop = true;
         try
         {
-            var Completion = this.ExecuteFileTransferAsync(Plan);
+            var Completion = ReceiveAsync();
+            async Task<FileTransferPlan?> ReceiveAsync()
+            {
+                var Snapshot = await DropDataSnapshot.ReadAsync(E.Data);
+                if (this.WindowClosed || this.PlanFileTransfer(Snapshot, Target.Path, E.AllowedEffects) is not { } Resolved) return null;
+                return await this.ExecuteFileTransferAsync(Resolved) ? Resolved : null;
+            }
             if (!Completion.IsCompleted)
             {
                 // Keep the OLE drop alive until its actual result is known while the UI continues pumping.
@@ -227,7 +250,7 @@ public partial class ExplorerTab
                 _ = FinishFrame();
                 if (!Completion.IsCompleted) Dispatcher.PushFrame(Frame);
             }
-            if (Completion.GetAwaiter().GetResult())
+            if (Completion.GetAwaiter().GetResult() is { } Plan)
             {
                 E.Effects = Plan.Effect;
                 if (Plan.ShellItemIds is not null)
@@ -244,5 +267,6 @@ public partial class ExplorerTab
             }
         }
         catch (Exception Error) { this.ShowNotice(LanguageService.Text("OperationIncomplete", FriendlyError(Error)), true); }
+        finally { this.ReceivingFileDrop = false; }
     }
 }
