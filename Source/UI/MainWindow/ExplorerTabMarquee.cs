@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -19,22 +20,67 @@ public partial class ExplorerTab
     private ModifierKeys MarqueeModifiers;
     private HashSet<FileEntry> MarqueeInitialSelection = [];
     private DispatcherTimer? MarqueeScrollTimer;
+    private double MarqueeGroupHeaderHeight;
 
-    private (ScrollViewer Viewer, Rect Bounds, double RowHeight, double Offset)? MarqueeViewport()
+    private (ScrollViewer Viewer, Rect Bounds, double RowHeight, double Offset, (int Start, int Count)[]? Groups, double HeaderHeight)? MarqueeViewport()
     {
         var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
         var Presenter = Viewer is null ? null : FindVisualChild<ScrollContentPresenter>(Viewer);
         if (Viewer is null || Presenter is null || Presenter.ActualWidth <= 0 || Presenter.ActualHeight <= 0) return null;
         if (!this.IsDetailsView && FindVisualChild<CDir.Controls.FileTilePanel>(this.FileTiles) is { } Tiles)
-            return (Viewer, new Rect(Presenter.TranslatePoint(new Point(), this.ActiveFileControl), Presenter.RenderSize), Tiles.CellHeight, Tiles.VerticalOffset);
+            return (Viewer, new Rect(Presenter.TranslatePoint(new Point(), this.ActiveFileControl), Presenter.RenderSize), Tiles.CellHeight, Tiles.VerticalOffset, null, 0);
         var FirstRow = FindVisualChild<DataGridRow>(this.FileGrid);
         var Height = FirstRow is { ActualHeight: > 0 } ? FirstRow.ActualHeight : this.FileGrid.RowHeight;
         if (!double.IsFinite(Height) || Height <= 0) return null;
         var Bounds = new Rect(Presenter.TranslatePoint(new Point(), this.ActiveFileControl), Presenter.RenderSize);
+        var Groups = this.MarqueeRowGroups();
+        if (Groups is not null && FindVisualChild<GroupItem>(this.FileGrid) is { } Group
+            && Group.Template?.FindName("PART_Header", Group) is FrameworkElement { ActualHeight: > 0 } Header)
+            this.MarqueeGroupHeaderHeight = Header.ActualHeight;
+        var HeaderHeight = Groups is null ? 0 : this.MarqueeGroupHeaderHeight;
         // Use a realized row to account for both item and pixel scrolling, including DPI rounding.
-        var Offset = FirstRow is null ? 0 : this.FileGrid.ItemContainerGenerator.IndexFromContainer(FirstRow) * Height
-            - (FirstRow.TranslatePoint(new Point(), this.ActiveFileControl).Y - Bounds.Top);
-        return (Viewer, Bounds, Height, Offset);
+        // Grouped rows belong to their GroupItem's generator, so locate them in the flat view order.
+        var Index = FirstRow is null ? -1 : Groups is null ? this.FileGrid.ItemContainerGenerator.IndexFromContainer(FirstRow)
+            : this.FileGrid.Items.IndexOf(FirstRow.Item);
+        var Offset = Index < 0 ? 0 : MarqueeRowTop(Index, Height, Groups, HeaderHeight)
+            - (FirstRow!.TranslatePoint(new Point(), this.ActiveFileControl).Y - Bounds.Top);
+        return (Viewer, Bounds, Height, Offset, Groups, HeaderHeight);
+    }
+
+    // Details groups are laid out as one header followed by their rows, in the
+    // same order as the flat view. Returns null when the grid is not grouped.
+    private (int Start, int Count)[]? MarqueeRowGroups()
+    {
+        if (this.FileGroupProperty.Length == 0 || this.View?.Groups is not { Count: > 0 } Groups) return null;
+        var Result = new (int Start, int Count)[Groups.Count];
+        var Start = 0;
+        for (var Index = 0; Index < Groups.Count; Index++)
+        {
+            var Count = Groups[Index] is CollectionViewGroup Group ? Group.ItemCount : 0;
+            Result[Index] = (Start, Count);
+            Start += Count;
+        }
+        return Result;
+    }
+
+    private static double MarqueeRowTop(int Index, double RowHeight, (int Start, int Count)[]? Groups, double HeaderHeight)
+    {
+        if (Groups is null) return Index * RowHeight;
+        var Group = 0;
+        while (Group < Groups.Length - 1 && Index >= Groups[Group].Start + Groups[Group].Count) Group++;
+        return (Group + 1) * HeaderHeight + Index * RowHeight;
+    }
+
+    private static IEnumerable<int> MarqueeRowsIn(Rect Selection, int ItemCount, double RowHeight, (int Start, int Count)[]? Groups, double HeaderHeight)
+    {
+        foreach (var (Start, Count, Top) in Groups is null ? [(0, ItemCount, 0d)]
+            : Groups.Select((Group, Index) => (Group.Start, Group.Count, (Index + 1) * HeaderHeight + Group.Start * RowHeight)))
+        {
+            if (Count <= 0) continue;
+            var First = Start + (int)Math.Clamp(Math.Floor((Selection.Top - Top) / RowHeight), 0, Count);
+            var Last = Start + (int)Math.Clamp(Math.Ceiling((Selection.Bottom - Top) / RowHeight), 0, Count) - 1;
+            for (var Index = First; Index <= Math.Min(Last, ItemCount - 1); Index++) yield return Index;
+        }
     }
 
     private bool CanStartMarqueeSelection(DependencyObject? Source, Point Origin, ModifierKeys Modifiers, int ClickCount)
@@ -100,9 +146,7 @@ public partial class ExplorerTab
         }
         else if (Selection.Width > 0 && Selection.Height > 0 && Selection.Right > Viewport.Bounds.Left && Selection.Left < ContentRight)
         {
-            var First = Math.Max(0, (int)Math.Floor(Selection.Top / Viewport.RowHeight));
-            var Last = Math.Min(this.FileGrid.Items.Count - 1, (int)Math.Ceiling(Selection.Bottom / Viewport.RowHeight) - 1);
-            for (var Index = First; Index <= Last; Index++)
+            foreach (var Index in MarqueeRowsIn(Selection, this.FileGrid.Items.Count, Viewport.RowHeight, Viewport.Groups, Viewport.HeaderHeight))
             {
                 if (this.FileGrid.Items[Index] is not FileEntry Entry) continue;
                 if (this.MarqueeModifiers.HasFlag(ModifierKeys.Control) && this.MarqueeInitialSelection.Contains(Entry)) Desired.Remove(Entry);

@@ -1,5 +1,9 @@
 # 文件系统、语言与版本控制回归测试
 
+递归搜索的 Git/SVN 徽标包含在 version-control 界面组：从仓库之外搜索两层子目录中的真实 Git/SVN 工作副本，核对干净、修改和无仓库文件，并检查详细信息、大图标、列表和平铺的实际图标绑定，仓库还原后原地更新徽标，以及替换查询后移除旧作用域。主面板只为匹配结果的目录查询浅层 SVN 属性，保留单次批量查询和缓存，不扫描无关的搜索根子目录。搜索行宿主修复同时用 grouping 检查分组和 10,000 项虚拟化。
+
+搜索结果列宽与地址/搜索分隔条使用 `-Group language -UIGroup search,address,columns,panes,shortcuts,lifecycle -PublishConfiguration` 合并验证。search 增加仅位于子目录的一条结果、极宽列和最右横向滚动后 Alt+E、F5、自动列宽、关闭自动列宽、空结果与查询取消，检查实际单元格仍被创建且可见，输出 SearchResultsAfterFit/AutomaticFit.png 和 SearchFitRegression.json。address 通过实际 GridSplitter 的局部拖动事件检查双向调整、最小宽度、草稿与查询不变、单窗格 Alt+R、标签隔离和窗口缩放恢复；panes 验证均分同时重置每个窗格的地址/搜索宽度。不移动鼠标、不发送全局输入。
+
 启动与恢复响应性使用 lifecycle 组：暂停后台字体测量，检查首个页面在目录读取前可命中、内容提交后 Open 与 Preferences 可用、等待期间真实打开其他目录，以及迟到的列宽/工作区恢复不覆盖新目录、搜索和手动列宽；本地触发激活/停用事件验证不重复同步设置 DWM 边框，不锁定或切换用户桌面。navigation、columns、tabs、panes 检查导航与列宽、多标签和分栏兼容。
 
 偏好设置的 Columns 使用自适应多列布局，保留顺序、勾选语义与字号，长名称换行。columns 组检查宽/窄窗口及 24 号字号的真实布局，生成 PreferencesColumnsWide/Narrow/LargeFont/Special 和 PreferencesColumnTooltip 截图；language 后台组及 columns、language 界面组覆盖四语适用范围提示，区分回收站专用属性、普通创建时间和音视频/图像等元数据，并检查列菜单、表头及禁用选项的提示。

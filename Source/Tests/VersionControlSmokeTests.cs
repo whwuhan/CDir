@@ -20,6 +20,7 @@ public partial class ExplorerTab
         var SvnTool = VersionControlService.FindExecutable("svn");
         var SvnAdmin = VersionControlService.FindExecutable("svnadmin");
         if (GitTool is null || SvnTool is null || SvnAdmin is null) return;
+        await this.RunSearchVersionBadgesSmokeAsync(Passed, GitTool, SvnTool, SvnAdmin);
         var InitialPath = this.CurrentPath;
         var InitialSearch = this.SearchBox.Text;
         var InitialCategories = this.CustomCategories.ToArray();

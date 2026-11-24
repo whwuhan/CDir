@@ -56,6 +56,35 @@ internal sealed partial class ShellContextMenu
         finally { DestroyMenu(Handle); }
     }
 
+    internal sealed record HistoryCommand(string Text, bool Enabled, bool Redo);
+
+    // Windows' folder view lists Undo/Redo with the pending operation's name, for
+    // example "Undo Delete Ctrl+Z", only while its undo stack has that entry.
+    internal static IReadOnlyList<HistoryCommand> ReadHistoryCommands(object Bound)
+    {
+        var Menu = (IContextMenu)Bound;
+        var Handle = CreatePopupMenu();
+        if (Handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+        try
+        {
+            var Result = Menu.QueryContextMenu(Handle, 0, 1, 0x7fff, 4);
+            Marshal.ThrowExceptionForHR(Result);
+            var Commands = new List<HistoryCommand>();
+            for (uint Index = 0; Index < (Result & 0xffff); Index++)
+            {
+                var Verb = new StringBuilder(256);
+                if (Menu.GetCommandString(Index, 4, IntPtr.Zero, Verb, (uint)Verb.Capacity) < 0) continue;
+                var Redo = string.Equals(Verb.ToString(), HistoryVerb(true), StringComparison.OrdinalIgnoreCase);
+                if (!Redo && !string.Equals(Verb.ToString(), HistoryVerb(false), StringComparison.OrdinalIgnoreCase)) continue;
+                var Text = new StringBuilder(512);
+                if (GetMenuString(Handle, Index + 1, Text, Text.Capacity, 0) <= 0) continue;
+                Commands.Add(new(Text.ToString(), (GetMenuState(Handle, Index + 1, 0) & 3) == 0, Redo));
+            }
+            return Commands;
+        }
+        finally { DestroyMenu(Handle); }
+    }
+
     // Invoke Explorer's canonical background command, not a CDir backup replay.
     internal static void Replay(IntPtr Owner, string FolderPath, bool Redo)
     {

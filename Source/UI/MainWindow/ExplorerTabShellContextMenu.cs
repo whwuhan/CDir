@@ -63,10 +63,13 @@ public partial class ExplorerTab
             else if (this.ActiveFileItems.ItemContainerGenerator.ContainerFromItem(this.FileGrid.SelectedItem) is FrameworkElement Row)
                 Position = Row.PointToScreen(new Point(Math.Min(80, Row.ActualWidth), Row.ActualHeight));
             else Position = this.ActiveFileControl.PointToScreen(new Point(16, 32));
+            var History = Paths.Length == 0 && !this.IsRecycleBin ? this.ReadExplorerHistoryAsync() : null;
             using var Menu = new ShellContextMenu(Source.Handle, this.IsRecycleBin ? this.RecycleBinViewTarget : this.CurrentPath, Paths,
                 Extended: (Keyboard.Modifiers & ModifierKeys.Shift) != 0,
                 ShellItemIds: this.IsRecycleBin ? Entries.Select(Entry => Entry.ShellId!).ToArray() : null,
-                ViewSettings: new(this.Settings.FileView, this.SortProperty, this.SortDirection == ListSortDirection.Descending, this.FileGroupProperty, this.FileGroupDescending, !this.IsComputer, this.CanPasteBackground()));
+                ViewSettings: new(this.Settings.FileView, this.SortProperty, this.SortDirection == ListSortDirection.Descending, this.FileGroupProperty, this.FileGroupDescending, !this.IsComputer, this.CanPasteBackground(),
+                    this.ExplorerGroupColumns()));
+            if (History is not null) Menu.AddHistoryCommands(await History);
             var Id = Menu.Show(Source, Position);
             if (Id == 0) this.FocusMainFilePanel();
             await this.ExecuteShellCommandAsync(Menu, Id);
@@ -143,11 +146,11 @@ public partial class ExplorerTab
         }
     }
 
-    private Task<bool> DeleteShellSelectionAsync(string[] Paths, bool Permanently)
+    private async Task<bool> DeleteShellSelectionAsync(string[] Paths, bool Permanently)
     {
         this.CancelInlineRename();
         var Delete = this.DeleteShellItems;
-        return this.RunOperationAsync(LanguageService.Text("Recycling"), () =>
+        var Result = await this.RunOperationAsync(LanguageService.Text("Recycling"), () =>
         {
             var TopLevel = Paths.Where(Path => !Paths.Any(Other => !SamePath(Path, Other)
                 && Path.StartsWith(Other.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -156,6 +159,8 @@ public partial class ExplorerTab
             Delete(TopLevel, Permanently);
         },
             LanguageService.Text("RecycleComplete"), RequiresSta: true);
+        if (!Permanently) ShellIconService.InvalidatePath(ShellLocations.RecycleBin);
+        return Result;
     }
 
 }

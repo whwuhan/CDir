@@ -10,7 +10,7 @@ namespace CDir.Services;
 /// <summary>Hosts native Windows Shell menus and Explorer-style background view commands.</summary>
 internal sealed partial class ShellContextMenu : IDisposable
 {
-    internal sealed record MenuEntry(uint Id, string Text, bool Enabled, bool HasIcon, bool IsSeparator, IReadOnlyList<MenuEntry> Children);
+    internal sealed record MenuEntry(uint Id, string Text, bool Enabled, bool HasIcon, bool IsSeparator, IReadOnlyList<MenuEntry> Children, bool Checked = false);
     private readonly int ThreadId = Environment.CurrentManagedThreadId;
     private readonly IntPtr Owner;
     private readonly string WorkingDirectory;
@@ -254,7 +254,7 @@ internal sealed partial class ShellContextMenu : IDisposable
             }
             return new MenuEntry(GetMenuItemID(Menu, Index), Text.ToString(), (Info.State & 3) == 0,
                 Info.Bitmap != IntPtr.Zero || (Info.Type & 0x100) != 0, (Info.Type & 0x800) != 0,
-                Submenu == IntPtr.Zero ? [] : Read(Submenu));
+                Submenu == IntPtr.Zero ? [] : Read(Submenu), (Info.State & 8) != 0);
         }).ToArray();
     }
 

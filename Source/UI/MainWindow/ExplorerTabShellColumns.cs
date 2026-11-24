@@ -73,9 +73,11 @@ public partial class ExplorerTab
                 }
                 Dispatcher.Invoke(() =>
                 {
-                    if (Cancellation.IsCancellationRequested || this.WindowClosed || this.NavigationVersion != Version || !Keys.Contains(this.SortProperty)) return;
+                    var Regroup = Keys.Contains(this.FileGroupProperty);
+                    if (Cancellation.IsCancellationRequested || this.WindowClosed || this.NavigationVersion != Version || !Keys.Contains(this.SortProperty) && !Regroup) return;
                     var Viewer = FindVisualChild<ScrollViewer>(this.ActiveFileControl);
                     var Vertical = Viewer?.VerticalOffset ?? 0; var Horizontal = Viewer?.HorizontalOffset ?? 0;
+                    if (Regroup) { var Today = DateTime.Today; foreach (var Entry in this.Entries) this.AssignFileGroup(Entry, Today); }
                     this.View?.Refresh(); this.ActiveFileControl.UpdateLayout();
                     Viewer?.ScrollToVerticalOffset(Vertical); Viewer?.ScrollToHorizontalOffset(Horizontal);
                 }, System.Windows.Threading.DispatcherPriority.Background);

@@ -135,19 +135,19 @@ public partial class ExplorerTab
         if (this.IsVirtualLocation)
         {
             this.CancelSearch();
-            this.SearchTask = Task.CompletedTask;
+            this.SearchTask = this.Settings.AutoFitColumnsOnNavigation ? this.FitVisibleColumnsAsync(this.NavigationVersion) : Task.CompletedTask;
             this.ApplyColumnVisibility();
             this.View?.Refresh();
             this.UpdateCounts();
             if (!this.CurrentSearch.IsActive && this.FolderRefreshPending) this.ScheduleRefresh();
             return;
         }
-        if (!this.Loading) this.QueueSearch();
+        if (!this.Loading) this.QueueSearch(FitColumns: true);
     }
 
     private bool MatchesFilter(object Entry) => Entry is FileEntry File && this.CurrentSearch.Matches(File);
 
-    private void QueueSearch(bool Debounce = true, IEnumerable<string>? Selection = null, bool RevealSelection = true)
+    private void QueueSearch(bool Debounce = true, IEnumerable<string>? Selection = null, bool RevealSelection = true, bool FitColumns = false)
     {
         if (this.IsVirtualLocation)
         {
@@ -172,7 +172,8 @@ public partial class ExplorerTab
         if (!this.CurrentSearch.IsActive || this.CurrentSearch.ErrorKey is not null)
         {
             this.ShowEntries(this.CurrentSearch.ErrorKey is null ? this.FolderEntries : [], Selected, RevealSelection);
-            this.SearchTask = Task.CompletedTask;
+            this.SearchTask = FitColumns && this.Settings.AutoFitColumnsOnNavigation
+                ? this.FitVisibleColumnsAsync(this.NavigationVersion) : Task.CompletedTask;
         }
         else
         {
@@ -211,13 +212,14 @@ public partial class ExplorerTab
                 {
                     if (!Known.Add(Entry.FullPath)) continue;
                     Entry.Use12HourClock = this.Settings.Use12HourClock;
-                    Entry.VersionStatus = this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Contains(Entry.FullPath))?.GetStatus(Entry.FullPath)
+                    Entry.VersionStatus = this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Covers(Entry.FullPath))?.GetStatus(Entry.FullPath)
                         ?? VersionStatus.None;
                     this.AssignFileGroup(Entry, Today);
                     Items.Add(Entry);
                 }
                 foreach (var Path in this.PendingSearchSelection.ToArray()) this.SelectPath(Path, Append: true, Reveal: RevealSelection);
                 this.UpdateCounts();
+                this.ScheduleVersionRefresh();
             }, DispatcherPriority.Background, Token);
         }
         try
@@ -235,7 +237,6 @@ public partial class ExplorerTab
         {
             if (IsCurrent())
             {
-                this.SearchCancellation = null;
                 this.Searching = false;
                 this.PendingSearchSelection.Clear();
                 if (Query.ErrorKey is not null) this.ShowEntries([]);
@@ -243,7 +244,19 @@ public partial class ExplorerTab
                 this.UpdateActions();
                 this.UpdateCounts();
                 if (Failure is not null) this.ShowNotice(Failure, true);
+                if (this.Settings.AutoFitColumnsOnNavigation && this.IsDetailsView)
+                {
+                    // Include late recursive matches and enabled Shell values.
+                    // Never rebuild the result collection just to measure it.
+                    try
+                    {
+                        await this.ShellColumnsTask.WaitAsync(Token);
+                        if (IsCurrent()) await this.FitVisibleColumnsAsync(this.NavigationVersion);
+                    }
+                    catch (OperationCanceledException) when (!IsCurrent()) { }
+                }
             }
+            if (ReferenceEquals(this.SearchCancellation, Cancellation)) this.SearchCancellation = null;
             Cancellation.Dispose();
         }
     }

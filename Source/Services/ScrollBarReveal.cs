@@ -72,6 +72,11 @@ public static class ScrollBarReveal
         if (Vertical && Viewer.Template?.FindName("PART_VerticalScrollBar", Viewer) is ScrollBar VerticalBar) State(VerticalBar)?.Scroll();
     }
 
+    internal static void RevealScrollBar(ScrollBar Bar)
+    {
+        if (GetRevealOnScroll(Bar)) State(Bar)?.Scroll();
+    }
+
     private static RevealState? State(ScrollBar Bar)
     {
         // Only explicitly enabled regions participate; ordinary scrollbars stay visible.

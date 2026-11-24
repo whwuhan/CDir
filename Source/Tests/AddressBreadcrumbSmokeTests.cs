@@ -15,6 +15,7 @@ public partial class ExplorerTab
 {
     private async Task RunAddressBreadcrumbSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunNavigationFieldResizeSmokeAsync(Passed);
         var InitialPath = this.CurrentPath;
         var InitialSearch = this.SearchBox.Text;
         var FixtureId = Guid.NewGuid().ToString("N");
