@@ -162,7 +162,11 @@ public partial class ExplorerTab
             this.FolderRefreshPending = false;
             if (RebuildRows) await this.RebuildFileViewAsync(() => !this.WindowClosed && this.IsRecycleBin
                 && Navigation == this.NavigationVersion && Request == this.RecycleReadVersion);
-            else this.RefreshFileRows(Entries);
+            else
+            {
+                this.RefreshFileRows(Entries);
+                ShellIconService.InvalidatePath(ShellLocations.RecycleBin);
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception Error) when (Error is COMException or IOException or UnauthorizedAccessException)

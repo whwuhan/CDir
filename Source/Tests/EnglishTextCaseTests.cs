@@ -6,7 +6,7 @@ internal sealed partial class RegressionRunner
     // These resources are prose or status fragments; all other English resources are functional captions.
     private static readonly HashSet<string> SentenceCaseKeys =
     [
-        "FolderViewApplied", "FolderViewsReset",
+        "FolderViewApplied", "FolderViewsReset", "PasteShortcutComplete", "PasteShortcutUnavailable", "ResizeAddressSearchHint",
         "OriginalLocationColumnHint", "DateDeletedColumnHint", "DateCreatedColumnHint", "RecycleColumnHint", "AudioColumnHint", "VideoColumnHint",
         "ImageColumnHint", "DocumentColumnHint", "ContactColumnHint", "MessageColumnHint", "VersionControlColumnHint", "WindowsColumnHint",
         "ResetScopeQuestion", "RestoringFiles", "RestoreComplete", "DeletingFiles", "DeleteComplete", "HistoryStorageProtected", "HistoryHint", "HistoryEmpty", "HistoryChanged", "NothingToUndo", "NothingToRedo", "Undoing", "Redoing", "UndoComplete", "RedoComplete",

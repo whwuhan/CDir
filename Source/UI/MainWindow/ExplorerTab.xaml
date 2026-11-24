@@ -408,7 +408,7 @@
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="{DynamicResource UINavigationRowHeight}" /><RowDefinition Height="*" /><RowDefinition Height="{DynamicResource UIStatusRowHeight}" /></Grid.RowDefinitions>
       <Border x:Name="NavigationBar" Grid.Row="0" Background="{StaticResource SurfaceMiddle}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="12,5">
-        <Grid>
+        <Grid x:Name="NavigationFields" SizeChanged="NavigationFieldsSizeChanged">
           <Grid.Resources>
             <Style x:Key="CompactNavigationButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
               <Setter Property="Width" Value="28" /><Setter Property="Height" Value="28" /><Setter Property="FontSize" Value="12" />
@@ -435,7 +435,10 @@
               </Style.Triggers>
             </Style>
           </Grid.Resources>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="200" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="120" /><ColumnDefinition x:Name="AddressFieldColumn" Width="*" MinWidth="72" /><ColumnDefinition Width="8" /><ColumnDefinition x:Name="SearchFieldColumn" Width="200" MinWidth="96" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+          <GridSplitter x:Name="AddressSearchSplitter" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="False" KeyboardIncrement="8" DragStarted="AddressSearchDragStarted" DragCompleted="AddressSearchDragCompleted" ToolTip="{DynamicResource TextResizeAddressSearchHint}" AutomationProperties.Name="{DynamicResource TextResizeAddressSearch}">
+            <GridSplitter.Template><ControlTemplate TargetType="GridSplitter"><Border Background="{TemplateBinding Background}"><Border x:Name="Grip" Width="1" Height="18" VerticalAlignment="Center" Background="{StaticResource Line}" /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="{StaticResource Muted}" /></Trigger></ControlTemplate.Triggers></ControlTemplate></GridSplitter.Template>
+          </GridSplitter>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="BackButton" Style="{StaticResource CompactNavigationButton}" Content="&#xE72B;" ToolTip="{DynamicResource TextBackTooltip}" AutomationProperties.Name="{DynamicResource TextBack}" Click="BackClick" IsEnabled="False" />
             <Button x:Name="ForwardButton" Style="{StaticResource CompactNavigationButton}" Content="&#xE72A;" ToolTip="{DynamicResource TextForwardTooltip}" AutomationProperties.Name="{DynamicResource TextForward}" Click="ForwardClick" IsEnabled="False" />
@@ -689,6 +692,8 @@
               </ScrollViewer>
               </StackPanel>
             </StackPanel>
+            <ScrollBar x:Name="CategoryOverlayScrollBar" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Bottom" Visibility="Collapsed"
+                       Minimum="0" SmallChange="16" ValueChanged="CategoryOverlayScrollValueChanged" AutomationProperties.Name="{DynamicResource TextDirectoryTree}" />
             <Border x:Name="SidebarDropMarker" Height="2" Background="{StaticResource FocusOutline}" VerticalAlignment="Top" Margin="12,0,10,0" IsHitTestVisible="False" Visibility="Collapsed" />
             <Border x:Name="SidebarCategoryDropHighlight" Background="#600078D4" BorderBrush="{StaticResource FocusOutline}" BorderThickness="1" CornerRadius="0" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False" Visibility="Collapsed" />
           </Grid>
@@ -734,6 +739,9 @@
                       IsKeyboardFocusWithinChanged="FileGridKeyboardFocusWithinChanged" PreviewKeyDown="FileGridPreviewKeyDown" LostMouseCapture="FileGridLostMouseCapture">
               <DataGrid.ItemsPanel><ItemsPanelTemplate><controls:FileListRowsPresenter /></ItemsPanelTemplate></DataGrid.ItemsPanel>
               <DataGrid.GroupStyle><GroupStyle>
+                <!-- WPF can use GroupStyle.Panel for an initially empty flat view.
+                     Keep a DataGridRowsPresenter even before recursive matches arrive. -->
+                <GroupStyle.Panel><ItemsPanelTemplate><controls:FileListRowsPresenter /></ItemsPanelTemplate></GroupStyle.Panel>
                 <GroupStyle.ContainerStyle><Style TargetType="GroupItem">
                   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="GroupItem">
                     <StackPanel><ContentPresenter x:Name="PART_Header" /><ItemsPresenter x:Name="ItemsPresenter" /></StackPanel>

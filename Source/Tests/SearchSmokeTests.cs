@@ -33,6 +33,7 @@ public partial class ExplorerTab
 
     private async Task RunSearchSmokeChecksAsync(List<string> Passed)
     {
+        await this.RunSearchColumnFitSmokeAsync(Passed);
         var InitialPath = this.CurrentPath;
         var InitialSearch = this.SearchBox.Text;
         var InitialHidden = this.Settings.ShowHidden;

@@ -37,6 +37,8 @@ public static class ShellIconService
     // Only the explicit, isolated smoke-test process may install a scheduling probe.
     internal static Action<string>? BeforeThumbnailReadForTests;
     public static event EventHandler? CacheInvalidated;
+    internal static event EventHandler<string>? PathInvalidated;
+    internal static long CurrentGeneration => Volatile.Read(ref Generation);
 
     static ShellIconService()
     {
@@ -59,7 +61,15 @@ public static class ShellIconService
 
     public static Task<ImageSource?> GetIconAsync(string? Path, bool IsDirectory, int Size = 16, bool OpenFolder = false, bool ShowThumbnails = false, long ThumbnailStamp = 0, CancellationToken CancellationToken = default)
     {
-        if (CancellationToken.IsCancellationRequested) return Task.FromCanceled<ImageSource?>(CancellationToken);
+        var PendingResult = GetIconResultAsync(Path, IsDirectory, Size, OpenFolder, ShowThumbnails, ThumbnailStamp, CancellationToken);
+        if (PendingResult.IsCompletedSuccessfully) return Task.FromResult(PendingResult.Result.Image);
+        return UnwrapAsync(PendingResult);
+        static async Task<ImageSource?> UnwrapAsync(Task<ShellIconLoadResult> Task) => (await Task.ConfigureAwait(false)).Image;
+    }
+
+    internal static Task<ShellIconLoadResult> GetIconResultAsync(string? Path, bool IsDirectory, int Size = 16, bool OpenFolder = false, bool ShowThumbnails = false, long ThumbnailStamp = 0, CancellationToken CancellationToken = default)
+    {
+        if (CancellationToken.IsCancellationRequested) return Task.FromCanceled<ShellIconLoadResult>(CancellationToken);
         var Pixels = NormalizeSize(Size);
         var Normalized = NormalizePath(Path);
         var Kind = GetStockKind(Normalized, IsDirectory, OpenFolder);
@@ -67,11 +77,11 @@ public static class ShellIconService
         var Key = new IconKey(Normalized ?? string.Empty, IsDirectory, Pixels, OpenFolder && IsDirectory, ShowThumbnails && !IsDirectory && Pixels > 32, ShowThumbnails && !IsDirectory && Pixels > 32 ? ThumbnailStamp : 0);
         lock (Sync)
         {
-            if (TryGetCached(Key, out var Cached)) return Task.FromResult<ImageSource?>(Cached);
+            if (TryGetCached(Key, out var Cached)) return Task.FromResult(new ShellIconLoadResult(Cached, Retryable: false));
             if (Normalized is null && GetCachedStock(Kind, Pixels, false) is { } Stock)
-                return Task.FromResult<ImageSource?>(Stock);
+                return Task.FromResult(new ShellIconLoadResult(Stock, Retryable: false));
             if (Pending.TryGetValue(Key, out var Existing) && !Existing.Abandoned) return Subscribe(Existing, CancellationToken);
-            if (Stopping) return Task.FromResult<ImageSource?>(GetCachedStock(Kind, Pixels));
+            if (Stopping) return Task.FromResult(new ShellIconLoadResult(GetCachedStock(Kind, Pixels), Retryable: false));
 
             var Request = new IconRequest(Key, Kind, Generation);
             Request.Result = WaitForResultAsync(Request);
@@ -85,13 +95,26 @@ public static class ShellIconService
 
     private static void Enqueue(IconRequest Request, bool ExtractThumbnail)
     {
-        // Called under Sync. Prefer newly-visible rows during virtualized scrolling.
+        // Called under Sync. Discard canceled entries before evicting an active item.
+        static void DropAbandoned(Queue<IconRequest> Source)
+        {
+            while (Source.Count > 0 && Source.Peek().Abandoned)
+            {
+                var Stale = Source.Dequeue();
+                if (Pending.TryGetValue(Stale.Key, out var Current) && ReferenceEquals(Current, Stale)) Pending.Remove(Stale.Key);
+                Stale.Completion.TrySetResult(new ShellIconLoadResult(GetCachedStock(Stale.Kind, Stale.Key.Size), Retryable: true));
+            }
+        }
+        DropAbandoned(Queue);
+        DropAbandoned(ThumbnailQueue);
+        // Prefer newly-visible rows during virtualized scrolling, and mark evicted
+        // items retryable so visible controls keep their icon and reload after the burst.
         if (Queue.Count + ThumbnailQueue.Count >= QueueCapacity)
         {
             var OldQueue = ThumbnailQueue.Count > 0 && (Queue.Count == 0 || ThumbnailQueue.Peek().CreatedAt <= Queue.Peek().CreatedAt) ? ThumbnailQueue : Queue;
             var Dropped = OldQueue.Dequeue();
             if (Pending.TryGetValue(Dropped.Key, out var Current) && ReferenceEquals(Current, Dropped)) Pending.Remove(Dropped.Key);
-            Dropped.Completion.TrySetResult(GetCachedStock(Dropped.Kind, Dropped.Key.Size));
+            Dropped.Completion.TrySetResult(new ShellIconLoadResult(GetCachedStock(Dropped.Kind, Dropped.Key.Size), Retryable: true));
         }
         if (ExtractThumbnail) { ThumbnailQueue.Enqueue(Request); ThumbnailWorkAvailable.Release(); }
         else { Queue.Enqueue(Request); WorkAvailable.Set(); }
@@ -99,11 +122,11 @@ public static class ShellIconService
 
     // Cancellation belongs to a caller, not a shared native request. Recycled rows
     // abandon queued work only after its last subscriber has left.
-    private static Task<ImageSource?> Subscribe(IconRequest Request, CancellationToken Cancellation)
+    private static Task<ShellIconLoadResult> Subscribe(IconRequest Request, CancellationToken Cancellation)
     {
         Request.Consumers++;
         return Wait();
-        async Task<ImageSource?> Wait()
+        async Task<ShellIconLoadResult> Wait()
         {
             try { return await Request.Result.WaitAsync(Cancellation).ConfigureAwait(false); }
             finally
@@ -140,11 +163,11 @@ public static class ShellIconService
     {
         lock (Sync)
         {
-            Generation++;
+            Volatile.Write(ref Generation, Generation + 1);
             Cache.Clear();
             Recent.Clear();
             foreach (var Request in Pending.Values)
-                Request.Completion.TrySetResult(GetCachedStock(Request.Kind, Request.Key.Size));
+                Request.Completion.TrySetResult(new ShellIconLoadResult(GetCachedStock(Request.Kind, Request.Key.Size), Retryable: true));
             Pending.Clear();
             Queue.Clear();
             ThumbnailQueue.Clear();
@@ -153,12 +176,39 @@ public static class ShellIconService
         CacheInvalidated?.Invoke(null, EventArgs.Empty);
     }
 
+    /// <summary>Refreshes cached icons for one location (such as the Recycle Bin) without flushing unrelated entries.</summary>
+    internal static void InvalidatePath(string? Path)
+    {
+        var Normalized = NormalizePath(Path);
+        if (Normalized is null) return;
+        lock (Sync)
+        {
+            foreach (var Key in Cache.Keys.Where(Entry => string.Equals(Entry.Path, Normalized, StringComparison.OrdinalIgnoreCase)).ToArray())
+                if (Cache.Remove(Key, out var Node)) Recent.Remove(Node);
+            foreach (var Key in Pending.Keys.Where(Entry => string.Equals(Entry.Path, Normalized, StringComparison.OrdinalIgnoreCase)).ToArray())
+            {
+                if (!Pending.Remove(Key, out var Request)) continue;
+                Request.Abandoned = true;
+                Request.Completion.TrySetResult(new ShellIconLoadResult(GetCachedStock(Request.Kind, Request.Key.Size), Retryable: true));
+            }
+        }
+        PathInvalidated?.Invoke(null, Normalized);
+    }
+
+    internal static bool SameIconPath(string? Raw, string NormalizedTarget)
+    {
+        if (string.IsNullOrWhiteSpace(Raw)) return false;
+        if (string.Equals(Raw, NormalizedTarget, StringComparison.OrdinalIgnoreCase)) return true;
+        if (ShellLocations.IsVirtual(NormalizedTarget)) return false;
+        return string.Equals(NormalizePath(Raw), NormalizedTarget, StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static ShellIconDiagnostics GetDiagnostics()
     {
         lock (Sync) return new(Cache.Count, Pending.Count, Queue.Count + ThumbnailQueue.Count, Interlocked.Read(ref NativeRequestCount), StockCache.Count);
     }
 
-    private static async Task<ImageSource?> WaitForResultAsync(IconRequest Request)
+    private static async Task<ShellIconLoadResult> WaitForResultAsync(IconRequest Request)
     {
         try
         {
@@ -171,7 +221,7 @@ public static class ShellIconService
         {
             // Windows offers no safe cancellation for a running SHGetFileInfo call. Bound the caller's
             // wait while leaving at most one native call active; never spawn replacement threads.
-            lock (Sync) return GetCachedStock(Request.Kind, Request.Key.Size);
+            lock (Sync) return new ShellIconLoadResult(GetCachedStock(Request.Kind, Request.Key.Size), Retryable: true);
         }
     }
 
@@ -200,9 +250,11 @@ public static class ShellIconService
                 BitmapSource? Icon = null;
                 var Succeeded = false;
                 var NeedsExtraction = false;
+                var ExpiredInQueue = false;
                 try
                 {
-                    if (!Request.Abandoned && (Request.Key.Thumbnail || Environment.TickCount64 - Request.CreatedAt <= RequestTimeoutMilliseconds))
+                    ExpiredInQueue = !Request.Key.Thumbnail && Environment.TickCount64 - Request.CreatedAt > RequestTimeoutMilliseconds;
+                    if (!Request.Abandoned && !ExpiredInQueue)
                     {
                         if (Thumbnails && AppMain.SmokeTest) Volatile.Read(ref BeforeThumbnailReadForTests)?.Invoke(Request.Key.Path);
                         if (Request.Key.Thumbnail && !Thumbnails)
@@ -235,10 +287,10 @@ public static class ShellIconService
                     }
                     if (Pending.TryGetValue(Request.Key, out var Current) && ReferenceEquals(Current, Request))
                         Pending.Remove(Request.Key);
-                    if (!Request.Abandoned && Request.Key.Path.Length > 0 && Request.Generation == Generation)
+                    if (!Request.Abandoned && !ExpiredInQueue && Request.Key.Path.Length > 0 && Request.Generation == Generation)
                         AddCached(Request.Key, Icon, Succeeded ? CacheLifetimeMilliseconds : FailureLifetimeMilliseconds);
                 }
-                Request.Completion.TrySetResult(Icon);
+                Request.Completion.TrySetResult(new ShellIconLoadResult(Icon, Retryable: ExpiredInQueue));
             }
         }
         catch (Exception Error) when (Error is not OutOfMemoryException and not StackOverflowException)
@@ -253,7 +305,7 @@ public static class ShellIconService
             {
                 Stopping = true;
                 foreach (var Request in Pending.Values)
-                    Request.Completion.TrySetResult(GetCachedStock(Request.Kind, Request.Key.Size));
+                    Request.Completion.TrySetResult(new ShellIconLoadResult(GetCachedStock(Request.Kind, Request.Key.Size), Retryable: false));
                 Pending.Clear(); Queue.Clear(); ThumbnailQueue.Clear();
             }
             WorkAvailable.Set();
@@ -488,10 +540,11 @@ public static class ShellIconService
         public int Consumers;
         public bool Started;
         public bool Abandoned;
-        public TaskCompletionSource<ImageSource?> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task<ImageSource?> Result { get; set; } = Task.FromResult<ImageSource?>(null);
+        public TaskCompletionSource<ShellIconLoadResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<ShellIconLoadResult> Result { get; set; } = Task.FromResult(new ShellIconLoadResult(null, Retryable: false));
     }
 
+    internal readonly record struct ShellIconLoadResult(ImageSource? Image, bool Retryable);
     internal sealed record ShellIconDiagnostics(int CacheCount, int PendingCount, int QueuedCount, long NativeRequestCount, int StockCacheCount);
 
     [Flags]

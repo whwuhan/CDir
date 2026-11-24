@@ -59,6 +59,7 @@ public partial class ExplorerTab
             Surface.ColumnDefinitions[0].Width = new GridLength(4, GridUnitType.Star);
             Surface.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star); await Settle();
             var Pages = Probe.Tabs.ToArray(); var Paths = Pages.Select(Page => Page.TabPath).ToArray();
+            foreach (var Page in Pages) Page.SearchFieldColumn.Width = new GridLength(300);
             var KeyResult = await Press(B, Key.R, ModifierKeys.Alt);
             var Widths = Probe.Panes.Select(Pane => Pane.ActualWidth).ToArray();
             var RightRows = Probe.Panes.Where(Pane => Pane.Selected != A).ToArray();
@@ -66,6 +67,8 @@ public partial class ExplorerTab
                 && Math.Abs(RightRows[0].ActualHeight - RightRows[1].ActualHeight) < 1
                 && Math.Abs(Original.ActualHeight - RightRows.Sum(Pane => Pane.ActualHeight) - 5) < 1,
                 "Alt+R gives the single left pane and the two stacked right panes equal column widths and equal right-row heights");
+            Check(Pages.All(Page => Page.SearchContainer.ActualWidth >= 96 && Page.SearchContainer.ActualWidth <= 200.5),
+                "Alt+R also restores default address/search widths in every balanced pane");
             var State = Probe.CaptureWorkspace()!;
             Check(State.Layout?.Split == "Horizontal" && Math.Abs(State.Layout.Ratio - .5) < .001
                 && State.Layout.Second?.Split == "Vertical" && State.Layout.Second.Ratio == .5,

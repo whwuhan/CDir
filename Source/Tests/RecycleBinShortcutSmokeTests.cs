@@ -118,7 +118,7 @@ public partial class ExplorerTab
                 }
                 finally { Release.Set(); await Opening; }
                 Check(Cancelled && SamePath(this.CurrentPath, InitialPath) && this.Entries.Select(Item => Item.FullPath).SequenceEqual(Snapshot.Select(Item => Item.FullPath))
-                    && !this.FileGrid.Columns.Any(Column => IsRecycleColumn(Column.SortMemberPath)),
+                    && !this.FileGrid.Columns.Any(Column => IsRecycleColumn(Column.SortMemberPath) && Column.Visibility == Visibility.Visible),
                     "Cancelled Recycle Bin batches cannot overwrite a newer folder or restore its columns");
             }
             this.ReadRecycleEntries = ReadFixture;
@@ -230,7 +230,7 @@ public partial class ExplorerTab
                 this.HostWindow.Width = SavedWidth;
             }
             await this.BackAsync();
-            Check(SamePath(this.CurrentPath, InitialPath) && this.FileGrid.IsVisible && !this.FileGrid.Columns.Any(Column => IsRecycleColumn(Column.SortMemberPath)),
+            Check(SamePath(this.CurrentPath, InitialPath) && this.FileGrid.IsVisible && !this.FileGrid.Columns.Any(Column => IsRecycleColumn(Column.SortMemberPath) && Column.Visibility == Visibility.Visible),
                 "Back restores ordinary browsing and removes the Recycle Bin-only columns");
             await this.ForwardAsync();
             Check(this.IsRecycleBin && this.Entries.Count == 3, "Forward restores the Recycle Bin common-grid view");

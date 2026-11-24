@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using CDir.Controls;
 using CDir.Models;
+using CDir.Models;
 using CDir.Services;
 
 namespace CDir.UI;
@@ -113,6 +114,8 @@ public partial class ExplorerTab
     private void SidebarScrollChanged(object Sender, ScrollChangedEventArgs E)
     {
         this.UpdateStickySidebar();
+        this.UpdateCategoryOverlayScrollBar();
+        if (E.HorizontalChange != 0 && E.OriginalSource is ScrollViewer Viewer) this.RevealCategoryOverlayOnScroll(Viewer);
         if (Math.Abs(E.VerticalChange) > 0 || E.ExtentHeightChange != 0 || E.ViewportHeightChange != 0)
             this.ScheduleVersionRefresh();
     }
@@ -155,8 +158,14 @@ public partial class ExplorerTab
         var Navigation = this.NavigationVersion;
         this.VersionQueryNavigation = Navigation;
         this.VersionQueryIncludesSidebar = false;
+        var MainEntries = this.CurrentSearch.IsActive ? this.View?.Cast<FileEntry>() ?? [] : this.Entries;
         var MainDirectories = new[] { this.CurrentPath }
-            .Concat(this.Entries.Where(Entry => Entry.IsDirectory && Entry.Name is not ".git" and not ".svn").Select(Entry => Entry.FullPath)).ToArray();
+            .Concat(MainEntries.Where(Entry => Entry.IsDirectory && Entry.Name is not ".git" and not ".svn").Select(Entry => Entry.FullPath))
+            // Recursive results can be files inside deeper/nested repositories.
+            // SVN's shallow scopes must include each result's containing folder.
+            .Concat(this.CurrentSearch.IsActive ? MainEntries.Where(Entry => !Entry.IsDirectory)
+                .Select(Entry => Path.GetDirectoryName(Entry.FullPath)!).Where(Directory => Directory is not null) : [])
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var Directories = MainDirectories.Concat(this.VisibleVersionNodes().Select(Node => Node.FullPath))
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
         if (this.VersionReadEpoch == Epoch && this.VersionReadNavigation == Navigation
@@ -188,7 +197,7 @@ public partial class ExplorerTab
             // Sidebars can contain slow or offline working copies. Display the main
             // pane first; completed repositories publish independently afterwards.
             var MainSnapshots = await this.VersionControl.ReadAsync(MainDirectories, Cancellation.Token, ShallowSvn: true,
-                SnapshotReady: PublishReadyAsync, PriorityDirectory: this.CurrentPath);
+                SnapshotReady: PublishReadyAsync, PriorityDirectory: this.CurrentSearch.IsActive ? null : this.CurrentPath);
             var Snapshots = MainSnapshots;
             if (Directories.Length > MainDirectories.Distinct(StringComparer.OrdinalIgnoreCase).Count())
             {

@@ -30,6 +30,7 @@ public partial class ExplorerTab
     private void AutoFitColumns()
     {
         if (this.WindowClosed || !this.IsDetailsView) return;
+        ++this.ColumnFitVersion;
         this.FitVisibleColumns();
         this.HostWindow.PersistWorkspaceNow();
     }
@@ -38,6 +39,15 @@ public partial class ExplorerTab
     {
         if (!this.IsDetailsView) return;
         foreach (var Column in this.FileGrid.Columns.Where(Item => Item.Visibility == Visibility.Visible).ToArray()) this.AutoFitColumn(Column);
+        this.CompleteColumnFit();
+    }
+
+    private void CompleteColumnFit()
+    {
+        // Fitting can move every formerly visible column out of the viewport.
+        // Start at Name again and let WPF realize the new horizontal range;
+        // retaining the old far-right offset can leave headers and rows blank.
+        FindVisualChild<ScrollViewer>(this.FileGrid)?.ScrollToHorizontalOffset(0);
     }
 
     private async Task RefreshAndFitColumnsAsync()
@@ -112,6 +122,7 @@ public partial class ExplorerTab
             Column.MinWidth = 0;
             Column.Width = new DataGridLength(Math.Min(Column.MaxWidth, Math.Ceiling(Width)));
         }
+        if (Current()) this.CompleteColumnFit();
     }
 
     private static string ColumnText(FileEntry Entry, string Key) => Key switch

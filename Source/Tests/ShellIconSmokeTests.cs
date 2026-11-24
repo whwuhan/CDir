@@ -56,6 +56,7 @@ public partial class ExplorerTab
             var Samples = new[]
             {
                 new ShellIconSample("Computer", ShellLocations.Computer, true),
+                new ShellIconSample("RecycleBin", ShellLocations.RecycleBin, true),
                 new ShellIconSample("Folder", FolderPath, true),
                 new ShellIconSample("OpenFolder", FolderPath, true, 16, true),
                 new ShellIconSample("Drive", System.IO.Path.GetPathRoot(Fixture)!, true),
@@ -167,6 +168,166 @@ public partial class ExplorerTab
             Check(ReferenceEquals(Probe.Source, ExpectedLarge) && ShellIconService.GetDiagnostics().NativeRequestCount == NativeBeforeZoom
                 && Raster >= Math.Min(256, (int)Math.Ceiling(Sizes[^1] * Scale)),
                 "Nearby zoom sizes reuse one sufficiently large cached bitmap without new native Shell reads");
+
+            // Quick Access icon refresh regressions: collapsed duplicates, hidden controls,
+            // open/closed folder retention, Recycle Bin targeted invalidation, and >128 burst recovery.
+            var InitialFavoritesExpanded = this.FavoritesSection.IsExpanded;
+            try
+            {
+                this.FavoritesSection.IsExpanded = true;
+                this.UpdateLayout();
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+
+                ShellIcon? VisibleFavoriteIcon(string Location)
+                {
+                    foreach (var Item in this.FavoritesList.Items.OfType<CDir.Models.FavoriteLocation>())
+                    {
+                        if (!string.Equals(Item.FullPath, Location, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (this.FavoritesList.ItemContainerGenerator.ContainerFromItem(Item) is not DependencyObject Container) continue;
+                        var Stack = new Stack<DependencyObject>();
+                        Stack.Push(Container);
+                        while (Stack.Count > 0)
+                        {
+                            var Current = Stack.Pop();
+                            if (Current is ShellIcon Icon && Icon.IsVisible) return Icon;
+                            for (var Index = 0; Index < VisualTreeHelper.GetChildrenCount(Current); Index++)
+                                Stack.Push(VisualTreeHelper.GetChild(Current, Index));
+                        }
+                    }
+                    return null;
+                }
+                int CollapsedFavoriteLoadedIcons()
+                {
+                    var Count = 0;
+                    foreach (var Item in this.FavoritesList.Items.OfType<CDir.Models.FavoriteLocation>())
+                    {
+                        if (this.FavoritesList.ItemContainerGenerator.ContainerFromItem(Item) is not DependencyObject Container) continue;
+                        var Stack = new Stack<DependencyObject>();
+                        Stack.Push(Container);
+                        while (Stack.Count > 0)
+                        {
+                            var Current = Stack.Pop();
+                            if (Current is ShellIcon Icon && !Icon.IsVisible && Icon.Source is not null) Count++;
+                            for (var Index = 0; Index < VisualTreeHelper.GetChildrenCount(Current); Index++)
+                                Stack.Push(VisualTreeHelper.GetChild(Current, Index));
+                        }
+                    }
+                    return Count;
+                }
+
+                var ComputerIcon = VisibleFavoriteIcon(ShellLocations.Computer);
+                var RecycleIcon = VisibleFavoriteIcon(ShellLocations.RecycleBin);
+                var ExpectedComputer16 = await ShellIconService.GetIconAsync(ShellLocations.Computer, true, Pixels);
+                var ExpectedRecycle16 = await ShellIconService.GetIconAsync(ShellLocations.RecycleBin, true, Pixels);
+                var GenericFolder16 = ShellIconService.GetFallbackIcon(true, Pixels);
+                Check(ComputerIcon is not null && RecycleIcon is not null
+                    && IconPixelsEqual(ComputerIcon.Source, ExpectedComputer16)
+                    && IconPixelsEqual(RecycleIcon.Source, ExpectedRecycle16)
+                    && !IconPixelsEqual(ComputerIcon.Source, GenericFolder16)
+                    && !IconPixelsEqual(RecycleIcon.Source, GenericFolder16)
+                    && CollapsedFavoriteLoadedIcons() == 0,
+                    "Quick Access displays native virtual icons and skips collapsed duplicate ShellIcon controls");
+
+                // Hidden ShellIcon controls must not submit native requests while collapsed,
+                // and must refresh once made visible again.
+                var HiddenFile = System.IO.Path.Combine(StressPath, "HiddenTabIcon.txt");
+                System.IO.File.WriteAllText(HiddenFile, "hidden");
+                Probe.IconSize = 16;
+                Probe.IsDirectory = false;
+                Probe.Visibility = Visibility.Collapsed;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+                var NativeWhileHidden = ShellIconService.GetDiagnostics().NativeRequestCount;
+                Probe.Path = HiddenFile;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+                var RequestsWhileHidden = ShellIconService.GetDiagnostics().NativeRequestCount - NativeWhileHidden;
+                Probe.Visibility = Visibility.Visible;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+                var ExpectedHiddenIcon = await ShellIconService.GetIconAsync(HiddenFile, false, Pixels);
+                Check(RequestsWhileHidden == 0 && ReferenceEquals(Probe.Source, ExpectedHiddenIcon),
+                    "Collapsed ShellIcon controls defer Shell reads until visible");
+
+                // Toggling OpenFolder retains the displayed icon instead of flashing to the stock fallback.
+                var OpenToggleDowngrades = 0;
+                Probe.IsDirectory = true;
+                Probe.OpenFolder = false;
+                Probe.Path = ShellLocations.Computer;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+                var SourceDescriptor = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(ShellIcon));
+                void TrackOpenToggle(object? Sender, EventArgs E)
+                {
+                    if (ReferenceEquals(Probe.Source, GenericFolder16)) OpenToggleDowngrades++;
+                }
+                SourceDescriptor.AddValueChanged(Probe, TrackOpenToggle);
+                try
+                {
+                    Probe.OpenFolder = true;
+                    await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                    await WaitForShellIconIdleAsync();
+                }
+                finally
+                {
+                    SourceDescriptor.RemoveValueChanged(Probe, TrackOpenToggle);
+                    Probe.OpenFolder = false;
+                }
+                Check(OpenToggleDowngrades == 0 && IconPixelsEqual(Probe.Source, ExpectedComputer16),
+                    "Expanding a sidebar folder retains its displayed icon without flashing to a generic folder");
+
+                // Targeted Recycle Bin invalidation refreshes Recycle Bin without flushing unrelated cached icons.
+                var PreservedIconBefore = await ShellIconService.GetIconAsync(HiddenFile, false, Pixels);
+                var NativeBeforeRecycle = ShellIconService.GetDiagnostics().NativeRequestCount;
+                ShellIconService.InvalidatePath(ShellLocations.RecycleBin);
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                await WaitForShellIconIdleAsync();
+                var PreservedIconAfter = await ShellIconService.GetIconAsync(HiddenFile, false, Pixels);
+                Check(ReferenceEquals(PreservedIconBefore, PreservedIconAfter)
+                    && ShellIconService.GetDiagnostics().NativeRequestCount > NativeBeforeRecycle
+                    && IconPixelsEqual(RecycleIcon!.Source, ExpectedRecycle16),
+                    "Targeted Recycle Bin invalidation refreshes its Quick Access icon while preserving unrelated cache entries");
+
+                // A >128-icon burst right after CacheInvalidated must never leave Quick Access icons stuck on generic folders.
+                var BurstPaths = Enumerable.Range(0, 160).Select(Index => System.IO.Path.Combine(StressPath, $"Burst{Index:000}.txt")).ToArray();
+                foreach (var BurstFile in BurstPaths) System.IO.File.WriteAllText(BurstFile, "burst");
+                var QuickAccessDowngrades = 0;
+                void TrackQuickAccessDowngrade(object? Sender, EventArgs E)
+                {
+                    if (Sender is ShellIcon Icon && ReferenceEquals(Icon.Source, GenericFolder16)) QuickAccessDowngrades++;
+                }
+                SourceDescriptor.AddValueChanged(ComputerIcon!, TrackQuickAccessDowngrade);
+                SourceDescriptor.AddValueChanged(RecycleIcon!, TrackQuickAccessDowngrade);
+                try
+                {
+                    ShellIconService.InvalidateCache();
+                    var BurstTasks = BurstPaths.Select(BurstFile => ShellIconService.GetIconAsync(BurstFile, false, Pixels)).ToArray();
+                    await Task.WhenAll(BurstTasks);
+                    await WaitForShellIconIdleAsync();
+                    var RetryDeadline = Environment.TickCount64 + 5000;
+                    while ((!IconPixelsEqual(ComputerIcon!.Source, ExpectedComputer16) || !IconPixelsEqual(RecycleIcon!.Source, ExpectedRecycle16))
+                        && Environment.TickCount64 < RetryDeadline)
+                    {
+                        await Task.Delay(50);
+                        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+                    }
+                    await WaitForShellIconIdleAsync();
+                }
+                finally
+                {
+                    SourceDescriptor.RemoveValueChanged(ComputerIcon!, TrackQuickAccessDowngrade);
+                    SourceDescriptor.RemoveValueChanged(RecycleIcon!, TrackQuickAccessDowngrade);
+                }
+                Check(QuickAccessDowngrades == 0
+                    && IconPixelsEqual(ComputerIcon!.Source, ExpectedComputer16)
+                    && IconPixelsEqual(RecycleIcon!.Source, ExpectedRecycle16),
+                    "Quick Access icons retain their artwork and recover cleanly when a refresh burst exceeds queue capacity");
+            }
+            finally
+            {
+                this.FavoritesSection.IsExpanded = InitialFavoritesExpanded;
+            }
         }
         catch (Exception Error)
         {

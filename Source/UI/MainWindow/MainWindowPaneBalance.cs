@@ -6,7 +6,9 @@ public partial class MainWindow
 {
     internal void DistributePanesEvenly()
     {
-        if (this.WorkspaceClosed || this.Panes.Count < 2) return;
+        if (this.WorkspaceClosed) return;
+        foreach (var Page in this.Tabs) Page.ResetNavigationFieldWidths();
+        if (this.Panes.Count < 2) return;
         var Spans = new Dictionary<PaneNode, (int Columns, int Rows)>();
         (int Columns, int Rows) Measure(PaneNode Node)
         {

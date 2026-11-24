@@ -74,7 +74,7 @@ public partial class ExplorerTab
         if (this.Settings.AutoFitColumnsOnNavigation && !this.IsVirtualLocation)
             await this.FitVisibleColumnsAsync(this.InitialNavigationVersion);
         if (this.WindowClosed || this.StartupInteraction || this.NavigationVersion != this.InitialNavigationVersion) return;
-        this.FileGroupProperty = BackgroundSortKeys.Contains(State.Group) ? State.Group : "";
+        this.FileGroupProperty = State.Group is { } Group && this.IsColumnKey(Group) ? Group : "";
         this.FileGroupDescending = State.GroupDescending;
         this.AppliedFileView = null; this.ApplyFileView();
         if (ColumnKeys.Contains(State.Sort)) this.SortProperty = State.Sort;

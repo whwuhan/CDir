@@ -60,15 +60,51 @@ public partial class ExplorerTab
         catch (Exception Error) when (Error is System.Runtime.InteropServices.ExternalException or System.Threading.ThreadStateException) { return false; }
     }
     private static readonly string[] BackgroundSortKeys = [nameof(FileEntry.Name), nameof(FileEntry.Modified), nameof(FileEntry.TypeName), nameof(FileEntry.Size)];
+    private const long UnspecifiedGroupOrder = long.MaxValue;
+
+    // Explorer lists the view's visible Details columns, in display order, using
+    // Windows' own column names rather than this application's UI language.
+    private IReadOnlyList<(string Key, string Header)> ExplorerGroupColumns() => this.FileGrid.Columns
+        .Where(Column => Column.Visibility == Visibility.Visible).OrderBy(Column => Column.DisplayIndex)
+        .Select(Column => (Column.SortMemberPath, (this.IsRecycleBin ? RecycleColumns.Value : WindowsColumns.Value)
+            .FirstOrDefault(Definition => Definition.Key == Column.SortMemberPath)?.Header ?? Convert.ToString(Column.Header, LanguageService.Culture) ?? Column.SortMemberPath))
+        .ToArray();
+
+    private bool IsColumnKey(string Key) => Key.Length > 0 && this.FileGrid.Columns.Any(Column => Column.SortMemberPath == Key);
+
+    private static string DateGroupLabel(DateTime Value, DateTime Today) => Value.Date == Today ? LanguageService.Text("GroupToday")
+        : Value.Date == Today.AddDays(-1) ? LanguageService.Text("GroupYesterday") : Value.ToString("yyyy/MM");
+    private static long DateGroupOrder(DateTime Value, DateTime Today) => Value.Date == Today || Value.Date == Today.AddDays(-1)
+        ? Value.Date.Ticks : new DateTime(Value.Year, Value.Month, 1).Ticks;
+
+    // Values for columns without a dedicated grouping rule: dates use the same
+    // ranges as Date Modified, other values group by their displayed text.
+    private (string Label, long Order) ColumnGroup(FileEntry Entry, DateTime Today)
+    {
+        object? Value = this.FileGroupProperty switch
+        {
+            nameof(FileEntry.FullPath) => System.IO.Path.GetDirectoryName(Entry.FullPath),
+            nameof(FileEntry.OriginalLocation) => Entry.OriginalLocation,
+            nameof(FileEntry.DateDeleted) => Entry.DateDeleted,
+            _ => Entry.ShellSortValue(this.FileGroupProperty) is DateTime Date ? Date : Entry[this.FileGroupProperty]
+        };
+        return Value switch
+        {
+            DateTime Date => (DateGroupLabel(Date, Today), DateGroupOrder(Date, Today)),
+            string { Length: > 0 } Text => (Text, 0),
+            _ => (LanguageService.Text("GroupUnspecified"), UnspecifiedGroupOrder)
+        };
+    }
+
     private string GroupLabel(FileEntry Entry, DateTime Today) => this.FileGroupProperty switch
     {
+        "" => "",
         nameof(FileEntry.Name) => Entry.Name.Length == 0 ? "#" : char.IsLetterOrDigit(Entry.Name[0]) ? Entry.Name[..1].ToUpper(LanguageService.Culture) : "#",
         nameof(FileEntry.TypeName) => Entry.TypeName,
-        nameof(FileEntry.Modified) => Entry.Modified.Date == Today ? LanguageService.Text("GroupToday")
-            : Entry.Modified.Date == Today.AddDays(-1) ? LanguageService.Text("GroupYesterday") : Entry.Modified.ToString("yyyy/MM"),
+        nameof(FileEntry.Modified) => DateGroupLabel(Entry.Modified, Today),
         nameof(FileEntry.Size) => LanguageService.Text(Entry.IsDirectory ? "FolderType" : Entry.Size is null or 0 ? "GroupEmpty"
             : Entry.Size < 16 * 1024 ? "GroupTiny" : Entry.Size < 1024 * 1024 ? "GroupSmall" : Entry.Size < 16 * 1024 * 1024 ? "GroupMedium" : "GroupLarge"),
-        _ => ""
+        _ => this.ColumnGroup(Entry, Today).Label
     };
     private sealed class FileViewComparer(ExplorerTab Tab) : IComparer
     {
@@ -133,11 +169,11 @@ public partial class ExplorerTab
         // of translated labels such as Small, Medium, Today and Yesterday.
         Entry.ViewGroupOrder = this.FileGroupProperty switch
         {
-            nameof(FileEntry.Modified) => Entry.Modified.Date == Today || Entry.Modified.Date == Today.AddDays(-1)
-                ? Entry.Modified.Date.Ticks : new DateTime(Entry.Modified.Year, Entry.Modified.Month, 1).Ticks,
+            "" or nameof(FileEntry.Name) or nameof(FileEntry.TypeName) => 0,
+            nameof(FileEntry.Modified) => DateGroupOrder(Entry.Modified, Today),
             nameof(FileEntry.Size) => Entry.IsDirectory ? -1 : Entry.Size is null or 0 ? 0 : Entry.Size < 16 * 1024 ? 1
                 : Entry.Size < 1024 * 1024 ? 2 : Entry.Size < 16 * 1024 * 1024 ? 3 : 4,
-            _ => 0
+            _ => this.ColumnGroup(Entry, Today).Order
         };
     }
     private void RefreshBackgroundLayout()
@@ -178,23 +214,48 @@ public partial class ExplorerTab
         this.HostWindow.PersistWorkspaceNow();
         this.FileLayoutStage?.Invoke("Persist");
     }
+    private async Task PasteShortcutAsync()
+    {
+        if (this.OperationBusy || this.Loading || this.IsVirtualLocation || this.CurrentPath.Length == 0) return;
+        string[] Paths;
+        try { Paths = this.ReadClipboardFiles()?.GetData(DataFormats.FileDrop) as string[] ?? []; }
+        catch (Exception Error) when (Error is COMException or System.Threading.ThreadStateException) { Paths = []; }
+        if (Paths.Length == 0) { this.ShowNotice(LanguageService.Text("ClipboardEmpty")); return; }
+        var Folder = this.CurrentPath;
+        await this.RunOperationAsync(LanguageService.Text("PasteShortcut"), () =>
+        {
+            var Created = ShellContextMenu.PasteShortcut(Folder, Paths);
+            SharedFileHistory.Audit("PasteShortcut", Created, "Invoked");
+        }, LanguageService.Text("PasteShortcutComplete", Paths.Length), RequiresSta: true);
+    }
     private async Task<bool> ExecuteBackgroundCommandAsync(string Verb)
     {
         if (Verb == "refresh" || Verb == "CDir.Refresh") { await this.RefreshAndFitColumnsAsync(); return true; }
         if (Verb == "CDir.Paste") { await this.PasteAsync(); return true; }
+        if (Verb == "CDir.PasteShortcut") { await this.PasteShortcutAsync(); return true; }
+        if (Verb is "CDir.Undo" or "CDir.Redo") { await this.ReplayFileOperationAsync(Verb == "CDir.Redo"); return true; }
         if (!Verb.StartsWith("CDir.", StringComparison.Ordinal)) return false;
         var Parts = Verb.Split('.');
         if (Parts.Length == 3 && Parts[1] == "View" && Enum.TryParse<FileViewMode>(Parts[2], out var Mode)) this.ChangeFileView(Mode);
-        else if (Parts.Length == 3 && Parts[1] == "Sort" && !this.IsComputer)
+        else if (Verb.StartsWith("CDir.Sort.", StringComparison.Ordinal) && !this.IsComputer)
         {
-            if (Parts[2] is "Ascending" or "Descending") this.SortDirection = Parts[2] == "Ascending" ? ListSortDirection.Ascending : ListSortDirection.Descending;
-            else if (BackgroundSortKeys.Contains(Parts[2])) this.SortProperty = Parts[2];
+            // Windows property keys such as System.Author contain dots.
+            var Key = Verb["CDir.Sort.".Length..];
+            if (Key is "Ascending" or "Descending") this.SortDirection = Key == "Ascending" ? ListSortDirection.Ascending : ListSortDirection.Descending;
+            else if (this.IsColumnKey(Key)) this.SortProperty = Key;
             this.RefreshBackgroundLayout();
         }
-        else if (Parts.Length == 3 && Parts[1] == "Group" && !this.IsComputer)
+        else if (Verb == "CDir.Group.More")
         {
-            var Property = Parts[2] == "None" ? "" : BackgroundSortKeys.Contains(Parts[2]) ? Parts[2] : this.FileGroupProperty;
-            var Descending = Parts[2] is "Ascending" or "Descending" ? Parts[2] == "Descending" : this.FileGroupDescending;
+            // Explorer's "More..." opens its column chooser; CDir's is the view options menu.
+            this.ColumnMenuClick(this.ColumnMenuButton, new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        }
+        else if (Verb.StartsWith("CDir.Group.", StringComparison.Ordinal) && !this.IsComputer)
+        {
+            // Windows property keys such as System.Author contain dots.
+            var Key = Verb["CDir.Group.".Length..];
+            var Property = Key == "None" ? "" : this.IsColumnKey(Key) ? Key : this.FileGroupProperty;
+            var Descending = Key is "Ascending" or "Descending" ? Key == "Descending" : this.FileGroupDescending;
             if (Property == this.FileGroupProperty && Descending == this.FileGroupDescending) { this.UpdateGroupingMenu(); return true; }
             this.FileGroupProperty = Property;
             this.FileGroupDescending = Descending;
@@ -208,22 +269,6 @@ public partial class ExplorerTab
                 ShellIconService.InvalidateCache();
                 await this.RefreshAsync(true);
             }
-        }
-        else if (Verb == "CDir.Terminal")
-        {
-            var Terminal = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", "wt.exe");
-            var Opened = false;
-            if (System.IO.File.Exists(Terminal))
-            {
-                try
-                {
-                    var Start = new System.Diagnostics.ProcessStartInfo(Terminal) { UseShellExecute = true, WorkingDirectory = this.CurrentPath };
-                    Start.ArgumentList.Add("-d"); Start.ArgumentList.Add(this.CurrentPath);
-                    System.Diagnostics.Process.Start(Start); Opened = true;
-                }
-                catch (System.ComponentModel.Win32Exception) { }
-            }
-            if (!Opened) this.Files.OpenTerminal(this.CurrentPath);
         }
         return true;
     }

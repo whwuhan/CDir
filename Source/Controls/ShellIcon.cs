@@ -43,8 +43,11 @@ public sealed class ShellIcon : Image
     private CancellationTokenSource? PendingLoad;
     private int LoadVersion;
     private bool RefreshQueued;
+    private bool NeedsRefresh;
+    private long LoadedGeneration = -1;
+    private int RetryCount;
     private IconIdentity? DisplayedIdentity;
-    private sealed record IconIdentity(string? Path, bool IsDirectory, bool IsDrive, bool OpenFolder, bool Thumbnails);
+    private sealed record IconIdentity(string? Path, bool IsDirectory, bool IsDrive, bool Thumbnails);
     private static readonly object BadgeSync = new();
     private static readonly Dictionary<(VersionState State, bool Pending, double Size, double Dpi), DrawingGroup> BadgeDrawings = [];
     private static readonly Typeface BadgeTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
@@ -65,16 +68,31 @@ public sealed class ShellIcon : Image
         {
             ShellIconService.CacheInvalidated -= this.CacheInvalidated;
             ShellIconService.CacheInvalidated += this.CacheInvalidated;
+            ShellIconService.PathInvalidated -= this.PathInvalidated;
+            ShellIconService.PathInvalidated += this.PathInvalidated;
             LanguageService.LanguageChanged -= this.VersionLanguageChanged;
             LanguageService.LanguageChanged += this.VersionLanguageChanged;
-            this.QueueRefresh();
+            this.NeedsRefresh = true;
+            this.RetryCount = 0;
+            if (this.IsVisible) this.QueueRefresh();
             this.UpdateVersionTooltip();
         };
         this.Unloaded += (_, _) =>
         {
             ShellIconService.CacheInvalidated -= this.CacheInvalidated;
+            ShellIconService.PathInvalidated -= this.PathInvalidated;
             LanguageService.LanguageChanged -= this.VersionLanguageChanged;
             this.CancelLoad();
+        };
+        this.IsVisibleChanged += (_, _) =>
+        {
+            if (!this.IsVisible) { this.CancelLoad(); return; }
+            if (this.IsLoaded && (this.NeedsRefresh || this.LoadedGeneration != ShellIconService.CurrentGeneration
+                || this.Source is null && !(this.HideWhenEmpty && string.IsNullOrWhiteSpace(this.Path))))
+            {
+                this.RetryCount = 0;
+                this.QueueRefresh();
+            }
         };
     }
 
@@ -89,7 +107,10 @@ public sealed class ShellIcon : Image
             if (RasterSize(Math.Clamp((int)Math.Ceiling(OldSize * Scale), 8, 256))
                 == RasterSize(Math.Clamp((int)Math.Ceiling(NewSize * Scale), 8, 256))) return;
         }
-        Icon.QueueRefresh();
+        Icon.NeedsRefresh = true;
+        Icon.RetryCount = 0;
+        if (Icon.IsVisible) Icon.QueueRefresh();
+        else Icon.CancelLoad();
         Icon.UpdateVersionTooltip();
     }
 
@@ -162,28 +183,49 @@ public sealed class ShellIcon : Image
     protected override void OnDpiChanged(DpiScale OldDpi, DpiScale NewDpi)
     {
         base.OnDpiChanged(OldDpi, NewDpi);
-        if (this.IsLoaded) this.QueueRefresh();
+        this.NeedsRefresh = true;
+        this.RetryCount = 0;
+        if (this.IsLoaded && this.IsVisible) this.QueueRefresh();
     }
 
     private void CacheInvalidated(object? Sender, EventArgs E)
     {
-        if (this.Dispatcher.CheckAccess())
+        void Handle()
         {
-            if (this.IsLoaded) this.QueueRefresh();
+            if (!this.IsLoaded) return;
+            this.NeedsRefresh = true;
+            this.RetryCount = 0;
+            if (this.IsVisible) this.QueueRefresh();
+            else this.CancelLoad();
         }
-        else if (!this.Dispatcher.HasShutdownStarted)
-            this.Dispatcher.BeginInvoke(() => { if (this.IsLoaded) this.QueueRefresh(); });
+        if (this.Dispatcher.CheckAccess()) Handle();
+        else if (!this.Dispatcher.HasShutdownStarted) this.Dispatcher.BeginInvoke(Handle);
+    }
+
+    private void PathInvalidated(object? Sender, string InvalidatedPath)
+    {
+        void Handle()
+        {
+            if (!this.IsLoaded || !ShellIconService.SameIconPath(this.Path, InvalidatedPath)) return;
+            this.NeedsRefresh = true;
+            this.RetryCount = 0;
+            if (this.IsVisible) this.QueueRefresh();
+            else this.CancelLoad();
+        }
+        if (this.Dispatcher.CheckAccess()) Handle();
+        else if (!this.Dispatcher.HasShutdownStarted) this.Dispatcher.BeginInvoke(Handle);
     }
 
     private void QueueRefresh()
     {
         this.CancelLoad();
+        if (!this.IsLoaded || !this.IsVisible) return;
         if (this.RefreshQueued) return;
         this.RefreshQueued = true;
         this.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
         {
             this.RefreshQueued = false;
-            if (this.IsLoaded) this.RefreshIcon();
+            if (this.IsLoaded && this.IsVisible) this.RefreshIcon();
         });
     }
 
@@ -198,13 +240,18 @@ public sealed class ShellIcon : Image
     private async void RefreshIcon()
     {
         this.CancelLoad();
+        if (!this.IsLoaded || !this.IsVisible) return;
         if (this.HideWhenEmpty && string.IsNullOrWhiteSpace(this.Path))
         {
             this.Source = null;
             this.DisplayedIdentity = null;
+            this.NeedsRefresh = false;
+            this.LoadedGeneration = ShellIconService.CurrentGeneration;
+            this.RetryCount = 0;
             return;
         }
         var Version = this.LoadVersion;
+        var Generation = ShellIconService.CurrentGeneration;
         var PixelSize = RasterSize(Math.Clamp((int)Math.Ceiling(this.IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX), 8, 256));
         var Fallback = this.IsDrive
             ? ShellIconService.GetDriveFallbackIcon(PixelSize)
@@ -212,16 +259,19 @@ public sealed class ShellIcon : Image
         var Cancellation = new CancellationTokenSource();
         this.PendingLoad = Cancellation;
         var Thumbnails = this.ShowThumbnails && !this.IsDirectory && PixelSize > 32 && this.IconSize > 16;
-        var Identity = new IconIdentity(this.Path, this.IsDirectory, this.IsDrive, this.OpenFolder && this.IsDirectory, Thumbnails);
+        // Retain the same path's icon across open/closed folder state and cache
+        // invalidations so Quick Access and tree folders never flash to stock icons.
+        var Identity = new IconIdentity(this.Path, this.IsDirectory, this.IsDrive, Thumbnails);
         var RetainImage = this.Source is not null && this.DisplayedIdentity == Identity;
         this.DisplayedIdentity = Identity;
         try
         {
-            var Pending = ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, Thumbnails, this.ThumbnailStamp, Cancellation.Token);
+            var Pending = ShellIconService.GetIconResultAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, Thumbnails, this.ThumbnailStamp, Cancellation.Token);
             // A cache hit paints immediately, without flashing a generic icon.
             if (Pending.IsCompletedSuccessfully)
             {
-                if (this.IsLoaded && Version == this.LoadVersion) this.Source = Pending.Result ?? Fallback;
+                if (this.IsLoaded && this.IsVisible && Version == this.LoadVersion)
+                    this.ApplyLoadResult(Pending.Result, Fallback, RetainImage, Generation, Version);
                 return;
             }
             // Keep a same-file image while refreshing its timestamp/size. Falling
@@ -232,25 +282,56 @@ public sealed class ShellIcon : Image
             {
                 // The fast icon lane provides a sharp associated-type icon while
                 // the independent preview workers wait for a media provider.
-                var Default = ShellIconService.GetIconAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, CancellationToken: Cancellation.Token);
+                var Default = ShellIconService.GetIconResultAsync(this.Path, this.IsDirectory, PixelSize, this.OpenFolder, CancellationToken: Cancellation.Token);
                 if (await Task.WhenAny(Pending, Default) == Default)
                 {
                     var IconSource = await Default;
-                    if (this.IsLoaded && Version == this.LoadVersion) this.Source = IconSource ?? Fallback;
+                    if (this.IsLoaded && this.IsVisible && Version == this.LoadVersion && !IconSource.Retryable)
+                        this.Source = IconSource.Image ?? Fallback;
                 }
             }
-            var Icon = await Pending;
-            if (this.IsLoaded && Version == this.LoadVersion) this.Source = Icon ?? Fallback;
+            var Result = await Pending;
+            if (this.IsLoaded && this.IsVisible && Version == this.LoadVersion)
+                this.ApplyLoadResult(Result, Fallback, RetainImage, Generation, Version);
         }
         catch (OperationCanceledException) { }
         catch (Exception)
         {
-            if (this.IsLoaded && Version == this.LoadVersion) this.Source = Fallback;
+            if (this.IsLoaded && this.IsVisible && Version == this.LoadVersion && !RetainImage) this.Source = Fallback;
         }
         finally
         {
             if (ReferenceEquals(this.PendingLoad, Cancellation)) this.PendingLoad = null;
             Cancellation.Dispose();
         }
+    }
+
+    private void ApplyLoadResult(ShellIconService.ShellIconLoadResult Result, ImageSource? Fallback, bool RetainImage, long Generation, int Version)
+    {
+        if (!Result.Retryable)
+        {
+            this.Source = Result.Image ?? Fallback;
+            this.NeedsRefresh = false;
+            this.LoadedGeneration = Generation;
+            this.RetryCount = 0;
+            return;
+        }
+        // Evicted or queue-timed-out reads must not replace a valid displayed icon
+        // with a generic folder. Retry once the current burst drains.
+        if (!RetainImage && this.Source is null) this.Source = Fallback;
+        if (this.RetryCount >= 6)
+        {
+            if (!RetainImage) this.Source = Result.Image ?? Fallback;
+            return;
+        }
+        this.ScheduleRetry(Version, 150 * ++this.RetryCount);
+    }
+
+    private async void ScheduleRetry(int Version, int DelayMilliseconds)
+    {
+        try { await Task.Delay(DelayMilliseconds); }
+        catch (Exception) { return; }
+        if (this.IsLoaded && this.IsVisible && Version == this.LoadVersion && !this.Dispatcher.HasShutdownStarted)
+            this.QueueRefresh();
     }
 }

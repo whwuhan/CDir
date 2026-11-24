@@ -149,6 +149,7 @@ public partial class ExplorerTab
             Check(this.MarqueeScrollTimer?.IsEnabled != true, "Completing marquee selection stops edge scrolling");
             Viewport.Viewer.ScrollToTop();
             await Settle();
+            await this.RunGroupedMarqueeSmokeChecksAsync(Check, Settle);
             await this.NavigateAsync(Path.Combine(Fixture, "A Folder"), RecordHistory: false);
             await Settle();
             var EmptyViewport = this.MarqueeViewport()!.Value;
@@ -168,6 +169,7 @@ public partial class ExplorerTab
             this.FileGrid.IsHitTestVisible = InitialHitTest;
             this.OperationBusy = false;
             this.EndMarqueeSelection();
+            if (this.FileGroupProperty.Length > 0) await this.ExecuteBackgroundCommandAsync("CDir.Group.None");
             this.SortProperty = InitialSort;
             this.SortDirection = InitialDirection;
             await this.NavigateAsync(InitialPath, RecordHistory: false);
@@ -175,5 +177,60 @@ public partial class ExplorerTab
                 throw new InvalidOperationException("Refusing cleanup outside the owned marquee fixture.");
             Directory.Delete(Fixture, true);
         }
+    }
+
+    private async Task RunGroupedMarqueeSmokeChecksAsync(Action<bool, string> Check, Func<Task> Settle)
+    {
+        static IEnumerable<T> Descendants<T>(DependencyObject Parent) where T : DependencyObject
+        {
+            for (var Index = 0; Index < VisualTreeHelper.GetChildrenCount(Parent); Index++)
+            {
+                var Child = VisualTreeHelper.GetChild(Parent, Index);
+                if (Child is T Match) yield return Match;
+                foreach (var Descendant in Descendants<T>(Child)) yield return Descendant;
+            }
+        }
+        await this.ExecuteBackgroundCommandAsync("CDir.Group." + nameof(FileEntry.TypeName));
+        await Settle();
+        var Viewer = this.MarqueeViewport()!.Value.Viewer;
+        Viewer.ScrollToTop();
+        await Settle();
+        var Groups = this.MarqueeRowGroups();
+        var Ordered = this.FileGrid.Items.Cast<FileEntry>().ToArray();
+        Check(Groups is { Length: 2 } && Groups.Select(Group => Group.Count).Order().SequenceEqual([2, 90]),
+            "The grouped fixture separates folders and text files into two Details groups");
+        Point WhitespacePoint(DataGridRow Row, double Fraction)
+        {
+            var Cell = FindVisualChild<DataGridCell>(Row)!;
+            return Cell.TranslatePoint(new Point(Cell.ActualWidth - 8, Cell.ActualHeight * Fraction), this.FileGrid);
+        }
+        DataGridRow VisibleRow(FileEntry Entry) => Descendants<DataGridRow>(this.FileGrid).First(Row => ReferenceEquals(Row.Item, Entry) && Row.IsVisible);
+        async Task Drag(int From, int To, string Name)
+        {
+            var StartRow = VisibleRow(Ordered[From]);
+            var Start = WhitespacePoint(StartRow, .5);
+            Check(this.PrepareMarqueeSelection(FindVisualChild<DataGridCell>(StartRow), Start, ModifierKeys.None, 1), Name + ": grouped rows start a marquee");
+            var End = WhitespacePoint(VisibleRow(Ordered[To]), .5);
+            this.UpdateMarqueeSelection(new Point(End.X - 70, End.Y));
+            await Settle();
+            var Expected = Ordered.Skip(Math.Min(From, To)).Take(Math.Abs(To - From) + 1).ToHashSet();
+            Check(this.SelectedEntries().ToHashSet().SetEquals(Expected),
+                Name + $" (expected={string.Join(",", Expected.Select(Entry => Entry.Name))}; actual={string.Join(",", this.SelectedEntries().Select(Entry => Entry.Name))})");
+            this.EndMarqueeSelection();
+            this.ClearFileSelection();
+        }
+        await Drag(Groups![1].Start, Groups[1].Start + 3, "Grouped Details marquee selects exactly the rows it covers below a group header");
+        await Drag(Groups[0].Start + 1, Groups[1].Start + 1, "Grouped Details marquee spans a group header without shifting the selected rows");
+        Viewer.ScrollToVerticalOffset(Viewer.ScrollableHeight / 2);
+        await Settle();
+        var Visible = Descendants<DataGridRow>(this.FileGrid).Where(Row => Row.IsVisible && Row.Item is FileEntry)
+            .Select(Row => (Row, Top: Row.TranslatePoint(new Point(), this.FileGrid).Y))
+            .Where(Item => Item.Top >= this.MarqueeViewport()!.Value.Bounds.Top && Item.Top + Item.Row.ActualHeight <= this.MarqueeViewport()!.Value.Bounds.Bottom)
+            .OrderBy(Item => Item.Top).Select(Item => Array.IndexOf(Ordered, (FileEntry)Item.Row.Item)).ToArray();
+        Check(Viewer.VerticalOffset > 0 && Visible.Length > 6, "The grouped Details list scrolls to a middle position with visible rows");
+        await Drag(Visible[2], Visible[5], "Grouped Details marquee stays aligned after scrolling into a group");
+        await this.ExecuteBackgroundCommandAsync("CDir.Group.None");
+        Viewer.ScrollToTop();
+        await Settle();
     }
 }

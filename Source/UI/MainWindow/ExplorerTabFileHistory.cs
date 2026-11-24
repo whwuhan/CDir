@@ -29,6 +29,22 @@ public partial class ExplorerTab
         this.FocusMainFilePanel();
     }
 
+    // Windows' undo stack belongs to the process rather than a folder, so its Undo/Redo
+    // captions are read from an empty owned folder, on a separate Shell thread, while
+    // the visible menu is being built. Large folders are never enumerated for this.
+    private async Task<IReadOnlyList<ShellContextMenu.HistoryCommand>> ReadExplorerHistoryAsync()
+    {
+        var Folder = Path.Combine(AppMain.SmokeTest ? AppMain.SmokeRoot!
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CDir"), "HistoryView");
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            return await CDir.Controls.NativeShellView.ReadHistoryCommandsAsync(Folder).WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception Error) when (Error is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException
+            or System.ComponentModel.Win32Exception or InvalidOperationException or TimeoutException) { return []; }
+    }
+
     internal void FocusMainFilePanel()
     {
         if (this.WindowClosed || !this.IsTabSelected) return;

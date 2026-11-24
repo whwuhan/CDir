@@ -64,7 +64,7 @@ public partial class ExplorerTab
         if (Group is "address" or "all") await RunGroup("address", () => this.RunAddressBreadcrumbSmokeChecksAsync(Passed));
         if (Group is "operations" or "all") await RunGroup("operations", () => this.RunExtendedSmokeChecksAsync(Passed));
         if (Group is "view-zoom" or "all") await RunGroup("view-zoom", () => this.RunViewZoomSmokeAsync(Passed));
-        if (Group is "grouping" or "all") await RunGroup("grouping", async () => { await this.RunGroupingMenuSmokeAsync(Passed); await this.RunGroupedGridLinesSmokeAsync(Passed); });
+        if (Group is "grouping" or "all") await RunGroup("grouping", async () => { await this.RunGroupingMenuSmokeAsync(Passed); await this.RunGroupedGridLinesSmokeAsync(Passed); await this.RunBackgroundMenuSmokeAsync(Passed); });
         if (Group is "columns" or "all") await RunGroup("columns", () => this.RunColumnsSmokeChecksAsync(Passed));
         if (Group is "fonts" or "all") await RunGroup("fonts", () => this.RunFontsSmokeChecksAsync(Passed));
         if (Group is "search" or "all") await RunGroup("search", () => this.RunSearchSmokeChecksAsync(Passed));
@@ -168,6 +168,7 @@ public partial class ExplorerTab
             await this.RunTreeBranchSmokeChecksAsync(Passed);
             await this.RunSidebarScrollSmokeChecksAsync(Passed);
             await this.RunCategoryHorizontalScrollSmokeChecksAsync(Passed);
+            await this.RunCategoryOverlayScrollSmokeChecksAsync(Passed);
             await this.RunStickyAncestorSmokeChecksAsync(Passed);
             await this.RunTreeMotionSmokeChecksAsync(Passed);
             await this.RunSidebarLayoutSmokeChecksAsync(Passed);
