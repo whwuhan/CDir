@@ -61,6 +61,7 @@ public partial class ExplorerTab
         this.DismissFileDragFeedback();
         if (E.ChangedButton != MouseButton.Left || E.OriginalSource is DependencyObject PressSource && !this.SidebarPanel.IsAncestorOf(PressSource))
             this.CancelSidebarFolderClick();
+        this.InlineRenamePreviewMouseDown(E);
         this.ClearSelectionOnBlankMouseDown(E);
         this.AddressEditPreviewMouseDown(E);
         if (E.Handled) return;

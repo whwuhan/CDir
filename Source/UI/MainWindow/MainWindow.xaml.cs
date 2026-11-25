@@ -431,6 +431,7 @@ public partial class MainWindow : Window
 
     private async void WindowInputPreviewMouseDown(object Sender, MouseButtonEventArgs E)
     {
+        this.ActiveTab?.InlineRenamePreviewMouseDown(E);
         if (E.OriginalSource is DependencyObject Origin && this.PaneFromSource(Origin) is { } InputPane) this.ActivatePane(InputPane);
         if (E.ChangedButton is MouseButton.XButton1 or MouseButton.XButton2)
         {

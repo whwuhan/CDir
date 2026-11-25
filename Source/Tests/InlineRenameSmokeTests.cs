@@ -79,6 +79,43 @@ public partial class ExplorerTab
                 "A conflicting filename preserves both files and reopens inline editing for correction");
             await this.AcceptSmokeInlineRenameAsync(() => Task.CompletedTask, "Cancelled.txt", Confirm: false);
             Check(File.Exists(Renamed) && !File.Exists(Path.Combine(Fixture, "Cancelled.txt")), "Escape cancels inline renaming without modifying the file");
+
+            // Clearing the name and clicking outside blank space (or pressing Escape / Enter)
+            // must cancel inline renaming and restore the default/original name instead of reopening.
+            this.BeginFileRename(Renamed);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
+            var EmptyFileBox = this.InlineRenameBox!;
+            EmptyFileBox.Text = "";
+            var BlankClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                { RoutedEvent = Mouse.PreviewMouseDownEvent, Source = this.StatusBarPanel };
+            this.WindowInputPreviewMouseDown(this.HostWindow, BlankClick);
+            await this.InlineRenameTask;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            Check(this.InlineRenameTarget is null && this.InlineRenameBox is null && !EmptyFileBox.IsVisible
+                && EmptyFileBox.Text == Path.GetFileName(Renamed) && File.Exists(Renamed),
+                "Clicking blank space with an empty filename restores the original name and cancels renaming");
+
+            this.BeginFileRename(Renamed);
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
+            var WhitespaceBox = this.InlineRenameBox!;
+            WhitespaceBox.Text = "   ";
+            this.InlineRenameLostFocus(WhitespaceBox, new KeyboardFocusChangedEventArgs(Keyboard.PrimaryDevice, 0, WhitespaceBox, this.FileGrid));
+            await this.InlineRenameTask;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            Check(this.InlineRenameTarget is null && this.InlineRenameBox is null && !WhitespaceBox.IsVisible
+                && WhitespaceBox.Text == Path.GetFileName(Renamed) && File.Exists(Renamed),
+                "Losing focus with a whitespace-only filename restores the original name instead of reopening the editor");
+
+            await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, "", Confirm: false);
+            Check(this.InlineRenameTarget is null && this.InlineRenameBox is null && File.Exists(Renamed),
+                "Pressing Escape with an empty filename restores the original name and cancels renaming");
+
+            await this.AcceptSmokeInlineRenameAsync(this.RenameAsync, "   ", Confirm: true);
+            Check(this.InlineRenameTarget is null && this.InlineRenameBox is null && File.Exists(Renamed),
+                "Pressing Enter with an empty or whitespace filename restores the original name and cancels renaming");
+
             this.SearchBox.Text = "No match";
             await this.SearchTask;
             await this.AcceptSmokeInlineRenameAsync(this.NewFolderAsync, "Created While Filtered");
@@ -86,8 +123,22 @@ public partial class ExplorerTab
                 "Creating a folder while filtering reveals its row for inline editing");
             await this.NewFolderAsync();
             var DefaultPath = RenamePath(this.InlineRenameTarget!);
-            await this.AcceptSmokeInlineRenameAsync(() => Task.CompletedTask, "Cancelled Folder", Confirm: false);
-            Check(Directory.Exists(DefaultPath), "Escape after folder creation keeps the newly created default folder");
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            this.UpdateLayout();
+            var EmptyFolderBox = this.InlineRenameBox!;
+            EmptyFolderBox.Text = "";
+            var FolderBlankClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                { RoutedEvent = Mouse.PreviewMouseDownEvent, Source = this.SidebarPanel };
+            this.WindowInputPreviewMouseDown(this.HostWindow, FolderBlankClick);
+            await this.InlineRenameTask;
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            Check(this.InlineRenameTarget is null && this.InlineRenameBox is null && !EmptyFolderBox.IsVisible
+                && EmptyFolderBox.Text == Path.GetFileName(DefaultPath) && Directory.Exists(DefaultPath),
+                "Clicking blank space with an empty folder name after creation keeps the default name and cancels renaming");
+            this.BeginFileRename(DefaultPath);
+            await this.AcceptSmokeInlineRenameAsync(() => Task.CompletedTask, "", Confirm: false);
+            Check(this.InlineRenameTarget is null && Directory.Exists(DefaultPath),
+                "Pressing Escape with an empty folder name restores the default folder name and cancels renaming");
             foreach (var Mode in Enum.GetValues<FileViewMode>())
             {
                 this.ChangeFileView(Mode);
