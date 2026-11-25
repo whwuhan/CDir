@@ -14,6 +14,16 @@ public sealed class FileListGridLines : FrameworkElement
 
     private Rect Viewport;
     private double[] Columns = [];
+    private readonly List<DataGridColumn> VisibleColumnsBuffer = [];
+    private readonly List<double> PositionsBuffer = [];
+    private DataGrid? CachedOwner;
+    private ScrollViewer? CachedScroll;
+    private ScrollContentPresenter? CachedPresenter;
+    private Brush? CachedPenBrush;
+    private double CachedDpiX;
+    private double CachedDpiY;
+    private Pen? CachedHorizontalPen;
+    private Pen? CachedVerticalPen;
     private double RowOrigin;
     private double RowHeight;
     private Rect[]? GroupedRows;
@@ -24,12 +34,19 @@ public sealed class FileListGridLines : FrameworkElement
         this.IsHitTestVisible = false;
         this.Loaded += (_, _) => this.Attach();
         this.Unloaded += (_, _) => this.LayoutUpdated -= this.OwnerLayoutUpdated;
+        this.IsVisibleChanged += (_, _) => this.Attach();
     }
 
     private void Attach()
     {
         this.LayoutUpdated -= this.OwnerLayoutUpdated;
-        if (this.IsLoaded) this.LayoutUpdated += this.OwnerLayoutUpdated;
+        if (!ReferenceEquals(this.CachedOwner, this.GridOwner))
+        {
+            this.CachedOwner = this.GridOwner;
+            this.CachedScroll = null;
+            this.CachedPresenter = null;
+        }
+        if (this.IsLoaded && this.IsVisible) this.LayoutUpdated += this.OwnerLayoutUpdated;
         this.InvalidateVisual();
     }
 
@@ -47,17 +64,31 @@ public sealed class FileListGridLines : FrameworkElement
     private void OwnerLayoutUpdated(object? Sender, EventArgs E)
     {
         if (!this.IsVisible || this.GridOwner is not { IsVisible: true } Grid) return;
-        var Scroll = Descendant<ScrollViewer>(Grid);
-        var Presenter = Scroll is null ? null : Descendant<ScrollContentPresenter>(Scroll);
+        if (!ReferenceEquals(this.CachedOwner, Grid) || this.CachedScroll is null || !Grid.IsAncestorOf(this.CachedScroll))
+        {
+            this.CachedOwner = Grid;
+            this.CachedScroll = Descendant<ScrollViewer>(Grid);
+            this.CachedPresenter = this.CachedScroll is null ? null : Descendant<ScrollContentPresenter>(this.CachedScroll);
+        }
+        else if (this.CachedPresenter is null || !this.CachedScroll.IsAncestorOf(this.CachedPresenter))
+        {
+            this.CachedPresenter = Descendant<ScrollContentPresenter>(this.CachedScroll);
+        }
+        var Scroll = this.CachedScroll;
+        var Presenter = this.CachedPresenter;
         if (Scroll is null || Presenter is null || Presenter.ActualWidth <= 0 || Presenter.ActualHeight <= 0) return;
         var Viewport = new Rect(Presenter.TranslatePoint(new Point(), this), Presenter.RenderSize);
         Viewport.Intersect(new Rect(this.RenderSize));
-        var Positions = new List<double>();
+        this.VisibleColumnsBuffer.Clear();
+        foreach (var Column in Grid.Columns)
+            if (Column.Visibility == Visibility.Visible) this.VisibleColumnsBuffer.Add(Column);
+        this.VisibleColumnsBuffer.Sort(static (Left, Right) => Left.DisplayIndex.CompareTo(Right.DisplayIndex));
+        this.PositionsBuffer.Clear();
         var X = Viewport.Left - Scroll.HorizontalOffset;
-        foreach (var Column in Grid.Columns.Where(Column => Column.Visibility == Visibility.Visible).OrderBy(Column => Column.DisplayIndex))
+        foreach (var Column in this.VisibleColumnsBuffer)
         {
             X += Column.ActualWidth;
-            if (X > Viewport.Left && X <= Viewport.Right) Positions.Add(X);
+            if (X > Viewport.Left && X <= Viewport.Right) this.PositionsBuffer.Add(X);
         }
         // Use an actual row as the origin to follow both item and pixel scrolling.
         var FirstRow = Descendant<DataGridRow>(Grid);
@@ -92,15 +123,18 @@ public sealed class FileListGridLines : FrameworkElement
                 }
             }
             ReadRows(Grid);
-            GroupedRows = Rows.OrderBy(Row => Row.Top).ToArray();
+            Rows.Sort(static (Left, Right) => Left.Top.CompareTo(Right.Top));
+            GroupedRows = Rows.ToArray();
         }
-        var Columns = Positions.ToArray();
-        if (Viewport == this.Viewport && Columns.SequenceEqual(this.Columns)
+        var SameColumns = this.PositionsBuffer.Count == this.Columns.Length;
+        for (var Index = 0; SameColumns && Index < this.Columns.Length; Index++)
+            if (this.PositionsBuffer[Index] != this.Columns[Index]) SameColumns = false;
+        if (Viewport == this.Viewport && SameColumns
             && RowOrigin == this.RowOrigin && RowHeight == this.RowHeight
             && GroupedTail.Equals(this.GroupedTail)
             && (GroupedRows is null ? this.GroupedRows is null : this.GroupedRows is not null && GroupedRows.SequenceEqual(this.GroupedRows))) return;
         this.Viewport = Viewport;
-        this.Columns = Columns;
+        this.Columns = this.PositionsBuffer.ToArray();
         this.RowOrigin = RowOrigin;
         this.RowHeight = RowHeight;
         this.GroupedRows = GroupedRows;
@@ -114,8 +148,19 @@ public sealed class FileListGridLines : FrameworkElement
         if (this.Viewport.IsEmpty || this.RowHeight <= 0) return;
         var Dpi = VisualTreeHelper.GetDpi(this);
         var Brush = (Brush)this.FindResource("Line");
-        var Horizontal = new Pen(Brush, 1 / Dpi.DpiScaleY);
-        var Vertical = new Pen(Brush, 1 / Dpi.DpiScaleX);
+        if (!ReferenceEquals(this.CachedPenBrush, Brush) || this.CachedDpiX != Dpi.DpiScaleX || this.CachedDpiY != Dpi.DpiScaleY
+            || this.CachedHorizontalPen is null || this.CachedVerticalPen is null)
+        {
+            this.CachedPenBrush = Brush;
+            this.CachedDpiX = Dpi.DpiScaleX;
+            this.CachedDpiY = Dpi.DpiScaleY;
+            this.CachedHorizontalPen = new Pen(Brush, 1 / Dpi.DpiScaleY);
+            this.CachedHorizontalPen.Freeze();
+            this.CachedVerticalPen = new Pen(Brush, 1 / Dpi.DpiScaleX);
+            this.CachedVerticalPen.Freeze();
+        }
+        var Horizontal = this.CachedHorizontalPen;
+        var Vertical = this.CachedVerticalPen;
         Context.PushClip(new RectangleGeometry(this.Viewport));
         void DrawColumns(double Top, double Bottom)
         {

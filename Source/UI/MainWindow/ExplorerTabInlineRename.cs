@@ -90,9 +90,11 @@ public partial class ExplorerTab
     private void CancelInlineRename()
     {
         var Target = this.InlineRenameTarget;
+        var Box = this.InlineRenameBox;
         this.InlineRenameTarget = null;
         this.InlineRenameBox = null;
         if (Target is null) return;
+        if (Box is not null) Box.Text = RenameName(Target);
         SetRenaming(Target, false);
         if (this.FolderRefreshPending) this.ScheduleRefresh();
     }
@@ -104,7 +106,8 @@ public partial class ExplorerTab
         var Navigation = this.InlineRenameNavigation;
         var Path = RenamePath(Target);
         this.CancelInlineRename();
-        if (this.WindowClosed || Navigation != this.NavigationVersion || Name == RenameName(Target)) return;
+        if (this.WindowClosed || Navigation != this.NavigationVersion
+            || string.IsNullOrWhiteSpace(Name) || Name == RenameName(Target)) return;
         string? NewPath = null;
         var Success = await this.RunOperationAsync(LanguageService.Text("Renaming"),
             () => { CDir.Services.ShellContextMenu.Rename(IntPtr.Zero, [Path], Name, AppMain.SmokeTest);
@@ -119,6 +122,18 @@ public partial class ExplorerTab
         }
     }
 
+    internal void InlineRenamePreviewMouseDown(MouseButtonEventArgs E)
+    {
+        if (this.InlineRenameTarget is null) return;
+        if (this.InlineRenameBox is not { } Box) { this.CancelInlineRename(); return; }
+        for (var Source = E.OriginalSource as DependencyObject; Source is not null;)
+        {
+            if (ReferenceEquals(Source, Box)) return;
+            Source = Source is FrameworkContentElement Content ? Content.Parent : VisualTreeHelper.GetParent(Source);
+        }
+        this.InlineRenameTask = this.CommitInlineRenameAsync();
+    }
+
     private async void InlineRenameLostFocus(object Sender, KeyboardFocusChangedEventArgs E)
     {
         if (!ReferenceEquals(Sender, this.InlineRenameBox)) return;
@@ -127,15 +142,17 @@ public partial class ExplorerTab
 
     internal bool HandleInlineRenameKey(KeyEventArgs E)
     {
-        if (this.InlineRenameTarget is null || E.OriginalSource is not DependencyObject Source
-            || !ReferenceEquals(FindAncestor<TextBox>(Source), this.InlineRenameBox)) return false;
+        if (this.InlineRenameTarget is null) return false;
         if (E.Key == Key.Escape)
         {
             E.Handled = true;
             this.CancelInlineRename();
             this.FocusMainFilePanel();
+            return true;
         }
-        else if (E.Key is Key.Enter or Key.Tab)
+        if (E.OriginalSource is not DependencyObject Source
+            || !ReferenceEquals(FindAncestor<TextBox>(Source), this.InlineRenameBox)) return false;
+        if (E.Key is Key.Enter or Key.Tab)
         {
             E.Handled = true;
             this.InlineRenameTask = ConfirmAsync();

@@ -10,7 +10,7 @@ Built with C#, WPF, and .NET 10, CDir supports English, 简体中文, 日本語,
 
 Select files in the main panel and press Space to open them with their Windows default apps. If no app is associated, Windows shows its app picker. Customize, clear, or reset Open With Default App under Preferences > Keyboard Shortcuts. The built-in text editor has been removed. F5 keeps the selected sidebar tree when a folder and its parent are both bookmarked, and scrolls the exact selected folder header into view below pinned category and ancestor headers. Shortcut preferences remain grouped by function and searchable by action, key, or group.
 
-![CDir v3.4.25 interface preview](Docs/Images/CDirPreview.png)
+![CDir v3.4.28 interface preview](Docs/Images/CDirPreview.png)
 
 ### Opening CDir
 
@@ -28,7 +28,7 @@ The target platforms are **Windows 10 / Windows 11, 64-bit**. Builds and automat
 - Sidebar and status-bar drive meters share a one-screen-pixel frame with no inner gap. Usage colors are green `#079C19`, orange `#FFBF00`, and red `#FF3800`.
 
 - The top-right View Options dropdown includes Group By: Name, Date Modified, Type, Size, Ascending, Descending, and (None). Group headers show item counts; (None) restores the flat list. The dropdown and blank-space context menu share the same grouping state. Search and file selection are preserved, and each tab restores its grouping field and direction with the workspace. Large grouped lists and icon views load only visible items.
-- Blank-space menus match Windows File Explorer: View, Sort By and Group By (listing the visible columns), Refresh, Customize This Folder, Paste, Paste Shortcut and Windows Undo/Redo, with captions taken from Windows in its display language, alongside installed Shell extensions. Medium and larger items use Windows image/video thumbnails. The view dropdown can apply or reset a view recursively through every descendant, including future folders.
+- Blank-space menus match Windows File Explorer: View, Sort By and Group By (listing every column in the column menu, shown or hidden), Refresh, Customize This Folder, Paste, Paste Shortcut and Windows Undo/Redo, with captions taken from Windows in its display language, alongside installed Shell extensions. Medium and larger items use Windows image/video thumbnails. The view dropdown can apply or reset a view recursively through every descendant, including future folders.
 - Large items use high-resolution system icons. Images and videos show cached previews first; uncached previews load in the background while a sharp file-type icon remains visible. Pending preview requests are canceled when their items leave the visible view.
 
 - The dropdown to the right of search offers Extra Large Icons, Large Icons, Medium Icons, Small Icons, List, Details, Tiles, and Content above Show Hidden Items. Each folder remembers its view across navigation and restarts, including when opened in another tab. Alt+E and automatic column fitting act only in Details. My Computer uses fixed ascending drive-letter order with a light-gray, inactive sort arrow; directory-tree drive usage bars are thicker.
@@ -268,7 +268,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 
 在主面板选中文件后按空格，使用 Windows 默认程序打开；没有关联程序时显示系统的打开方式选择器。可在“偏好设置 → 快捷键 → 使用默认程序打开”中自定义、清除或恢复快捷键。内置文本编辑器已移除。同一分类同时收藏父目录和子目录时，F5 保持之前点击的目录树，不再展开其他同路径入口，并滚动到具体选中节点，避免被固定的分类和祖先标题遮挡。快捷键页继续按功能分组，支持按动作、组合键或分组名称搜索。
 
-![CDir v3.4.25 界面预览](Docs/Images/CDirPreview.png)
+![CDir v3.4.28 界面预览](Docs/Images/CDirPreview.png)
 
 ### 打开 CDir
 
@@ -286,7 +286,7 @@ CDir 使用 C#、WPF 和 .NET 10 构建，支持 English、简体中文、日本
 - 侧栏和状态栏用量条统一使用一个屏幕像素的细边框，填充紧贴边框；绿色为 `#079C19`、橙色为 `#FFBF00`、红色为 `#FF3800`。
 
 - 右上角“视图选项”下拉菜单新增“分组依据”：名称、修改日期、类型、大小、递增、递减和“(无)”。组标题显示项目数量，“(无)”恢复普通列表；与空白处右键菜单共用分组状态。分组切换保留搜索和文件选择，重启随工作区恢复各标签页的分组字段及方向。大目录的分组详细列表和图标视图只加载可见项目。
-- 空白处右键菜单与 Windows 文件资源管理器一致：查看、排序方式与分组依据（列出可见列）、刷新、自定义文件夹、粘贴、粘贴快捷方式及 Windows 撤消/恢复，文字取自 Windows 当前显示语言，并保留本机 Shell 扩展；中等及更大图标使用 Windows 图片/视频缩略图。右上角视图菜单可将视图递归应用到所有层级的子目录（含未来新建目录），或递归重置。
+- 空白处右键菜单与 Windows 文件资源管理器一致：查看、排序方式与分组依据（列出列选择菜单中的全部列，无论是否显示）、刷新、自定义文件夹、粘贴、粘贴快捷方式及 Windows 撤消/恢复，文字取自 Windows 当前显示语言，并保留本机 Shell 扩展；中等及更大图标使用 Windows 图片/视频缩略图。右上角视图菜单可将视图递归应用到所有层级的子目录（含未来新建目录），或递归重置。
 - 大图标使用高分辨率系统图标，避免把小图标直接放大。图片和视频优先显示已有预览；未缓存的预览在后台加载，等待期间先显示清晰的文件类型图标。离开或滚出可视区域的待处理预览会取消，减少无效等待。
 
 - 点击搜索框右侧下拉菜单，在“显示隐藏项目”上方选择超大图标、大图标、中等图标、小图标、列表、详细信息、平铺或内容。每个文件夹独立记住视图，切换目录或重启后均恢复，同一文件夹在不同标签页使用相同视图；Alt+E 和自动调整列宽仅在详细信息视图生效。My Computer 固定按盘符升序，排序箭头为不可点击的浅灰色；目录树磁盘用量条稍加粗。

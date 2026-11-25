@@ -57,49 +57,109 @@ internal static class ShellDetailColumns
         finally { if (Folder is not null) Marshal.ReleaseComObject(Folder); Marshal.FreeCoTaskMem(Root); }
     }
 
+    internal static ReadSession OpenSession() => new();
+
     internal static IReadOnlyDictionary<string, (string Text, object? Value)> ReadValues(FileEntry Entry, IReadOnlyList<Column> Columns)
     {
-        var Root = IntPtr.Zero;
-        IShellFolder2? Folder = null;
-        try
+        using var Session = new ReadSession();
+        return Session.ReadValues(Entry, Columns);
+    }
+
+    // Reuses bound IShellFolder2 instances across items in the same directory so
+    // reading extended Windows properties does not re-bind the parent folder per file.
+    internal sealed class ReadSession : IDisposable
+    {
+        private readonly Dictionary<string, IShellFolder2> Folders = new(StringComparer.OrdinalIgnoreCase);
+
+        internal IReadOnlyDictionary<string, (string Text, object? Value)> ReadValues(FileEntry Entry, IReadOnlyList<Column> Columns)
         {
-            if (Entry.ShellId is { } Bytes)
+            if (Entry.ShellId is null && Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Entry.FullPath)) is { Length: > 0 } Parent
+                && Entry.Name.Length > 0 && this.TryGetFolder(Parent, out var CachedFolder))
             {
-                Root = Marshal.AllocCoTaskMem(Bytes.Length);
-                Marshal.Copy(Bytes, 0, Root, Bytes.Length);
-            }
-            else Root = RecycleBinService.GetIdList(Entry.FullPath);
-            var Id = typeof(IShellFolder2).GUID;
-            Marshal.ThrowExceptionForHR(SHBindToParent(Root, ref Id, out Folder, out var Child));
-            var Result = new Dictionary<string, (string, object?)>();
-            foreach (var Column in Columns)
-            {
-                var Key = Column.Property;
-                object? Value = null;
-                try { if (Folder.GetDetailsEx(Child, ref Key, out Value) < 0) Value = null; }
-                catch (Exception Error) when (Error is COMException or InvalidCastException or ArgumentException) { }
-                if (Value is not null && Marshal.IsComObject(Value)) { Marshal.ReleaseComObject(Value); Value = null; }
-                // The caller supplies the context-specific catalog: Recycle Bin indices differ from filesystem indices.
-                string Text = "";
-                if (Folder.GetDetailsOf(Child, Column.Index, out var Detail) >= 0)
+                if (CachedFolder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, Entry.Name, IntPtr.Zero, out var Child, IntPtr.Zero) >= 0 && Child != IntPtr.Zero)
                 {
-                    if (StrRetToStr(ref Detail.Text, Child, out var Pointer) >= 0)
-                    {
-                        try { Text = Marshal.PtrToStringUni(Pointer) ?? ""; }
-                        finally { Marshal.FreeCoTaskMem(Pointer); }
-                    }
+                    try { return ReadColumns(CachedFolder, Child, Columns); }
+                    finally { Marshal.FreeCoTaskMem(Child); }
                 }
-                Result[Column.Key] = (Text, Value);
             }
-            return Result;
+            var Root = IntPtr.Zero;
+            IShellFolder2? Folder = null;
+            try
+            {
+                if (Entry.ShellId is { } Bytes)
+                {
+                    Root = Marshal.AllocCoTaskMem(Bytes.Length);
+                    Marshal.Copy(Bytes, 0, Root, Bytes.Length);
+                }
+                else Root = RecycleBinService.GetIdList(Entry.FullPath);
+                var Id = typeof(IShellFolder2).GUID;
+                Marshal.ThrowExceptionForHR(SHBindToParent(Root, ref Id, out Folder, out var Child));
+                return ReadColumns(Folder, Child, Columns);
+            }
+            finally { if (Folder is not null) Marshal.ReleaseComObject(Folder); if (Root != IntPtr.Zero) Marshal.FreeCoTaskMem(Root); }
         }
-        finally { if (Folder is not null) Marshal.ReleaseComObject(Folder); if (Root != IntPtr.Zero) Marshal.FreeCoTaskMem(Root); }
+
+        private bool TryGetFolder(string Directory, out IShellFolder2 Folder)
+        {
+            if (this.Folders.TryGetValue(Directory, out Folder!)) return true;
+            if (this.Folders.Count >= 64) this.ReleaseFolders();
+            var Root = IntPtr.Zero;
+            try
+            {
+                Root = RecycleBinService.GetIdList(Directory);
+                var Id = typeof(IShellFolder2).GUID;
+                if (SHBindToObject(IntPtr.Zero, Root, IntPtr.Zero, ref Id, out Folder!) < 0 || Folder is null) return false;
+                this.Folders[Directory] = Folder;
+                return true;
+            }
+            catch (Exception Error) when (Error is COMException or IOException or UnauthorizedAccessException)
+            {
+                Folder = null!;
+                return false;
+            }
+            finally { if (Root != IntPtr.Zero) Marshal.FreeCoTaskMem(Root); }
+        }
+
+        private void ReleaseFolders()
+        {
+            foreach (var Folder in this.Folders.Values) Marshal.ReleaseComObject(Folder);
+            this.Folders.Clear();
+        }
+
+        public void Dispose() => this.ReleaseFolders();
+    }
+
+    private static Dictionary<string, (string Text, object? Value)> ReadColumns(IShellFolder2 Folder, IntPtr Child, IReadOnlyList<Column> Columns)
+    {
+        var Result = new Dictionary<string, (string, object?)>(Columns.Count);
+        foreach (var Column in Columns)
+        {
+            var Key = Column.Property;
+            object? Value = null;
+            try { if (Folder.GetDetailsEx(Child, ref Key, out Value) < 0) Value = null; }
+            catch (Exception Error) when (Error is COMException or InvalidCastException or ArgumentException) { }
+            if (Value is not null && Marshal.IsComObject(Value)) { Marshal.ReleaseComObject(Value); Value = null; }
+            // The caller supplies the context-specific catalog: Recycle Bin indices differ from filesystem indices.
+            string Text = "";
+            if (Folder.GetDetailsOf(Child, Column.Index, out var Detail) >= 0)
+            {
+                if (StrRetToStr(ref Detail.Text, Child, out var Pointer) >= 0)
+                {
+                    try { Text = Marshal.PtrToStringUni(Pointer) ?? ""; }
+                    finally { Marshal.FreeCoTaskMem(Pointer); }
+                }
+            }
+            Result[Column.Key] = (Text, Value);
+        }
+        return Result;
     }
 
     [ComImport, Guid("93F2F68C-1D1B-11D3-A30E-00C04F79ABD1"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IShellFolder2
     {
-        void ParseDisplayName(); void EnumObjects(); void BindToObject(); void BindToStorage(); void CompareIDs();
+        [PreserveSig] int ParseDisplayName(IntPtr Owner, IntPtr Context, [MarshalAs(UnmanagedType.LPWStr)] string Name,
+            IntPtr Eaten, out IntPtr IdList, IntPtr Attributes);
+        void EnumObjects(); void BindToObject(); void BindToStorage(); void CompareIDs();
         void CreateViewObject(); void GetAttributesOf(); void GetUIObjectOf(); void GetDisplayNameOf(); void SetNameOf();
         void GetDefaultSearchGUID(); void EnumSearches(); void GetDefaultColumn();
         [PreserveSig] int GetDefaultColumnState(uint Index, out uint Flags);

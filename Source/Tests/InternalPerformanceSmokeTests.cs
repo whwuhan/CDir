@@ -108,6 +108,23 @@ public partial class ExplorerTab
                 "Fitting 10,000 repeated type labels retains the exact column width with over 75 percent fewer measurement allocations");
             Metrics["column_fit"] = new { entries = Rows.Length, distinct_labels = 20, baseline_ms = BeforeFit.Ms, final_ms = AfterFit.Ms,
                 baseline_bytes = BeforeFit.Bytes, final_bytes = AfterFit.Bytes, expected_width = Math.Ceiling(LegacyWidth), final_width = Column.Width.Value };
+
+            var TabState = Page.CaptureWorkspaceTab();
+            var VisibleCount = Page.FileGrid.Columns.Count(Item => Item.Visibility == Visibility.Visible && Item.ActualWidth >= 24);
+            Check(TabState.ColumnWidths.Count == VisibleCount && TabState.ColumnWidths.Count < 16,
+                "Workspace snapshots persist only visible column widths instead of all collapsed Windows columns");
+            var ColumnPasses = Measure(() => { for (var Pass = 0; Pass < 40; Pass++) Page.ApplyColumnVisibility(); });
+            Check(ColumnPasses.Ms < 200, "Repeated ApplyColumnVisibility passes stay fast across all 321 Windows columns");
+            Metrics["column_visibility_40x"] = new { passes = 40, columns = Page.FileGrid.Columns.Count, ms = ColumnPasses.Ms, bytes = ColumnPasses.Bytes };
+
+            var EnumFixture = Directory.CreateDirectory(Path.Combine(Root, "EnumPerf")).FullName;
+            for (var Index = 0; Index < 300; Index++) File.WriteAllText(Path.Combine(EnumFixture, $"Item-{Index:000}.txt"), "perf");
+            var Listed = this.Files.GetEntries(EnumFixture, ShowHidden: true, SortByName: true);
+            Check(Listed.Count == 300 && Listed.All(Entry => Entry.TypeArguments.Length == 0 && Entry.TypeName.Length > 0),
+                "FileSystemEnumerable directory listing avoids per-entry TypeArguments allocations for known file types");
+            var SearchMatches = this.Files.SearchEntries(EnumFixture, SearchQuery.Parse("Item-299"), ShowHidden: true);
+            Check(SearchMatches.Count == 1 && SearchMatches[0].Name == "Item-299.txt",
+                "FileSystemEnumerable recursive search finds exact matches without allocating FileInfo per skipped file");
         }
         finally { Probe.RequestExit(); }
         if (AppMain.ScreenshotPath is { } Output)

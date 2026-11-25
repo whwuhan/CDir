@@ -61,6 +61,7 @@ public partial class ExplorerTab
         this.DismissFileDragFeedback();
         if (E.ChangedButton != MouseButton.Left || E.OriginalSource is DependencyObject PressSource && !this.SidebarPanel.IsAncestorOf(PressSource))
             this.CancelSidebarFolderClick();
+        this.InlineRenamePreviewMouseDown(E);
         this.ClearSelectionOnBlankMouseDown(E);
         this.AddressEditPreviewMouseDown(E);
         if (E.Handled) return;
@@ -212,8 +213,7 @@ public partial class ExplorerTab
                 {
                     if (!Known.Add(Entry.FullPath)) continue;
                     Entry.Use12HourClock = this.Settings.Use12HourClock;
-                    Entry.VersionStatus = this.VersionSnapshots.FirstOrDefault(Snapshot => Snapshot.Covers(Entry.FullPath))?.GetStatus(Entry.FullPath)
-                        ?? VersionStatus.None;
+                    Entry.VersionStatus = this.CachedVersionStatus(Entry.FullPath);
                     this.AssignFileGroup(Entry, Today);
                     Items.Add(Entry);
                 }

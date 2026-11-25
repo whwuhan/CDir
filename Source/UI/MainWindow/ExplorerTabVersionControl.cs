@@ -231,29 +231,30 @@ public partial class ExplorerTab
         }
     }
 
-    private void ApplyVersionSnapshots()
+    private VersionStatus CachedVersionStatus(string Path)
     {
         if (!ReferenceEquals(this.CachedStatusSnapshots, this.VersionSnapshots))
         {
             this.VersionStatusByPath.Clear();
             this.CachedStatusSnapshots = this.VersionSnapshots;
         }
-        VersionStatus Status(string Path)
-        {
-            if (this.VersionSnapshots.Count == 0) return VersionStatus.None;
-            if (this.VersionStatusByPath.TryGetValue(Path, out var Cached)) return Cached;
-            var Status = VersionStatus.None;
-            foreach (var Snapshot in this.VersionSnapshots)
-                if (Snapshot.Covers(Path)) { Status = Snapshot.GetStatus(Path); break; }
-            // Bound path retention even when a long recursive search continually
-            // replaces its displayed batch without changing repository snapshots.
-            if (this.VersionStatusByPath.Count >= 65536) this.VersionStatusByPath.Clear();
-            this.VersionStatusByPath[Path] = Status;
-            return Status;
-        }
-        foreach (var Entry in this.Entries) Entry.VersionStatus = Status(Entry.FullPath);
-        foreach (var Node in this.AllVersionNodes()) Node.VersionStatus = Status(Node.FullPath);
-        this.AddressIcon.VersionStatus = Status(this.CurrentPath);
+        if (this.VersionSnapshots.Count == 0) return VersionStatus.None;
+        if (this.VersionStatusByPath.TryGetValue(Path, out var Cached)) return Cached;
+        var Status = VersionStatus.None;
+        foreach (var Snapshot in this.VersionSnapshots)
+            if (Snapshot.Covers(Path)) { Status = Snapshot.GetStatus(Path); break; }
+        // Bound path retention even when a long recursive search continually
+        // replaces its displayed batch without changing repository snapshots.
+        if (this.VersionStatusByPath.Count >= 65536) this.VersionStatusByPath.Clear();
+        this.VersionStatusByPath[Path] = Status;
+        return Status;
+    }
+
+    private void ApplyVersionSnapshots()
+    {
+        foreach (var Entry in this.Entries) Entry.VersionStatus = this.CachedVersionStatus(Entry.FullPath);
+        foreach (var Node in this.AllVersionNodes()) Node.VersionStatus = this.CachedVersionStatus(Node.FullPath);
+        this.AddressIcon.VersionStatus = this.CachedVersionStatus(this.CurrentPath);
     }
 
     private void ConfigureVersionWatchers()

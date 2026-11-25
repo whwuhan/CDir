@@ -80,14 +80,38 @@ public partial class MainWindow
             && this.ReadSharedState(Item.Key) is { } Disk && Disk != Baseline && Disk != Item.Value);
     }
 
+    private int PeerProbeActive;
+    private long LastPeerProbeAt;
+
+    private void QueuePeerCheck()
+    {
+        if (!this.TrackInstances || this.MultiInstanceDetected || this.SaveOnExit is not null || this.WorkspaceClosed) return;
+        var Now = Environment.TickCount64;
+        if (Now - this.LastPeerProbeAt < 3000 || Interlocked.Exchange(ref this.PeerProbeActive, 1) != 0) return;
+        this.LastPeerProbeAt = Now;
+        _ = Task.Run(() =>
+        {
+            try { if (InstanceWorkspaceService.Peers().Length > 0) this.MultiInstanceDetected = true; }
+            finally { Interlocked.Exchange(ref this.PeerProbeActive, 0); }
+        });
+    }
+
     internal bool CanPersistSharedState
     {
         get
         {
             if (this.SaveOnExit is { } Save) return Save;
-            if (this.TrackInstances && InstanceWorkspaceService.Peers().Length > 0) this.MultiInstanceDetected = true;
+            if (this.TrackInstances && !this.MultiInstanceDetected && InstanceWorkspaceService.Peers().Length > 0)
+                this.MultiInstanceDetected = true;
             return !this.MultiInstanceDetected;
         }
+    }
+
+    private bool CanPersistSharedStateFromTimer()
+    {
+        if (this.SaveOnExit is { } Save) return Save;
+        this.QueuePeerCheck();
+        return !this.MultiInstanceDetected;
     }
 
     private Rect LastFinitePersistenceBounds = Rect.Empty;
@@ -265,20 +289,21 @@ public partial class MainWindow
             if (this.WorkspacePath is not null && !this.WorkspaceClosed)
             {
                 this.WorkspaceTimer = new DispatcherTimer(DispatcherPriority.Background, this.Dispatcher) { Interval = TimeSpan.FromSeconds(1) };
-                this.WorkspaceTimer.Tick += (_, _) => this.PersistWorkspaceNow();
+                this.WorkspaceTimer.Tick += (_, _) => this.PersistWorkspaceNow(FromTimer: true);
                 this.WorkspaceTimer.Start();
                 this.PersistWorkspaceNow();
             }
         }
     }
 
-    internal bool PersistWorkspaceNow()
+    internal bool PersistWorkspaceNow(bool FromTimer = false)
     {
         if (this.SessionIsEnding || this.ClosingTabBatch || this.WorkspacePath is null || this.RestoringWorkspace || this.WorkspaceClosed
             || this.Tabs.Count == 0 || this.Tabs.Any(Tab => !Tab.IsInitialLayoutReady)) return false;
         try
         {
-            if (!this.CanPersistSharedState)
+            var CanPersist = FromTimer ? this.CanPersistSharedStateFromTimer() : this.CanPersistSharedState;
+            if (!CanPersist)
             {
                 if (this.SaveOnExit is null && this.CaptureWorkspace() is { } PrivateState) this.SessionStore?.Save(PrivateState);
                 return false;
