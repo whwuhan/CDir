@@ -34,14 +34,20 @@ internal sealed class InstanceWorkspaceService(Func<Task<WorkspaceState?>> Captu
         catch (UnauthorizedAccessException) { return false; }
     }
 
+    private static readonly Lazy<(int Id, string Name, int SessionId)> CurrentProcessInfo = new(() =>
+    {
+        using var Current = Process.GetCurrentProcess();
+        return (Current.Id, Current.ProcessName, Current.SessionId);
+    });
+
     internal static int[] Peers()
     {
         // UI checks must never discover, clone or suspend saving in user windows,
         // including when Test.ps1 -Published launches the exact same executable.
         if (AppMain.SmokeTest) return [];
-        using var Current = Process.GetCurrentProcess();
+        var Current = CurrentProcessInfo.Value;
         var Peers = new List<(int Id, DateTime Started)>();
-        foreach (var Process in Process.GetProcessesByName(Current.ProcessName))
+        foreach (var Process in Process.GetProcessesByName(Current.Name))
         {
             using (Process)
             {

@@ -62,19 +62,27 @@ public partial class ExplorerTab
         this.ApplyLanguageResources();
     }
 
+    private static string? LastSharedResourceLanguage;
+
     private void ApplyLanguageResources()
     {
-        foreach (var Entry in LanguageService.GetTexts()) SetSharedResource("Text" + Entry.Key, Entry.Value);
-        var FontSource = LanguageService.CurrentLanguage switch
+        var CurrentLanguage = LanguageService.CurrentLanguage;
+        var Texts = LanguageService.GetTexts();
+        if (LastSharedResourceLanguage != CurrentLanguage || !Application.Current.Resources.Contains("TextFavorites"))
         {
-            "ja-JP" => "Yu Gothic UI, Meiryo, Segoe UI, Microsoft YaHei UI, Malgun Gothic",
-            "ko-KR" => "Malgun Gothic, Segoe UI, Microsoft YaHei UI, Yu Gothic UI",
-            "en-US" => "Segoe UI, Microsoft YaHei UI, Yu Gothic UI, Malgun Gothic",
-            _ => "Microsoft YaHei UI, Segoe UI, Yu Gothic UI, Malgun Gothic"
-        };
-        if (Application.Current.Resources["InterfaceFont"] is not FontFamily Font || Font.Source != FontSource)
-            SetSharedResource("InterfaceFont", new FontFamily(FontSource));
-        this.Language = XmlLanguage.GetLanguage(LanguageService.CurrentLanguage);
+            foreach (var Entry in Texts) SetSharedResource("Text" + Entry.Key, Entry.Value);
+            var FontSource = CurrentLanguage switch
+            {
+                "ja-JP" => "Yu Gothic UI, Meiryo, Segoe UI, Microsoft YaHei UI, Malgun Gothic",
+                "ko-KR" => "Malgun Gothic, Segoe UI, Microsoft YaHei UI, Yu Gothic UI",
+                "en-US" => "Segoe UI, Microsoft YaHei UI, Yu Gothic UI, Malgun Gothic",
+                _ => "Microsoft YaHei UI, Segoe UI, Yu Gothic UI, Malgun Gothic"
+            };
+            if (Application.Current.Resources["InterfaceFont"] is not FontFamily Font || Font.Source != FontSource)
+                SetSharedResource("InterfaceFont", new FontFamily(FontSource));
+            LastSharedResourceLanguage = CurrentLanguage;
+        }
+        this.Language = XmlLanguage.GetLanguage(CurrentLanguage);
         // DataGrid columns and closed context menus do not participate in the window's resource invalidation.
         UpdateMenuHeaders(this.HostWindow.FileMenu);
         UpdateMenuHeaders(this.HostWindow.HelpMenu);
@@ -85,11 +93,11 @@ public partial class ExplorerTab
             foreach (var Column in this.FileGrid.Columns)
             {
                 var Key = ColumnResourceKey(Column.SortMemberPath);
-                if (LanguageService.GetTexts().ContainsKey(Key)) Column.Header = LanguageService.Text(Key);
+                if (Texts.TryGetValue(Key, out var Label) && !Equals(Column.Header, Label)) Column.Header = Label;
             }
             if (this.ColumnMenuButton.ContextMenu is { } ColumnsMenu)
                 foreach (var Item in ColumnsMenu.Items.OfType<System.Windows.Controls.MenuItem>())
-                    if (Item.Tag is string ColumnKey && ColumnKeys.Contains(ColumnKey)) Item.Header = LanguageService.Text(ColumnResourceKey(ColumnKey));
+                    if (Item.Tag is string ColumnKey && AllColumnKeySet.Value.Contains(ColumnKey)) Item.Header = LanguageService.Text(ColumnResourceKey(ColumnKey));
             UpdateMenuHeaders(this.FileGrid.ContextMenu);
             this.ApplyShortcutHints();
         }
@@ -220,7 +228,8 @@ public partial class ExplorerTab
             SeparatePinnedTabs = this.Settings.SeparatePinnedTabs,
             ShowSidebarDriveUsage = this.Settings.ShowSidebarDriveUsage,
             AutoFitColumnsOnNavigation = this.Settings.AutoFitColumnsOnNavigation,
-            ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
+            ColumnOrder = this.Settings.ColumnOrder is { Count: > 0 } SavedOrder ? [.. SavedOrder]
+                : this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList(),
             HiddenColumns = this.Settings.HiddenColumns?.ToList() ?? [],
             EnabledColumns = this.Settings.EnabledColumns?.ToList(),
             BoldAllFonts = this.Settings.BoldAllFonts,

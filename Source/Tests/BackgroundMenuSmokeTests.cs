@@ -90,8 +90,9 @@ public partial class ExplorerTab
         static bool CollapsibleGroupsOnly(MenuNode Node) => Node.Verb is "viewexpandall" or "viewcollapseall";
         async Task<(MenuNode[] Windows, MenuNode[] Application)> Compare(string Name, uint NativeView, bool Assert = true)
         {
-            var Keys = this.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible).OrderBy(Column => Column.DisplayIndex)
-                .Select(Column => Column.SortMemberPath).ToArray();
+            // CDir also lists hidden columns from its column menu; give Windows the same
+            // columns so everything else in the menu can still be compared item by item.
+            var Keys = this.ExplorerGroupColumns().Select(Column => Column.Key).ToArray();
             MenuNode[] Windows = [], Application = [];
             bool Matches() => Windows.Length == Application.Length && Windows.Zip(Application).All(Pair => Pair.First.SameAs(Pair.Second));
             // The first menus a process requests can omit packaged (Windows 11) handlers
@@ -155,6 +156,39 @@ public partial class ExplorerTab
                 await this.ExecuteBackgroundCommandAsync("CDir.Group.None");
                 this.ChangeColumnVisibility(Created, false);
                 await Settle();
+                // A column hidden in the column menu still sorts and groups the folder.
+                File.SetCreationTime(Path.Combine(Fixture, "Alpha.txt"), new DateTime(2020, 1, 2, 3, 4, 5));
+                File.SetCreationTime(Path.Combine(Fixture, "Beta.bin"), new DateTime(2024, 6, 7, 8, 9, 10));
+                await this.NavigateAsync(Fixture, RecordHistory: false);
+                await Settle();
+                var Hidden = await ReadApplicationMenu();
+                MenuNode Submenu(MenuNode[] Menu, string Prefix) => Menu.Single(Node => Node.Children.Any(Child => Child.Verb == Prefix + "Ascending"));
+                Check(this.FileGrid.Columns.Single(Column => Column.SortMemberPath == Created).Visibility != Visibility.Visible
+                    && Submenu(Hidden, "CDir.Sort.").Children.Any(Child => Child.Verb == "CDir.Sort." + Created)
+                    && Submenu(Hidden, "CDir.Group.").Children.Any(Child => Child.Verb == "CDir.Group." + Created),
+                    "A column hidden in the column menu still appears in Sort By and Group By");
+                await this.ExecuteBackgroundCommandAsync("CDir.Sort." + Created);
+                await this.ExecuteBackgroundCommandAsync("CDir.Sort.Descending");
+                await this.ShellColumnsTask;
+                await Settle();
+                var Files = this.View!.Cast<FileEntry>().Where(Entry => !Entry.IsDirectory).Select(Entry => Entry.Name).ToArray();
+                Check(this.SortProperty == Created && this.Entries.All(Entry => Entry.ShellSortValue(Created) is DateTime)
+                    && Files.SequenceEqual(["Beta.bin", "Alpha.txt"]),
+                    $"Sorting by a hidden date column loads its values and orders by them (files={string.Join(", ", Files)})");
+                await this.ExecuteBackgroundCommandAsync("CDir.Group." + Created);
+                await this.ShellColumnsTask;
+                await Settle();
+                Check(this.FileGroupProperty == Created && this.View!.Groups?.Count > 1
+                    && this.Entries.All(Entry => Entry.ViewGroup.Length > 0 && Entry.ViewGroup != Unspecified),
+                    "Grouping by a hidden date column groups by its loaded values");
+                this.ChangeColumnEnabled(Created, false);
+                await Settle();
+                var Removed = await ReadApplicationMenu();
+                Check(this.SortProperty != Created && this.FileGroupProperty.Length == 0
+                    && !Submenu(Removed, "CDir.Sort.").Children.Any(Child => Child.Verb == "CDir.Sort." + Created),
+                    "Removing a column from the column menu removes it from Sort By and releases its sort and grouping");
+                await this.ExecuteBackgroundCommandAsync("CDir.Sort." + nameof(FileEntry.Name));
+                await this.ExecuteBackgroundCommandAsync("CDir.Sort.Ascending");
             }
             await this.ExecuteBackgroundCommandAsync("CDir.Group.None");
             this.ChangeFileView(FileViewMode.MediumIcons, FocusPanel: false, SaveImmediately: false);
@@ -193,6 +227,8 @@ public partial class ExplorerTab
             if (this.ColumnMenuButton.ContextMenu is { } Menu) Menu.IsOpen = false;
             if (this.IsColumnEnabled(Created) && !CreatedWasVisible) this.ChangeColumnVisibility(Created, false);
             if (!CreatedWasEnabled && this.IsColumnEnabled(Created)) this.ChangeColumnEnabled(Created, false);
+            if (CreatedWasEnabled && !this.IsColumnEnabled(Created)) this.ChangeColumnEnabled(Created, true);
+            if (CreatedWasVisible && this.IsColumnEnabled(Created)) this.ChangeColumnVisibility(Created, true);
             this.ChangeFileView(InitialView, InitialSize, FocusPanel: false, SaveImmediately: false);
             await this.ExecuteBackgroundCommandAsync("CDir.Sort." + InitialSort);
             await this.ExecuteBackgroundCommandAsync(InitialDirection == System.ComponentModel.ListSortDirection.Descending ? "CDir.Sort.Descending" : "CDir.Sort.Ascending");

@@ -80,13 +80,13 @@ public partial class ExplorerTab
     private async void ColumnVisibilityMenuClick(object Sender, RoutedEventArgs E)
     {
         E.Handled = true;
-        if (Sender is not MenuItem { Tag: string Key }) return;
-        var Column = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == Key);
+        if (Sender is not MenuItem { Tag: string Key } || !this.ColumnsByKey.TryGetValue(Key, out var Column)) return;
         if (this.ChangeColumnVisibility(Key, Column.Visibility != Visibility.Visible))
             await this.HostWindow.SynchronizePreferencesAsync(this);
         if (this.ColumnMenuButton.ContextMenu is { } Menu)
-            foreach (var Item in Menu.Items.OfType<MenuItem>().Where(Item => Item.Tag is string Key && ColumnKeys.Contains(Key)))
-                Item.IsChecked = this.FileGrid.Columns.Single(Column => Column.SortMemberPath == (string)Item.Tag).Visibility == Visibility.Visible;
+            foreach (var Item in Menu.Items.OfType<MenuItem>())
+                if (Item.Tag is string ItemKey && this.ColumnsByKey.TryGetValue(ItemKey, out var MenuColumn))
+                    Item.IsChecked = MenuColumn.Visibility == Visibility.Visible;
     }
 
     private void UpdateHiddenItemsMenu()
@@ -114,7 +114,7 @@ public partial class ExplorerTab
         nameof(FileEntry.OriginalLocation) => "OriginalLocationColumnHint",
         nameof(FileEntry.DateDeleted) => "DateDeletedColumnHint",
         "System.DateCreated" => "DateCreatedColumnHint",
-        _ when WindowsColumns.Value.FirstOrDefault(Column => Column.Key == Key)?.RecycleOnly == true => "RecycleColumnHint",
+        _ when WindowsColumnsByKey.Value.TryGetValue(Key, out var Column) && Column.RecycleOnly => "RecycleColumnHint",
         _ when Key.StartsWith("System.Audio.") || Key.StartsWith("System.Music.") => "AudioColumnHint",
         _ when Key.StartsWith("System.Video.") || Key.StartsWith("System.RecordedTV.") => "VideoColumnHint",
         _ when Key.StartsWith("System.Image.") || Key.StartsWith("System.Photo.") => "ImageColumnHint",
@@ -122,28 +122,51 @@ public partial class ExplorerTab
         _ when Key.StartsWith("System.Contact.") => "ContactColumnHint",
         _ when Key.StartsWith("System.Message.") => "MessageColumnHint",
         _ when Key.StartsWith("System.VersionControl.") => "VersionControlColumnHint",
-        _ when !BasicColumnKeys.Contains(Key) => "WindowsColumnHint",
+        _ when !BasicColumnKeySet.Contains(Key) => "WindowsColumnHint",
         _ => null
     };
 
     private void RestoreColumnLayout(IEnumerable<string>? Order, IEnumerable<string>? Hidden, IEnumerable<string>? Enabled = null)
     {
         this.InitializeShellColumns();
+        var AllSet = AllColumnKeySet.Value;
         var Known = (Order ?? DefaultSettings.Current.ColumnOrder).ToHashSet(StringComparer.Ordinal);
-        var RestoredOrder = (Order ?? DefaultSettings.Current.ColumnOrder).Where(Key => ColumnKeys.Contains(Key, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToList();
-        RestoredOrder.AddRange(ColumnKeys.Where(Key => !RestoredOrder.Contains(Key, StringComparer.Ordinal)));
-        var RestoredHidden = (Hidden ?? DefaultSettings.Current.HiddenColumns).Where(Key => ColumnKeys.Contains(Key, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToList();
-        RestoredHidden.AddRange(ColumnKeys.Where(Key => !Known.Contains(Key) && !BasicColumnKeys.Contains(Key) && !IsRecycleColumn(Key) && !RestoredHidden.Contains(Key)));
-        if (ColumnKeys.Where(Key => Key != nameof(FileEntry.FullPath) && this.ColumnAvailable(Key)).All(RestoredHidden.Contains)) RestoredHidden.Remove(nameof(FileEntry.Name));
+        var RestoredOrder = new List<string>(ColumnKeys.Length);
+        var RestoredOrderSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var Key in Order ?? DefaultSettings.Current.ColumnOrder)
+            if (AllSet.Contains(Key) && RestoredOrderSet.Add(Key)) RestoredOrder.Add(Key);
+        foreach (var Key in ColumnKeys)
+            if (RestoredOrderSet.Add(Key)) RestoredOrder.Add(Key);
+        var RestoredHidden = new List<string>();
+        var RestoredHiddenSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var Key in Hidden ?? DefaultSettings.Current.HiddenColumns)
+            if (AllSet.Contains(Key) && RestoredHiddenSet.Add(Key)) RestoredHidden.Add(Key);
+        foreach (var Key in ColumnKeys)
+            if (!Known.Contains(Key) && !BasicColumnKeySet.Contains(Key) && !IsRecycleColumn(Key) && RestoredHiddenSet.Add(Key))
+                RestoredHidden.Add(Key);
+        if (ColumnKeys.Where(Key => Key != nameof(FileEntry.FullPath) && this.ColumnAvailable(Key)).All(RestoredHiddenSet.Contains))
+        {
+            RestoredHidden.Remove(nameof(FileEntry.Name));
+            RestoredHiddenSet.Remove(nameof(FileEntry.Name));
+        }
         this.Settings.ColumnOrder = RestoredOrder;
-        var RestoredEnabled = (Enabled ?? ColumnKeys.Where(Key => BasicColumnKeys.Contains(Key) || IsRecycleColumn(Key) || !RestoredHidden.Contains(Key)))
-            .Where(ColumnKeys.Contains).Distinct(StringComparer.Ordinal).ToList();
-        if (!RestoredEnabled.Any(Key => Key != nameof(FileEntry.FullPath) && this.ColumnAvailable(Key) && !RestoredHidden.Contains(Key)))
-        { if (!RestoredEnabled.Contains(nameof(FileEntry.Name))) RestoredEnabled.Add(nameof(FileEntry.Name)); RestoredHidden.Remove(nameof(FileEntry.Name)); }
+        var RestoredEnabled = new List<string>();
+        var RestoredEnabledSet = new HashSet<string>(StringComparer.Ordinal);
+        IEnumerable<string> EnabledSource = Enabled ?? ColumnKeys.Where(Key => BasicColumnKeySet.Contains(Key) || IsRecycleColumn(Key) || !RestoredHiddenSet.Contains(Key));
+        foreach (var Key in EnabledSource)
+            if (AllSet.Contains(Key) && RestoredEnabledSet.Add(Key)) RestoredEnabled.Add(Key);
+        if (!RestoredEnabled.Any(Key => Key != nameof(FileEntry.FullPath) && this.ColumnAvailable(Key) && !RestoredHiddenSet.Contains(Key)))
+        {
+            if (RestoredEnabledSet.Add(nameof(FileEntry.Name))) RestoredEnabled.Add(nameof(FileEntry.Name));
+            RestoredHidden.Remove(nameof(FileEntry.Name));
+        }
         this.Settings.EnabledColumns = RestoredEnabled;
         this.Settings.HiddenColumns = RestoredHidden;
         for (var Index = 0; Index < RestoredOrder.Count; Index++)
-            this.FileGrid.Columns.Single(Column => Column.SortMemberPath == RestoredOrder[Index]).DisplayIndex = Index;
+        {
+            var Column = this.ColumnsByKey[RestoredOrder[Index]];
+            if (Column.DisplayIndex != Index) Column.DisplayIndex = Index;
+        }
         this.ApplyColumnVisibility();
         this.UpdateColumnHints();
     }
@@ -155,7 +178,9 @@ public partial class ExplorerTab
         foreach (var Column in this.FileGrid.Columns)
         {
             var Hint = ColumnHintResourceKey(Column.SortMemberPath);
-            Column.SetValue(ToolTipService.ToolTipProperty, Hint is not null ? LanguageService.Text(Hint) : null);
+            var Tip = Hint is not null ? LanguageService.Text(Hint) : null;
+            if (!Equals(Column.GetValue(ToolTipService.ToolTipProperty), Tip))
+                Column.SetValue(ToolTipService.ToolTipProperty, Tip);
             if (Hint is null) continue;
             if (!this.ColumnHeaderHintStyles.TryGetValue(Hint, out var HeaderStyle))
             {
@@ -165,26 +190,44 @@ public partial class ExplorerTab
             }
             // Column is assigned after a virtualized header's style is applied.
             // A per-column style also works for newly realized/recycled headers.
-            Column.HeaderStyle = HeaderStyle;
+            if (!ReferenceEquals(Column.HeaderStyle, HeaderStyle)) Column.HeaderStyle = HeaderStyle;
         }
     }
 
-    private IReadOnlyList<ColumnPreference> GetColumnPreferences() => this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex)
-        .Where(Column => ColumnKeys.Contains(Column.SortMemberPath, StringComparer.Ordinal))
-        .Select(Column => new ColumnPreference(Column.SortMemberPath, ColumnResourceKey(Column.SortMemberPath),
-            this.IsColumnEnabled(Column.SortMemberPath),
-            Column.SortMemberPath == nameof(FileEntry.FullPath),
-            LanguageService.GetTexts().ContainsKey(ColumnResourceKey(Column.SortMemberPath)) ? null : Column.Header?.ToString(),
-            ColumnHintResourceKey(Column.SortMemberPath))).ToArray();
+    private IReadOnlyList<ColumnPreference> GetColumnPreferences()
+    {
+        var Texts = LanguageService.GetTexts();
+        var EnabledSet = this.Settings.EnabledColumns is { Count: > 0 } List ? new HashSet<string>(List, StringComparer.Ordinal) : null;
+        return this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex)
+            .Where(Column => AllColumnKeySet.Value.Contains(Column.SortMemberPath))
+            .Select(Column =>
+            {
+                var ResourceKey = ColumnResourceKey(Column.SortMemberPath);
+                return new ColumnPreference(Column.SortMemberPath, ResourceKey,
+                    EnabledSet?.Contains(Column.SortMemberPath) == true,
+                    Column.SortMemberPath == nameof(FileEntry.FullPath),
+                    Texts.ContainsKey(ResourceKey) ? null : Column.Header?.ToString(),
+                    ColumnHintResourceKey(Column.SortMemberPath));
+            }).ToArray();
+    }
 
     private void ApplyColumnVisibility()
     {
+        var EnabledSet = this.Settings.EnabledColumns is { Count: > 0 } Enabled ? new HashSet<string>(Enabled, StringComparer.Ordinal) : null;
+        var HiddenSet = this.Settings.HiddenColumns is { Count: > 0 } Hidden ? new HashSet<string>(Hidden, StringComparer.Ordinal) : null;
+        var HideSearchPath = !this.CurrentSearch.IsActive || this.IsRecycleBin;
         foreach (var Column in this.FileGrid.Columns)
         {
-            if (!this.ColumnAvailable(Column.SortMemberPath) || !this.IsColumnEnabled(Column.SortMemberPath)) { Column.Visibility = Visibility.Collapsed; continue; }
-            var Hidden = this.Settings.HiddenColumns?.Contains(Column.SortMemberPath, StringComparer.Ordinal) == true;
-            var SearchOnly = Column.SortMemberPath == nameof(FileEntry.FullPath) && (!this.CurrentSearch.IsActive || this.IsRecycleBin);
-            Column.Visibility = Hidden || SearchOnly ? Visibility.Collapsed : Visibility.Visible;
+            var Key = Column.SortMemberPath;
+            Visibility Desired;
+            if (!this.ColumnAvailable(Key) || EnabledSet?.Contains(Key) != true) Desired = Visibility.Collapsed;
+            else
+            {
+                var IsHidden = HiddenSet?.Contains(Key) == true;
+                var SearchOnly = Key == nameof(FileEntry.FullPath) && HideSearchPath;
+                Desired = IsHidden || SearchOnly ? Visibility.Collapsed : Visibility.Visible;
+            }
+            if (Column.Visibility != Desired) Column.Visibility = Desired;
         }
         this.QueueFolderSizes();
         this.QueueShellColumnValues();
@@ -194,42 +237,53 @@ public partial class ExplorerTab
 
     private bool ChangeColumnEnabled(string Key, bool Enabled)
     {
-        if (!ColumnKeys.Contains(Key) || this.WindowClosed) return false;
+        if (!AllColumnKeySet.Value.Contains(Key) || this.WindowClosed) return false;
         if (!Enabled && this.IsColumnEnabled(Key) && !this.ChangeColumnVisibility(Key, false)) return false;
         var Keys = (this.Settings.EnabledColumns ?? []).ToHashSet(StringComparer.Ordinal);
         if (Enabled) Keys.Add(Key); else Keys.Remove(Key);
         this.Settings.EnabledColumns = ColumnKeys.Where(Keys.Contains).ToList();
         this.ApplyColumnVisibility();
+        if (!Enabled) this.ReleaseRemovedColumn(Key);
         if (this.ColumnMenuButton.ContextMenu is { } Menu) Menu.IsOpen = false;
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
         return true;
     }
 
-    private bool ChangeColumnVisibility(string Key, bool Visible)
+    // Removing a column from the column menu removes it from Sort By and Group By too.
+    private void ReleaseRemovedColumn(string Key)
     {
-        if (!ColumnKeys.Contains(Key, StringComparer.Ordinal) || !this.IsColumnEnabled(Key) || this.WindowClosed) return false;
-        var Hidden = (this.Settings.HiddenColumns ?? []).ToHashSet(StringComparer.Ordinal);
-        if (Visible) Hidden.Remove(Key);
-        else Hidden.Add(Key);
-        if (ColumnKeys.Where(Key => Key != nameof(FileEntry.FullPath) && this.ColumnAvailable(Key) && this.IsColumnEnabled(Key)).All(Hidden.Contains)) return false;
-        this.Settings.HiddenColumns = ColumnKeys.Where(Hidden.Contains).ToList();
-        this.ApplyColumnVisibility();
-        if (Hidden.Contains(this.SortProperty))
+        if (this.SortProperty != Key && this.FileGroupProperty != Key) return;
+        if (this.FileGroupProperty == Key) { this.FileGroupProperty = ""; this.FileGroupDescending = false; }
+        if (this.SortProperty == Key)
         {
             this.SortProperty = this.FileGrid.Columns.Where(Column => Column.Visibility == Visibility.Visible)
                 .OrderBy(Column => Column.DisplayIndex).First().SortMemberPath;
             this.SortDirection = ListSortDirection.Ascending;
-            this.ApplySort();
-            foreach (var Column in this.FileGrid.Columns)
-                Column.SortDirection = Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
         }
+        this.ApplySort();
+        foreach (var Column in this.FileGrid.Columns)
+            Column.SortDirection = Column.SortMemberPath == this.SortProperty ? this.SortDirection : null;
+    }
+
+    private bool ChangeColumnVisibility(string Key, bool Visible)
+    {
+        if (!AllColumnKeySet.Value.Contains(Key) || !this.IsColumnEnabled(Key) || this.WindowClosed) return false;
+        var Hidden = (this.Settings.HiddenColumns ?? []).ToHashSet(StringComparer.Ordinal);
+        if (Visible) Hidden.Remove(Key);
+        else Hidden.Add(Key);
+        var EnabledSet = new HashSet<string>(this.Settings.EnabledColumns ?? [], StringComparer.Ordinal);
+        if (ColumnKeys.Where(Item => Item != nameof(FileEntry.FullPath) && this.ColumnAvailable(Item) && EnabledSet.Contains(Item)).All(Hidden.Contains)) return false;
+        this.Settings.HiddenColumns = ColumnKeys.Where(Hidden.Contains).ToList();
+        // A hidden column still orders or groups the view; only removing it from the
+        // column menu releases it.
+        this.ApplyColumnVisibility();
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
         return true;
     }
 
     private void FileGridColumnReordered(object? Sender, DataGridColumnEventArgs E)
     {
-        this.Settings.ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).Where(ColumnKeys.Contains).ToList();
+        this.Settings.ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).Where(AllColumnKeySet.Value.Contains).ToList();
         if (!this.SaveSettings()) this.ShowNotice(LanguageService.Text("SettingsSaveError"), true);
     }
 }

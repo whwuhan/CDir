@@ -29,16 +29,21 @@ public partial class ExplorerTab
         Settings.SidebarTreeLayouts = this.CaptureSidebarTreeLayouts();
         Settings.CustomCategories = this.CustomCategories.Select(Category => Category.Clone()).ToList();
         Settings.SidebarOrder = this.SidebarSections.Select(this.SidebarSectionKey).ToList();
-        Settings.ColumnOrder = this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList();
+        Settings.ColumnOrder = this.Settings.ColumnOrder is { Count: > 0 } Order ? [.. Order]
+            : this.FileGrid.Columns.OrderBy(Column => Column.DisplayIndex).Select(Column => Column.SortMemberPath).ToList();
         Settings.FavoritesExpanded = this.FavoritesSection.IsExpanded;
         Settings.DirectoryTreeExpanded = this.DirectoryTreeSection.IsExpanded;
+        var ColumnWidths = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var Column in this.FileGrid.Columns)
+            if (Column.Visibility == Visibility.Visible && double.IsFinite(Column.ActualWidth) && Column.ActualWidth >= 24)
+                ColumnWidths[Column.SortMemberPath] = Column.ActualWidth;
         return new WorkspaceTabState
         {
             Settings = Settings, Alias = this.TabAlias, IsPinned = this.IsTabPinned, Search = this.SearchBox.Text,
             Group = this.FileGroupProperty, GroupDescending = this.FileGroupDescending,
             Sort = this.SortProperty, Descending = this.SortDirection == ListSortDirection.Descending,
             History = this.History.ToList(), HistoryTreeKeys = this.HistoryTreeKeys.ToList(), HistoryIndex = this.HistoryIndex,
-            ColumnWidths = this.FileGrid.Columns.ToDictionary(Column => Column.SortMemberPath, Column => Column.ActualWidth),
+            ColumnWidths = ColumnWidths,
             SelectedPaths = this.SelectedEntries().Select(Entry => Entry.FullPath).ToList(),
             HorizontalScrollOffset = FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.HorizontalOffset ?? 0,
             ScrollOffset = FindVisualChild<ScrollViewer>(this.ActiveFileControl)?.VerticalOffset ?? 0,

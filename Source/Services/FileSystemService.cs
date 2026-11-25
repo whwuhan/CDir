@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Enumeration;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using CDir.Models;
@@ -13,6 +15,7 @@ public sealed class FileSystemService
 {
     internal FileOperationHistory? OperationHistory { get; set; }
     private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+    private static readonly ConcurrentDictionary<string, object?[]> ExtensionTypeArgsCache = new(StringComparer.Ordinal);
     private static readonly EnumerationOptions Enumeration = new()
     {
         RecurseSubdirectories = false,
@@ -60,60 +63,86 @@ public sealed class FileSystemService
     public IReadOnlyList<DirectoryEntry> GetDirectories(string Path, bool ShowHidden)
     {
         var Result = new List<DirectoryEntry>();
-        foreach (var Directory in new DirectoryInfo(Path).EnumerateDirectories("*", Enumeration))
+        var Enumerator = new FileSystemEnumerable<DirectoryEntry>(
+            Path,
+            (ref FileSystemEntry Entry) => new DirectoryEntry(Entry.FileName.ToString(), Entry.ToFullPath()),
+            Enumeration)
         {
-            try
-            {
-                var Attributes = Directory.Attributes;
-                if (!ShowHidden && IsHidden(Attributes)) continue;
-                Result.Add(new DirectoryEntry(Directory.Name, Directory.FullName));
-            }
-            catch (System.Exception Ex) when (IsFileSystemError(Ex)) { /* A child may disappear or be unreadable. */ }
-        }
-        return Result.OrderBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
+            ShouldIncludePredicate = (ref FileSystemEntry Entry) =>
+                Entry.IsDirectory && (ShowHidden || !IsHidden(Entry.Attributes))
+        };
+        foreach (var Directory in Enumerator) Result.Add(Directory);
+        Result.Sort((Left, Right) => FileNameComparer.Instance.Compare(Left.Name, Right.Name));
+        return Result;
     }
 
     public IReadOnlyList<FileEntry> GetEntries(string Path, bool ShowHidden, bool SortByName = true, CancellationToken Cancellation = default)
     {
         Cancellation.ThrowIfCancellationRequested();
         var Result = new List<FileEntry>();
-        foreach (var Info in new DirectoryInfo(Path).EnumerateFileSystemInfos("*", Enumeration))
+        var Enumerator = new FileSystemEnumerable<FileEntry>(
+            Path,
+            (ref FileSystemEntry Entry) => ReadEntry(ref Entry),
+            Enumeration)
         {
-            Cancellation.ThrowIfCancellationRequested();
-            try
+            ShouldIncludePredicate = (ref FileSystemEntry Entry) =>
             {
-                var Attributes = Info.Attributes;
-                var Hidden = IsHidden(Attributes);
-                if (!ShowHidden && Hidden) continue;
-                Result.Add(ReadEntry(Info, Attributes));
+                Cancellation.ThrowIfCancellationRequested();
+                return ShowHidden || !IsHidden(Entry.Attributes);
             }
-            catch (System.Exception Ex) when (IsFileSystemError(Ex)) { /* Keep other readable entries visible. */ }
-        }
+        };
+        foreach (var Item in Enumerator) Result.Add(Item);
         // The UI applies its chosen comparator once; other callers retain the
         // public folders-first natural order by default.
         Cancellation.ThrowIfCancellationRequested();
         if (!SortByName) return Result;
-        return Result.OrderByDescending(Item => Item.IsDirectory)
-            .ThenBy(Item => Item.Name, FileNameComparer.Instance).ToArray();
+        Result.Sort((Left, Right) =>
+        {
+            var Order = Right.IsDirectory.CompareTo(Left.IsDirectory);
+            return Order != 0 ? Order : FileNameComparer.Instance.Compare(Left.Name, Right.Name);
+        });
+        return Result;
     }
 
-    private static FileEntry ReadEntry(FileSystemInfo Info, FileAttributes Attributes)
+    private static FileEntry ReadEntry(ref FileSystemEntry Entry)
     {
-        var IsDirectory = (Attributes & FileAttributes.Directory) != 0;
-        var Extension = IsDirectory ? string.Empty : Info.Extension.ToLowerInvariant();
+        var Attributes = Entry.Attributes;
+        var IsDirectory = Entry.IsDirectory;
+        var Name = Entry.FileName.ToString();
+        var Extension = IsDirectory ? string.Empty : NormalizeExtension(Entry.FileName);
         var IsLink = (Attributes & FileAttributes.ReparsePoint) != 0;
+        var TypeKey = IsLink ? (IsDirectory ? "TypeFolderLink" : "TypeFileLink") : GetTypeKey(IsDirectory, Extension);
         return new FileEntry
         {
-            Name = Info.Name,
-            FullPath = Info.FullName,
+            Name = Name,
+            FullPath = Entry.ToFullPath(),
             IsDirectory = IsDirectory,
             Extension = Extension,
-            TypeKey = IsLink ? (IsDirectory ? "TypeFolderLink" : "TypeFileLink") : GetTypeKey(IsDirectory, Extension),
-            TypeArguments = [Extension.TrimStart('.').ToUpperInvariant()],
-            Size = Info is FileInfo File ? File.Length : null,
-            Modified = Info.LastWriteTime,
+            TypeKey = TypeKey,
+            TypeArguments = TypeKey == "TypeExtensionFile" ? CachedExtensionArguments(Extension) : Array.Empty<object?>(),
+            Size = IsDirectory ? null : Entry.Length,
+            Modified = Entry.LastWriteTimeUtc.LocalDateTime,
             IsHidden = IsHidden(Attributes)
         };
+    }
+
+    private static string NormalizeExtension(ReadOnlySpan<char> FileName)
+    {
+        var Extension = System.IO.Path.GetExtension(FileName);
+        if (Extension.IsEmpty) return string.Empty;
+        var HasUpper = false;
+        for (var Index = 0; Index < Extension.Length; Index++)
+            if (char.IsUpper(Extension[Index])) { HasUpper = true; break; }
+        var Text = Extension.ToString();
+        return HasUpper ? Text.ToLowerInvariant() : Text;
+    }
+
+    private static object?[] CachedExtensionArguments(string Extension)
+    {
+        if (ExtensionTypeArgsCache.TryGetValue(Extension, out var Cached)) return Cached;
+        object?[] Created = [Extension.TrimStart('.').ToUpperInvariant()];
+        if (ExtensionTypeArgsCache.Count < 1024) ExtensionTypeArgsCache[Extension] = Created;
+        return Created;
     }
 
     public IReadOnlyList<FileEntry> SearchEntries(string Root, SearchQuery Query, bool ShowHidden,
@@ -140,26 +169,31 @@ public sealed class FileSystemService
             Cancellation.ThrowIfCancellationRequested();
             try
             {
-                foreach (var Info in new DirectoryInfo(DirectoryPath).EnumerateFileSystemInfos("*", Enumeration))
+                var Enumerator = new FileSystemEnumerable<FileEntry>(
+                    DirectoryPath,
+                    (ref FileSystemEntry Entry) => ReadEntry(ref Entry),
+                    Enumeration)
                 {
-                    Cancellation.ThrowIfCancellationRequested();
-                    try
+                    ShouldIncludePredicate = (ref FileSystemEntry Entry) =>
                     {
-                        var Attributes = Info.Attributes;
-                        if (!ShowHidden && IsHidden(Attributes)) continue;
-                        var IsDirectory = (Attributes & FileAttributes.Directory) != 0;
+                        Cancellation.ThrowIfCancellationRequested();
+                        if (Query.ErrorKey is not null) return false;
+                        var Attributes = Entry.Attributes;
+                        if (!ShowHidden && IsHidden(Attributes)) return false;
+                        var IsDirectory = Entry.IsDirectory;
                         // Display links if they match, but never follow them into loops or outside the search root.
-                        if (IsDirectory && (Attributes & FileAttributes.ReparsePoint) == 0) Pending.Push(Info.FullName);
-                        var Matches = Query.Matches(Info.Name, IsDirectory);
-                        if (Query.ErrorKey is not null) return [];
-                        if (!Matches) continue;
-                        var Entry = ReadEntry(Info, Attributes);
-                        Result.Add(Entry);
-                        Batch.Add(Entry);
-                        if (Batch.Count >= 128 || BatchTimer.ElapsedMilliseconds >= 100) Flush();
+                        if (IsDirectory && (Attributes & FileAttributes.ReparsePoint) == 0) Pending.Push(Entry.ToFullPath());
+                        return Query.Matches(Entry.FileName.ToString(), IsDirectory);
                     }
-                    catch (Exception Error) when (IsFileSystemError(Error)) { /* Keep searching readable siblings. */ }
+                };
+                foreach (var Entry in Enumerator)
+                {
+                    if (Query.ErrorKey is not null) return [];
+                    Result.Add(Entry);
+                    Batch.Add(Entry);
+                    if (Batch.Count >= 128 || BatchTimer.ElapsedMilliseconds >= 100) Flush();
                 }
+                if (Query.ErrorKey is not null) return [];
             }
             catch (Exception Error) when (IsFileSystemError(Error) && !PathComparer.Equals(DirectoryPath, RootPath)) { }
         }

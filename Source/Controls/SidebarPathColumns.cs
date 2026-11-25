@@ -95,12 +95,18 @@ public static class SidebarPathColumns
 
         private void Apply()
         {
+            if (!this.Row.IsVisible)
+            {
+                this.Group?.Report(this, null);
+                return;
+            }
             if (this.Viewport is null)
                 for (DependencyObject? Parent = this.Row; Parent is not null; Parent = VisualTreeHelper.GetParent(Parent))
                     if (Parent is UserControl Host && Host.FindName("SidebarScroll") is ScrollViewer Scroll) { this.Viewport = Scroll; break; }
             if (this.Viewport is not { ViewportWidth: > 0 } Viewport || this.Row.ActualWidth <= 0) return;
             var Index = GetNameColumn(this.Row);
-            var Prefix = this.Row.ColumnDefinitions.Take(Index).Sum(Column => Column.ActualWidth);
+            var Prefix = 0d;
+            for (var ColumnIndex = 0; ColumnIndex < Index; ColumnIndex++) Prefix += this.Row.ColumnDefinitions[ColumnIndex].ActualWidth;
             var Origin = this.Row.TranslatePoint(new Point(), Viewport).X + Prefix;
             // Keep column widths in content coordinates. Otherwise scrolling left
             // enlarges the name column by the same amount and pins the metadata.

@@ -62,15 +62,32 @@ public partial class ExplorerTab
     private static readonly string[] BackgroundSortKeys = [nameof(FileEntry.Name), nameof(FileEntry.Modified), nameof(FileEntry.TypeName), nameof(FileEntry.Size)];
     private const long UnspecifiedGroupOrder = long.MaxValue;
 
-    // Explorer lists the view's visible Details columns, in display order, using
-    // Windows' own column names rather than this application's UI language.
-    private IReadOnlyList<(string Key, string Header)> ExplorerGroupColumns() => this.FileGrid.Columns
-        .Where(Column => Column.Visibility == Visibility.Visible).OrderBy(Column => Column.DisplayIndex)
-        .Select(Column => (Column.SortMemberPath, (this.IsRecycleBin ? RecycleColumns.Value : WindowsColumns.Value)
-            .FirstOrDefault(Definition => Definition.Key == Column.SortMemberPath)?.Header ?? Convert.ToString(Column.Header, LanguageService.Culture) ?? Column.SortMemberPath))
-        .ToArray();
+    // Sort By and Group By list every column in the column menu, shown or hidden, in
+    // display order, using Windows' own column names rather than this application's UI
+    // language. Hiding a column must not remove it as a way to sort or group the folder.
+    private IReadOnlyList<(string Key, string Header)> ExplorerGroupColumns()
+    {
+        var Catalog = this.IsRecycleBin ? RecycleColumnsByKey.Value : WindowsColumnsByKey.Value;
+        var EnabledSet = this.Settings.EnabledColumns is { Count: > 0 } List ? new HashSet<string>(List, StringComparer.Ordinal) : null;
+        return this.FileGrid.Columns
+            .Where(Column => Column.Visibility == Visibility.Visible || Column.SortMemberPath != nameof(FileEntry.FullPath)
+                && this.ColumnAvailable(Column.SortMemberPath) && EnabledSet?.Contains(Column.SortMemberPath) == true)
+            .OrderBy(Column => Column.DisplayIndex)
+            .Select(Column => (Column.SortMemberPath, Catalog.TryGetValue(Column.SortMemberPath, out var Definition)
+                ? Definition.Header : Convert.ToString(Column.Header, LanguageService.Culture) ?? Column.SortMemberPath))
+            .ToArray();
+    }
 
-    private bool IsColumnKey(string Key) => Key.Length > 0 && this.FileGrid.Columns.Any(Column => Column.SortMemberPath == Key);
+    private bool IsColumnKey(string Key) => Key.Length > 0 && this.ColumnsByKey.ContainsKey(Key);
+
+    // Visible Windows property columns already have their values; a hidden one is read
+    // only once it orders or groups the view, and the view refreshes when they arrive.
+    private void LoadHiddenColumnValues(string Key)
+    {
+        if (Key.Length > 0 && !BasicColumnKeySet.Contains(Key) && !IsRecycleColumn(Key)
+            && (!this.ColumnsByKey.TryGetValue(Key, out var Column) || Column.Visibility != Visibility.Visible))
+            this.QueueShellColumnValues();
+    }
 
     private static string DateGroupLabel(DateTime Value, DateTime Today) => Value.Date == Today ? LanguageService.Text("GroupToday")
         : Value.Date == Today.AddDays(-1) ? LanguageService.Text("GroupYesterday") : Value.ToString("yyyy/MM");
@@ -106,36 +123,66 @@ public partial class ExplorerTab
             : Entry.Size < 16 * 1024 ? "GroupTiny" : Entry.Size < 1024 * 1024 ? "GroupSmall" : Entry.Size < 16 * 1024 * 1024 ? "GroupMedium" : "GroupLarge"),
         _ => this.ColumnGroup(Entry, Today).Label
     };
-    private sealed class FileViewComparer(ExplorerTab Tab) : IComparer
+    private sealed class FileViewComparer : IComparer
     {
+        private enum SortField { Name, Modified, Size, TypeName, FullPath, OriginalLocation, DateDeleted, ShellProperty }
         private readonly System.Globalization.CompareInfo Comparison = LanguageService.Culture.CompareInfo;
-        private static int CompareShellValues(object? A, object? B, string TextA, string TextB)
+        private readonly System.Globalization.CompareInfo ShellComparison = System.Globalization.CultureInfo.CurrentCulture.CompareInfo;
+        private readonly SortField Field;
+        private readonly string Property;
+        private readonly bool Grouped;
+        private readonly bool GroupDescending;
+        private readonly bool Descending;
+        private readonly bool DirectoriesFirst;
+
+        internal FileViewComparer(ExplorerTab Tab)
+        {
+            this.Property = Tab.SortProperty;
+            this.Grouped = Tab.FileGroupProperty.Length > 0;
+            this.GroupDescending = Tab.FileGroupDescending;
+            this.Descending = Tab.SortDirection == ListSortDirection.Descending;
+            this.Field = this.Property switch
+            {
+                nameof(FileEntry.Name) => SortField.Name,
+                nameof(FileEntry.Modified) => SortField.Modified,
+                nameof(FileEntry.Size) => SortField.Size,
+                nameof(FileEntry.TypeName) => SortField.TypeName,
+                nameof(FileEntry.FullPath) => SortField.FullPath,
+                nameof(FileEntry.OriginalLocation) => SortField.OriginalLocation,
+                nameof(FileEntry.DateDeleted) => SortField.DateDeleted,
+                _ => BasicColumnKeySet.Contains(this.Property) ? SortField.Name : SortField.ShellProperty
+            };
+            // Date sorting must compare folders and files on the same timeline.
+            this.DirectoriesFirst = this.Field != SortField.Modified;
+        }
+
+        private int CompareShellValues(object? A, object? B, string TextA, string TextB)
         {
             if (A is null) return B is null ? 0 : -1;
             if (B is null) return 1;
             if (A.GetType() == B.GetType() && A is IComparable Comparable) return Comparable.CompareTo(B);
-            return System.Globalization.CultureInfo.CurrentCulture.CompareInfo.Compare(TextA, TextB);
+            return this.ShellComparison.Compare(TextA, TextB);
         }
+
         public int Compare(object? Left, object? Right)
         {
             if (Left is not FileEntry A || Right is not FileEntry B) return 0;
-            var Grouped = Tab.FileGroupProperty.Length > 0;
-            if (Grouped)
+            if (this.Grouped)
             {
                 var Group = A.ViewGroupOrder.CompareTo(B.ViewGroupOrder);
                 if (Group == 0) Group = this.Comparison.Compare(A.ViewGroup, B.ViewGroup, System.Globalization.CompareOptions.StringSort);
-                if (Group != 0) return Tab.FileGroupDescending ? -Group : Group;
+                if (Group != 0) return this.GroupDescending ? -Group : Group;
             }
-            // Date sorting must compare folders and files on the same timeline.
-            if (Tab.SortProperty != nameof(FileEntry.Modified) && A.IsDirectory != B.IsDirectory) return A.IsDirectory ? -1 : 1;
-            var Order = Tab.SortProperty switch
+            if (this.DirectoriesFirst && A.IsDirectory != B.IsDirectory) return A.IsDirectory ? -1 : 1;
+            var Order = this.Field switch
             {
-                nameof(FileEntry.Modified) => A.Modified.CompareTo(B.Modified), nameof(FileEntry.Size) => Nullable.Compare(A.Size, B.Size),
-                nameof(FileEntry.TypeName) => this.Comparison.Compare(A.TypeName, B.TypeName),
-                nameof(FileEntry.FullPath) => this.Comparison.Compare(A.FullPath, B.FullPath),
-                nameof(FileEntry.OriginalLocation) => this.Comparison.Compare(A.OriginalLocation, B.OriginalLocation),
-                nameof(FileEntry.DateDeleted) => Nullable.Compare(A.DateDeleted, B.DateDeleted),
-                _ when !BasicColumnKeys.Contains(Tab.SortProperty) => CompareShellValues(A.ShellSortValue(Tab.SortProperty), B.ShellSortValue(Tab.SortProperty), A[Tab.SortProperty], B[Tab.SortProperty]),
+                SortField.Modified => A.Modified.CompareTo(B.Modified),
+                SortField.Size => Nullable.Compare(A.Size, B.Size),
+                SortField.TypeName => this.Comparison.Compare(A.TypeName, B.TypeName),
+                SortField.FullPath => this.Comparison.Compare(A.FullPath, B.FullPath),
+                SortField.OriginalLocation => this.Comparison.Compare(A.OriginalLocation, B.OriginalLocation),
+                SortField.DateDeleted => Nullable.Compare(A.DateDeleted, B.DateDeleted),
+                SortField.ShellProperty => this.CompareShellValues(A.ShellSortValue(this.Property), B.ShellSortValue(this.Property), A[this.Property], B[this.Property]),
                 _ => FileNameComparer.Instance.Compare(A.Name, B.Name)
             };
             // Keep the existing ascending name tie-break for ordinary column
@@ -143,9 +190,9 @@ public partial class ExplorerTab
             if (Order == 0)
             {
                 Order = FileNameComparer.Instance.Compare(A.Name, B.Name);
-                if (!Grouped) return Order;
+                if (!this.Grouped) return Order;
             }
-            return Tab.SortDirection == ListSortDirection.Descending ? -Order : Order;
+            return this.Descending ? -Order : Order;
         }
     }
     private void ApplyFileGroups()
@@ -244,6 +291,7 @@ public partial class ExplorerTab
             if (Key is "Ascending" or "Descending") this.SortDirection = Key == "Ascending" ? ListSortDirection.Ascending : ListSortDirection.Descending;
             else if (this.IsColumnKey(Key)) this.SortProperty = Key;
             this.RefreshBackgroundLayout();
+            this.LoadHiddenColumnValues(this.SortProperty);
         }
         else if (Verb == "CDir.Group.More")
         {
@@ -260,6 +308,7 @@ public partial class ExplorerTab
             this.FileGroupProperty = Property;
             this.FileGroupDescending = Descending;
             this.RefreshBackgroundLayout();
+            this.LoadHiddenColumnValues(this.FileGroupProperty);
         }
         else if (Verb == "CDir.Customize")
         {

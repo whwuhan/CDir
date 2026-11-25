@@ -20,6 +20,11 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
     private readonly List<ItemGroup> ItemGroups = [];
     private bool GroupsDirty = true;
     private readonly List<(string Label, double Top)> GroupHeaders = [];
+    private static readonly Pen GroupHeaderLinePen = CreateGroupHeaderLinePen();
+    private (FontFamily Family, FontWeight Weight, double Size, Brush Foreground, double Dpi, System.Globalization.CultureInfo Culture)? CachedHeaderStyle;
+    private Typeface? CachedHeaderTypeface;
+    private readonly Dictionary<string, FormattedText> HeaderTextCache = new(StringComparer.Ordinal);
+    private static Pen CreateGroupHeaderLinePen() { var Pen = new Pen(SystemColors.ControlLightBrush, 1); Pen.Freeze(); return Pen; }
     public static readonly DependencyProperty CellWidthProperty = DependencyProperty.Register(nameof(CellWidth), typeof(double), typeof(FileTilePanel), new FrameworkPropertyMetadata(112d, FrameworkPropertyMetadataOptions.AffectsMeasure));
     public double CellWidth { get => (double)GetValue(CellWidthProperty); set => SetValue(CellWidthProperty, value); }
     public static readonly DependencyProperty CellHeightProperty = DependencyProperty.Register(nameof(CellHeight), typeof(double), typeof(FileTilePanel), new FrameworkPropertyMetadata(112d, FrameworkPropertyMetadataOptions.AffectsMeasure));
@@ -171,15 +176,30 @@ public sealed class FileTilePanel : VirtualizingPanel, IScrollInfo
     protected override void OnRender(DrawingContext Context)
     {
         base.OnRender(Context);
-        if (ItemsControl.GetItemsOwner(this) is not Control Owner) return;
+        if (this.GroupHeaders.Count == 0 || ItemsControl.GetItemsOwner(this) is not Control Owner) return;
+        var Weight = (FontWeight)Owner.FindResource("UIHeadingFontWeight");
+        var Dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var Culture = CDir.Localization.LanguageService.Culture;
+        var Signature = (Owner.FontFamily, Weight, Owner.FontSize, Owner.Foreground, Dpi, Culture);
+        if (this.CachedHeaderStyle is not { } Cached || !Cached.Equals(Signature) || this.CachedHeaderTypeface is null)
+        {
+            this.CachedHeaderStyle = Signature;
+            this.CachedHeaderTypeface = new Typeface(Owner.FontFamily, FontStyles.Normal, Weight, FontStretches.Normal);
+            this.HeaderTextCache.Clear();
+        }
         foreach (var (Label, Top) in this.GroupHeaders)
         {
             var Y = Top - VerticalOffset + 6;
             if (Y < -40 || Y > ViewportHeight) continue;
-            var Text = new FormattedText(Label, CDir.Localization.LanguageService.Culture, FlowDirection.LeftToRight,
-                new Typeface(Owner.FontFamily, FontStyles.Normal, (FontWeight)Owner.FindResource("UIHeadingFontWeight"), FontStretches.Normal), Owner.FontSize, Owner.Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            if (!this.HeaderTextCache.TryGetValue(Label, out var Text))
+            {
+                if (this.HeaderTextCache.Count >= 256) this.HeaderTextCache.Clear();
+                Text = new FormattedText(Label, Culture, FlowDirection.LeftToRight,
+                    this.CachedHeaderTypeface, Owner.FontSize, Owner.Foreground, Dpi);
+                this.HeaderTextCache[Label] = Text;
+            }
             Context.DrawText(Text, new Point(8, Y));
-            Context.DrawLine(new Pen(SystemColors.ControlLightBrush, 1), new Point(Math.Min(ViewportWidth, Text.Width + 20), Y + Text.Height / 2), new Point(ViewportWidth, Y + Text.Height / 2));
+            Context.DrawLine(GroupHeaderLinePen, new Point(Math.Min(ViewportWidth, Text.Width + 20), Y + Text.Height / 2), new Point(ViewportWidth, Y + Text.Height / 2));
         }
     }
     protected override void OnItemsChanged(object Sender, ItemsChangedEventArgs Args)

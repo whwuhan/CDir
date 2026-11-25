@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Enumeration;
 
 namespace CDir.Services;
 
@@ -9,6 +10,7 @@ internal readonly record struct FolderSizeResult(long Bytes, bool Complete);
 internal static class FolderSizeService
 {
     private static readonly SemaphoreSlim ScanGate = new(1, 1);
+    private readonly record struct SizeStep(bool IsDirectory, bool IsLink, long Length, string? FullPath);
 
     internal static async Task<FolderSizeResult?> MeasureAsync(string Path, CancellationToken Token,
         Func<FolderSizeResult, Task>? Progress = null)
@@ -17,30 +19,39 @@ internal static class FolderSizeService
         try
         {
             Token.ThrowIfCancellationRequested();
-            var Root = new DirectoryInfo(Path);
-            try { if ((Root.Attributes & FileAttributes.ReparsePoint) != 0) return null; }
+            try { if ((File.GetAttributes(Path) & FileAttributes.ReparsePoint) != 0) return null; }
             catch (Exception Error) when (Unavailable(Error)) { return null; }
-            var Pending = new Stack<DirectoryInfo>();
-            Pending.Push(Root);
+            var Pending = new Stack<string>();
+            Pending.Push(Path);
             long Total = 0;
             var Complete = true;
             var Work = 0;
             var Reporting = Stopwatch.StartNew();
-            var Options = new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = false };
+            var Options = new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = false, ReturnSpecialDirectories = false };
             while (Pending.TryPop(out var Folder))
             {
                 Token.ThrowIfCancellationRequested();
                 try
                 {
-                    foreach (var Item in Folder.EnumerateFileSystemInfos("*", Options))
+                    var Enumerator = new FileSystemEnumerable<SizeStep>(
+                        Folder,
+                        (ref FileSystemEntry Entry) =>
+                        {
+                            var IsLink = (Entry.Attributes & FileAttributes.ReparsePoint) != 0;
+                            var IsDirectory = Entry.IsDirectory;
+                            return new SizeStep(IsDirectory, IsLink, IsDirectory || IsLink ? 0 : Entry.Length,
+                                IsDirectory && !IsLink ? Entry.ToFullPath() : null);
+                        },
+                        Options);
+                    foreach (var Step in Enumerator)
                     {
                         Token.ThrowIfCancellationRequested();
                         try
                         {
                             // Links can escape the tree or form cycles; never traverse them.
-                            if ((Item.Attributes & FileAttributes.ReparsePoint) != 0) Complete = false;
-                            else if (Item is DirectoryInfo Directory) Pending.Push(Directory);
-                            else if (Item is FileInfo File) Total = checked(Total + File.Length);
+                            if (Step.IsLink) Complete = false;
+                            else if (Step.IsDirectory) Pending.Push(Step.FullPath!);
+                            else Total = checked(Total + Step.Length);
                         }
                         catch (Exception Error) when (Unavailable(Error) || Error is OverflowException) { Complete = false; }
                         if (++Work % 64 == 0)
@@ -57,7 +68,7 @@ internal static class FolderSizeService
                 }
                 catch (Exception Error) when (Unavailable(Error))
                 {
-                    if (ReferenceEquals(Folder, Root)) return null;
+                    if (ReferenceEquals(Folder, Path)) return null;
                     Complete = false;
                 }
             }

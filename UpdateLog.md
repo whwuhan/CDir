@@ -1,5 +1,28 @@
 # 更新日志
 
+## v3.4.27
+
+- 发布时间：2026-11-25 10:47:06 UTC+08:00 (Asia/Shanghai)
+- 在不改变任何功能的前提下，对全应用热路径进行整体性能优化：
+  - **消除 321 个 Windows 列的 O(N²) 线性扫描与重复初始化**：为列目录和每个标签页建立 O(1) 哈希字典查找（`WindowsColumnsByKey`、`RecycleColumnsByKey`、`AllColumnKeySet`、`ColumnsByKey`）；`InitializeShellColumns()` 改为每标签页只执行一次（不再在每次目录导航时重复扫描 321×321 项）；`RestoreColumnLayout`、`ApplyColumnVisibility`、`UpdateColumnHints` 和 `ApplyLanguageResources` 消除重复的 `DisplayIndex`/可见性/共享资源写入，实测连续 40 次 `ApplyColumnVisibility`（覆盖全部 324 列）共仅约 2.47 ms。
+  - **批量读取 Windows 扩展列属性并复用 `IShellFolder2` COM 实例**：`ShellDetailColumns.ReadSession` 按父目录缓存已绑定的 `IShellFolder2` 并通过 `ParseDisplayName` 读取子项相对 PIDL，避免同目录数千个文件反复绑定和释放父目录 COM 对象；后台 STA 工作线程改为按批（首批 8 项，后续每 32 项或 40 ms）提交 UI 更新，大幅减少逐项同步阻塞 `Dispatcher.Invoke` 的跨线程切换。
+  - **无额外 `FileInfo`/`DirectoryInfo` 分配的目录遍历、递归搜索与文件夹大小计算**：`FileSystemService.GetEntries`、`GetDirectories`、`SearchEntries` 及 `FolderSizeService.MeasureAsync` 改用 `FileSystemEnumerable<T>` 直接读取底层目录缓冲区，递归搜索对不匹配文件不再分配 `FileInfo` 和完整路径字符串；非 `TypeExtensionFile` 条目复用共享空 `TypeArguments` 数组，扩展类型参数按扩展名缓存。
+  - **加快排序与搜索版本状态查找**：`FileViewComparer` 在构造时预解析排序字段枚举与比较器，避免十万级比较中重复进行字符串分支判断与 `BasicColumnKeys` 线性扫描；递归搜索批次复用 `VersionStatusByPath` 缓存。
+  - **减轻每秒自动保存对主线程的开销**：工作区快照仅保存实际可见且宽度有效的列（不再为每个标签页序列化 317 个折叠零宽列），复用维护好的 `ColumnOrder`；定时自动保存中的多实例进程枚举移至后台线程节流探测（退出冲突检查仍保持同步即时），不再每秒在界面线程调用 `Process.GetProcessesByName`。
+  - **优化绘制与布局监听开销**：`FileListGridLines` 在隐藏时自动卸载 `LayoutUpdated` 监听，显示时缓存 `ScrollViewer`/`ScrollContentPresenter`、冻结画笔及复用列坐标缓冲区；`FileTilePanel` 缓存分组标题的冻结画笔、`Typeface` 与 `FormattedText`；`SidebarPathColumns` 跳过不可见行并消除布局回调中的 LINQ 分配。
+- 发布候选（v3.4.27）后台 `filesystem`、`search`、`language` 共 60 项全部通过；界面 `columns` 1106 项（含新增工作区可见列宽快照、40 次全列可见性切换耗时及 `FileSystemEnumerable` 目录/搜索检查）、`grouping` 132 项、`search` 268 项、`lifecycle` 292 项、`view-zoom` 592 项全部通过。实际发布程序再次通过 `view-zoom` 592 项并捕获当前版本预览。其余后台组（`address`、`version-control`）、其他界面组及 `release` 脚本组本次未运行。
+- 普通整体性能优化，大、中版本保持 3.4，成功发布后修订号自动递增至 v3.4.27。已核验发布主程序与测试候选一致、`Release.json` 与可执行文件版本一致，`Publish` 与 `Artifacts` 两份 `CDir_WinX64_v3.4.27.zip` 同哈希且含唯一顶层目录（共 423 项），保留全部 21 份 `Publish` 历史 ZIP；两份预览同哈希并已目视检查，同步 README 中英文预览版本标注，旧产物按原相对路径归档至唯一 `Trash` 目录。
+
+## v3.4.26
+
+- 发布时间：2026-11-25 10:19:48 UTC+08:00 (Asia/Shanghai)
+- 空白处右键的“排序方式”和“分组依据”不再只列出当前显示的列：列选择菜单（Preferences → UI → Columns 中加入菜单的列）里的所有列，无论是否勾选显示，都按列顺序列出。例如取消勾选“创建日期”后，仍可按创建日期排序或分组；其他扩展列同样适用。
+- 按未显示的 Windows 属性列排序或分组时，在后台读取该列的属性值，读取完成后自动重新排序或分组；已显示的列不重复读取。
+- 隐藏当前排序列时不再把排序重置为第一列；只有把该列从列选择菜单中移除时，才把排序恢复为第一列可见列并取消按该列分组。
+- 随包的英文使用说明已更新为当前的空白处菜单说明（上一版发布后修改，本版随包分发）。
+- 发布候选（v3.4.26）界面 `grouping` 132 项（新增：隐藏的列仍出现在排序方式与分组依据中、按隐藏的创建日期列排序会读取属性值并按其排序、按其分组、从列选择菜单移除后同时从菜单中消失并释放排序与分组）、`columns` 1102 项通过；与 Windows 文件夹视图的整份菜单比对改为向 Windows 视图传入 CDir 列出的同一组列，其余菜单项继续逐项比对。实际发布程序再次通过 `grouping` 132 项并捕获当前版本预览。其余后台组、界面组及 `release` 脚本组本次未运行。
+- 普通功能修正，大、中版本保持 3.4，成功发布后修订号自动递增至 v3.4.26。已核验发布主程序与测试候选一致、`Release.json` 与可执行文件版本一致，`Publish` 与 `Artifacts` 两份 `CDir_WinX64_v3.4.26.zip` 同哈希且含唯一顶层目录（共 423 项），保留全部 `Publish` 历史 ZIP；两份预览同哈希并已目视检查，同步 README 中英文预览版本标注，旧产物按原相对路径归档至唯一 `Trash` 目录。
+
 ## v3.4.25
 
 - 发布时间：2026-11-24 17:43:52 UTC+08:00 (Asia/Shanghai)
